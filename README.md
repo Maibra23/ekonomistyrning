@@ -1,10 +1,8 @@
 # Ekonomistyrning Sandbox
 
-**En interaktiv övningsmiljö för Göran Anderssons *Ekonomistyrning: beslut och handling*.**
+**En interaktiv övningsmiljö för *Ekonomistyrning: beslut och handling*.**
 
-An interactive practice environment for Swedish students learning management accounting from Göran Andersson's textbook. Built with Streamlit, Plotly, and Python.
-
-> **Status:** Under aktiv utveckling. Se `docs/TASKS.md` för aktuell sprintplan.
+An interactive practice environment for Swedish students learning accounting management from Göran Andersson's textbook. Built with Streamlit, Plotly, and Python.
 
 ## Live demo
 
@@ -12,21 +10,21 @@ Kommer att publiceras på Streamlit Community Cloud när v1 är klar.
 
 ## Funktioner
 
-* **Kalkylering** Självkostnadskalkyl, bidragskalkyl och ABC kalkyl med interaktiva diagram
-* **Investeringsbedömning** NPV, IRR, payback, annuitet, känslighetsanalys, inflation och skatt, samt Monte Carlo simulering
-* **Budget och budgetering** Resultat, likviditets och balansbudget med automatisk integration
-* **Standardkostnadsanalys** Avvikelsedekomposition i volym, pris och effektivitet
-* **Kunskapstest** Scenariofrågor per kapitelkluster med direkt återkoppling
-* **Excel export** Alla moduler stöder export
+- **Kalkylering** Självkostnadskalkyl, bidragskalkyl och ABC kalkyl med interaktiva diagram
+- **Investeringsbedömning** NPV, IRR, payback, annuitet, känslighetsanalys, inflation och skatt, samt Monte Carlo simulering
+- **Budget och budgetering** Resultat, likviditets och balansbudget med automatisk integration
+- **Standardkostnadsanalys** Avvikelsedekomposition i volym, pris och effektivitet
+- **Kunskapstest** Scenariofrågor per kapitelkluster med direkt återkoppling
+- **Excel export** Alla moduler stöder export
 
 ## Teknisk stack
 
-* Python 3.11
-* Streamlit 1.32+
-* Plotly 5.18+
-* numpy, pandas, scipy, numpy financial
-* xlsxwriter, openpyxl
-* pytest
+- Python 3.11
+- Streamlit 1.32+
+- Plotly 5.18+
+- numpy, pandas, scipy, numpy financial
+- xlsxwriter, openpyxl
+- pytest
 
 ## Lokal installation
 
@@ -76,9 +74,9 @@ ekonomistyrning-sandbox/
 
 ## Dokumentation
 
-* **`docs/PRD.md`** Vision, målanvändare, scope, success metrics, risk register
-* **`docs/METHODOLOGY.md`** Alla formler, antaganden och kapitelreferenser
-* **`docs/TASKS.md`** 7 dagars sprintplan med Claude Code prompts per uppgift
+- `**docs/PRD.md**` Vision, målanvändare, scope, success metrics, risk register
+- `**docs/METHODOLOGY.md**` Alla formler, antaganden och kapitelreferenser
+- `**docs/TASKS.md**` 7 dagars sprintplan med Claude Code prompts per uppgift
 
 Läs dessa i ordning innan du börjar utveckla en ny modul.
 
