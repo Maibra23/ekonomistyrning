@@ -1,150 +1,152 @@
 """Landing page for Ekonomistyrning Sandbox.
 
-Entry point for the Streamlit multipage app. Shows the LLM connectivity
-status, the five module overview, and links to documentation.
+Entry point for the Streamlit multipage app. Shows the hero block, module
+overview, pipeline steps, and LLM connectivity status.
 """
 from __future__ import annotations
 
 import streamlit as st
 
-from utils.llm import is_llm_available, get_llm_config
-
 APP_VERSION = "0.2.0"
-BUILD_DATE = "2026-04-28"
 
 st.set_page_config(
     page_title="Ekonomistyrning Sandbox",
-    page_icon="📊",
+    page_icon=None,
     layout="wide",
     initial_sidebar_state="expanded",
+    menu_items={"Get Help": None, "Report a bug": None},
 )
 
+from utils.ui import (  # noqa: E402
+    footer_note,
+    hero,
+    inject_css,
+    llm_badge,
+    nav_card,
+    pipeline_steps,
+    render_sidebar,
+    stat_strip,
+    summary_box,
+)
 
-def render_llm_badge() -> None:
-    """Show whether the LLM tutor is reachable in the current environment."""
-    config = get_llm_config()
-    if is_llm_available():
-        st.success(f"🟢 LLM tutor aktiv. Modell: {config.model}")
-    else:
-        st.warning(
-            "🟡 LLM tutor offline. Beräkningar och diagram fungerar normalt. "
-            "Kontrollera HF_TOKEN i .streamlit/secrets.toml för att aktivera tutor."
-        )
+inject_css()
+render_sidebar("hem")
+
+
+def _llm_online() -> bool:
+    try:
+        from utils.llm import is_llm_available
+        return is_llm_available()
+    except Exception:
+        return False
 
 
 def render_landing() -> None:
-    """Render the landing page with module overview."""
-    st.title("Ekonomistyrning Sandbox")
-    st.markdown(
-        "**En interaktiv övningsmiljö för Göran Anderssons "
-        "*Ekonomistyrning: beslut och handling*, med Qwen3-14B som tutor.**"
+    st.html(
+        hero(
+            eyebrow="EKONOMISTYRNING",
+            title="Lär dig räkna med interaktiva kalkyler",
+            lead=(
+                "Öva självkostnadskalkyl, investeringsbedömning, budgetering och "
+                "avvikelseanalys direkt i webbläsaren. En LLM-tutor (Qwen3-14B) "
+                "förklarar varje resultat grundat i dina egna siffror."
+            ),
+        )
     )
 
-    render_llm_badge()
-
-    st.markdown(
-        """
-        Den här applikationen omvandlar bokens teori till praktisk övning.
-        Mata in egna siffror, ladda färdiga exempelföretag och se kalkyler,
-        investeringsbedömningar, budgetar och avvikelseanalyser växa fram
-        i realtid med interaktiv visualisering. En språkmodell (Qwen3-14B
-        via Hugging Face Inference Providers) förklarar varje resultat,
-        guidar dig steg för steg och svarar på dina följdfrågor, alltid
-        grundad i dina faktiska siffror.
-        """
+    st.html(
+        stat_strip([
+            ("5", "moduler"),
+            ("3", "kalkyleringsmetoder"),
+            ("10 000", "MC-iterationer"),
+            ("100%", "Svenska"),
+        ])
     )
 
-    st.divider()
+    online = _llm_online()
+    col_badge, _ = st.columns([1, 5])
+    col_badge.html(llm_badge(online))
 
-    st.subheader("Moduler")
-
-    col1, col2 = st.columns(2)
-
-    with col1:
+    with st.expander("Om appen", expanded=False):
         st.markdown(
             """
-            ### 📐 Kalkylering
-            Självkostnadskalkyl, bidragskalkyl och ABC kalkyl med
-            stegvisa beräkningar och waterfall diagram. Tutor förklarar
-            kostnadsfördelningen.
-            *Kapitel 4, 6, 7, 8.*
+            Den här applikationen omvandlar teorin i Göran Anderssons
+            *Ekonomistyrning: beslut och handling* (Studentlitteratur) till
+            praktisk övning. Mata in egna siffror eller ladda färdiga
+            exempelföretag och se kalkyler, investeringsbedömningar, budgetar
+            och avvikelseanalyser växa fram med interaktiv visualisering.
 
-            ### 💰 Investeringsbedömning
-            NPV, IRR, payback, annuitet, känslighetsanalys, inflation
-            och skatt samt Monte Carlo simulering för riskanalys.
-            Tutor tolkar fördelning och beslutsregler.
-            *Kapitel 10.*
+            Alla exempelföretag är fiktiva. Ingen koppling till boken eller
+            förlaget.
 
-            ### 📊 Budget och budgetering
-            Resultatbudget, likviditetsbudget och balansbudget med
-            automatisk länkning. Tutor bedömer konsistens och pekar
-            på avvikelseorsaker.
-            *Kapitel 13, 14, 15.*
+            **Integritet:** Hugging Face Inference Providers behandlar prompts
+            du skickar. Mata inte in känsliga personuppgifter.
             """
         )
 
-    with col2:
-        st.markdown(
-            """
-            ### 📉 Standardkostnadsanalys
-            Decomposera total avvikelse till volym, pris och
-            effektivitetsavvikelser. Tutor föreslår sannolika orsaker
-            och åtgärder.
-            *Kapitel 17.*
-
-            ### 🎓 Kunskapstest
-            Dynamiskt genererade scenariofrågor per kapitelkluster.
-            Varje fråga är unik och numeriska svar verifieras mot
-            kalkylator innan visning.
-            *Kapitel 4 till 17.*
-
-            ### 📤 Excel export
-            Alla moduler stöder export till Excel inklusive tutorns
-            förklaring som separat kalkylblad.
-            """
-        )
-
-    st.divider()
-
-    st.subheader("Så använder du appen")
-    st.markdown(
-        """
-        1. Välj en modul i menyn till vänster.
-        2. Mata in egna siffror eller ladda ett exempelföretag.
-        3. Studera resultaten och de interaktiva diagrammen.
-        4. Läs tutorns förklaring eller ställ följdfrågor i chatten.
-        5. Justera antaganden för att bygga intuition.
-        6. Exportera till Excel om du vill spara eller skicka in.
-        """
+    st.html(
+        pipeline_steps([
+            "Välj modul",
+            "Ange data",
+            "Beräkna och tolka",
+            "Exportera",
+        ])
     )
 
-    st.divider()
-
-    with st.sidebar:
-        st.subheader("Om appen")
-        config = get_llm_config()
-        st.markdown(
-            f"""
-            **Version:** {APP_VERSION}
-            **Byggd:** {BUILD_DATE}
-            **LLM modell:** {config.model}
-            **Provider:** Hugging Face Inference Providers
-
-            Pedagogiskt komplement till boken
-            *Ekonomistyrning: beslut och handling* av Göran Andersson
-            (Studentlitteratur). Inte officiellt kopplat till boken
-            eller förlaget. Alla exempelföretag är fiktiva.
-
-            Källkod och dokumentation finns på GitHub. Se `docs/PRD.md`,
-            `docs/METHODOLOGY.md` och `docs/TASKS.md`.
-            """
+    st.html(
+        summary_box(
+            "Varje modul innehåller en deterministisk kalkylator, interaktiva "
+            "Plotly-diagram, en LLM-genererad förklaring med steg-för-steg-guide "
+            "och ett Q&amp;A-chattfönster. Excel-export finns i alla moduler."
         )
+    )
 
-        st.caption(
-            "Integritet: Hugging Face Inference Providers ser de prompts som "
-            "skickas. Mata inte in känsliga personuppgifter."
-        )
+    st.markdown("### Moduler")
+
+    row1 = st.columns(3)
+    row2 = st.columns(2)
+
+    with row1[0]:
+        st.html(nav_card(
+            "Kalkylering",
+            "Självkostnadskalkyl via pålägg, bidragskalkyl och ABC-kalkyl "
+            "med waterfall-diagram. Kapitel 4, 6, 7, 8.",
+        ))
+        st.page_link("pages/1_Kalkyl.py", label="Öppna modul →")
+
+    with row1[1]:
+        st.html(nav_card(
+            "Investering",
+            "NPV, IRR, payback, annuitet, känslighetsanalys och Monte Carlo "
+            "med 10 000 iterationer. Kapitel 10.",
+        ))
+        st.page_link("pages/2_Investering.py", label="Öppna modul →")
+
+    with row1[2]:
+        st.html(nav_card(
+            "Budget",
+            "Resultatbudget, likviditetsbudget och balansbudget med automatisk "
+            "länkning och LLM-konsistensanalys. Kapitel 13, 14, 15.",
+        ))
+        st.page_link("pages/3_Budget.py", label="Öppna modul →")
+
+    with row2[0]:
+        st.html(nav_card(
+            "Standardkostnadsanalys",
+            "Dekomponera avvikelser i volym, pris och effektivitet. "
+            "LLM föreslår sannolika orsaker. Kapitel 17.",
+        ))
+        st.page_link("pages/4_Standardkostnadsanalys.py", label="Öppna modul →")
+
+    with row2[1]:
+        st.html(nav_card(
+            "Kunskapstest",
+            "LLM-genererade scenariofrågor per kapitelkluster. Numeriska svar "
+            "verifieras mot kalkylator. Kapitel 4–17.",
+        ))
+        st.page_link("pages/5_Kunskapstest.py", label="Öppna modul →")
+
+    st.html(footer_note(version=APP_VERSION))
 
 
-if __name__ == "__main__" or True:
-    render_landing()
+render_landing()

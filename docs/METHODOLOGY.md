@@ -1,8 +1,10 @@
 # METHODOLOGY: Theoretical Foundation and Documentation
 
-**Version:** 2.0
-**Last updated:** 2026-04-28
+**Version:** 2.2
+**Last updated:** 2026-05-05
 **Major change in v2:** Added section 6 on LLM design (prompt engineering, register, humanizer principles, evaluation).
+**Major change in v2.1:** Section 7.3 updated with LLM-generated scenarios on demand (Task 7.5).
+**Major change in v2.2:** Added section 8 on the UI design system (utils/ui.py, CSS architecture, color tokens, component catalog, interaction flow).
 
 This document explains the theory behind every calculation in the app, links each method to the relevant kapitel in Göran Andersson's *Ekonomistyrning: beslut och handling*, and documents the assumptions, data choices, design rationale, and LLM tutor design.
 
@@ -454,7 +456,154 @@ LLM tutor förstärker självständigt tänkande snarare än att ersätta det. A
 
 ---
 
-## 8. Datakällor och avgränsningar
+## 8. UI-designsystemet
+
+This section documents the technical architecture of the user interface, the CSS component library, color conventions, and how every page assembles itself from these building blocks. The design system is implemented in `utils/ui.py` and consumed by `streamlit_app.py` and all five module pages.
+
+### 8.1 Arkitektur: CSS injection och komponentbibliotek
+
+**Core principle:** Every color, font, Swedish label, and CSS class is defined exactly once in `utils/ui.py`. Pages never hardcode colors or label text. This means the entire visual identity can be changed in one file.
+
+**Page setup sequence (identical on every page):**
+
+```python
+st.set_page_config(...)                            # Must be first Streamlit call
+from utils.ui import inject_css, render_sidebar, ...   # noqa: E402
+inject_css()                                       # Injects all CSS into page head
+render_sidebar("module_key")                       # Draws sidebar, marks active link
+```
+
+`inject_css()` calls `st.html(f"<style>{GLOBAL_CSS}</style>")`. Streamlit appends this to the page's `<head>`, making all `.eks-*` classes available from that point forward. The `eks-` prefix namespaces every custom class to prevent collisions with Streamlit internals.
+
+### 8.2 CSS-interpolation mot COLORS
+
+`GLOBAL_CSS` is a single Python string that uses `%` string interpolation against the `COLORS` dict (15 tokens):
+
+```python
+GLOBAL_CSS = "..." % COLORS
+```
+
+Every color in the CSS is referenced as `%(token_name)s` — for example `%(primary)s` resolves to `#1E40AF`. Any literal `%` in the CSS (such as `opacity: 85%`) must be escaped as `%%`. This means one edit to `COLORS["primary"]` propagates to every page, chart, and component with no further changes needed.
+
+### 8.3 Designtokens och finansiell semantik
+
+Color tokens are not arbitrary. Each has a specific semantic role tied to financial outcomes:
+
+| Token | Hex | Finansiell semantik |
+|---|---|---|
+| `primary` | `#1E40AF` | Brand blue — neutral, no financial judgment |
+| `primary_light` | `#3B82F6` | Accent — pipeline arrows, step numbers, LLM section border |
+| `sidebar_bg` | `#1E3A8A` | Deep blue — navigation container |
+| `success` | `#059669` | Positive outcome: NPV > 0, favorable variance, TB > 0 |
+| `danger` | `#DC2626` | Negative outcome: NPV < 0, unfavorable variance, loss |
+| `warning` | `#D97706` | Boundary zone: breakeven, neutral variance, LLM offline |
+
+The `kpi_card()` component exposes this via the `variant` parameter:
+
+```python
+kpi_card("NPV", "142 000", "kr", variant="success")   # green left border
+kpi_card("NPV", "-38 000", "kr", variant="danger")    # red left border
+kpi_card("Payback", "5,0", "år", variant="warning")   # amber left border
+```
+
+Students see color immediately signal whether a financial result is favorable. This mirrors how controllers use traffic-light reporting and creates a consistent pedagogical signal across all five modules.
+
+### 8.4 Komponentkatalog
+
+All component functions return HTML strings rendered via `st.html()`. The sole exception is `render_kpi_row()`, which calls `st.columns()` internally.
+
+| Funktion | CSS-klass | Användning |
+|---|---|---|
+| `hero(eyebrow, title, lead)` | `.eks-hero` | Landing page only — blue gradient block |
+| `page_title(eyebrow, title, subtitle)` | `.eks-page-title` | Every module page header |
+| `kpi_card(label, value, ...)` | `.eks-kpi` | Primary result metric, color-coded by variant |
+| `render_kpi_row(cards)` | — | Lays out N kpi_cards in equal columns |
+| `card_header(title, subtitle, tag)` | `.eks-card-header` | Inside `st.container(border=True)` |
+| `stat_strip(cells)` | `.eks-stat-strip` | Flush horizontal strip of N stat cells |
+| `pipeline_steps(steps)` | `.eks-pipeline` | Numbered steps with arrows between them |
+| `nav_card(title, description)` | `.eks-nav-card` | Module navigation tiles on landing page |
+| `summary_box(text)` | `.eks-summary` | Blue-left-border callout and context panel |
+| `footer_note(version)` | `.eks-footer` | Book reference and version badge on every page |
+| `llm_badge(online)` | `.eks-llm-badge` | Green/red dot — LLM connectivity status |
+| `offline_badge()` | `.eks-offline-badge` | Amber pill — shown when LLM is unavailable |
+| `grounding_warning(llm, calc)` | `.eks-grounding-warn` | Red warning when LLM cites wrong number |
+
+### 8.5 Sidopanel (render_sidebar)
+
+`render_sidebar(active_page)` is called once per page immediately after `inject_css()`. It draws:
+
+1. **Brand block** — 32x3px blue bar, `EKS` mark, "Ekonomistyrning", "Andersson kap. 4–17"
+2. **MODULER** section — six nav links via `st.page_link()`; active link gets mid-blue background
+3. **INFORMATION** section — "Om appen" link
+4. **Footer** — model name (Qwen3-14B via Hugging Face) and live counter `N / 50`
+
+Streamlit's auto-generated sidebar nav is disabled via CSS (`div[data-testid="stSidebarNav"] {display: none !important;}`). The sidebar background is `#1E3A8A` and all sidebar text is forced to `rgba(255,255,255,0.65)` via a global CSS rule. The call counter reads from `st.session_state["llm_call_count"]` and updates in real time.
+
+### 8.6 LLM-gränssnittselement
+
+Four elements surface LLM state to the user at all times:
+
+**`llm_badge(online)`** — shown on the landing page. Green dot when `is_llm_available()` is True, red dot otherwise.
+
+**`offline_badge()`** — shown inline on any module where an LLM call failed or was skipped. Amber color signals degraded mode (fallback template active) without alarming the user.
+
+**`.eks-llm-section`** — the explanation block rendered inside `st.expander("Förklaring", expanded=True)` after a successful LLM call. Blue left border, 1.7 line-height, and four `<h4>` sub-headings for the Antagande / Beräkning / Tolkning / Källor structure defined in section 6.3 above.
+
+**`grounding_warning(llm_value, calc_value)`** — shown below an explanation when the numeric verifier in `utils/llm.py` detects a deviation greater than 1% between the LLM's cited value and the calculator output. Names both values explicitly and instructs the user to trust the calculator. This is the UI surface of Mechanism 2 in the grounding strategy (section 6.6).
+
+### 8.7 Interaktionsflöde per modul
+
+```
+Användaren öppnar en modulisda
+    ↓
+inject_css()          → alla .eks-* klasser aktiveras i sidans <head>
+render_sidebar()      → navigationspanel med aktiv länk markerad
+    ↓
+page_title()          → modulhuvud med eyebrow och titel
+    ↓
+Användaren fyller i formulär och klickar Beräkna
+    ↓
+Calculator (utils/kalkyl.py etc.) → returnerar resultatdict
+    ↓
+render_kpi_row([kpi_card(...)])   → primära nyckeltal med färgkodning
+st.plotly_chart(fig, ...)         → diagram med get_chart_layout()-tema
+    ↓
+LLM pipeline:
+  utils/prompts.py   → bygger systempromt + användarpromt med kalkylresultat
+  utils/llm.py       → anropar HF Inference Providers, streamer tokens
+  utils/humanizer.py → Layer 2 regex-rensning (AI-tells, streck, formatering)
+  st.expander()      → renderar .eks-llm-section med fyra sektioner
+    ↓
+Eventuell grounding_warning() om numerisk avvikelse > 1 %
+    ↓
+Q&A: st.chat_input() → samma LLM-pipeline → st.chat_message()
+    ↓
+st.download_button() → utils/export.py → Excel-fil inklusive LLM-text
+    ↓
+footer_note()         → bokräferens och versionsemblem
+```
+
+### 8.8 Typografi och talformatering
+
+- **Inter** — all prose, headings, labels, navigation
+- **IBM Plex Mono** — all computed numbers (KPI values, stat strip, axis ticks, version badges)
+
+Monospace for numbers makes decimal columns align visually and signals "computed value, not prose" — echoing the spreadsheet conventions students already use. Formatting follows Swedish locale via `utils/formatting.py`: comma as decimal separator, non-breaking space as thousands separator. Example: `142 000,50 kr`.
+
+### 8.9 Diagramtema (utils/charts.py)
+
+`get_chart_layout()` returns a Plotly layout dict that applies design tokens to all charts:
+
+- White plot area (`#FFFFFF`), dotted grid in page-background gray (`#F3F4F6`)
+- Inter for chart titles, IBM Plex Mono for axis ticks
+- Deep blue hover tooltip (`#1E3A8A`) matching the sidebar
+- `config={"displayModeBar": False}` removes the Plotly toolbar
+
+Chart series use `CHART_PALETTE` from `utils/ui.py` so color ordering is consistent across modules. Waterfall charts and horizontal variance bars apply `success`/`danger` colors directly — green for positive, red for negative — creating a unified color language across every module.
+
+---
+
+## 9. Datakällor och avgränsningar
 
 * **Inga externa datakällor.** Appen är ren beräkningsmotor; användaren matar in egna eller exempelscenariernas värden.
 * **Inga marknadsdata.** Räntor, inflationstakt och skattesats matas in manuellt.
@@ -463,7 +612,7 @@ LLM tutor förstärker självständigt tänkande snarare än att ersätta det. A
 
 ---
 
-## 9. Begränsningar och framtida arbete
+## 10. Begränsningar och framtida arbete
 
 ### 9.1 Kända begränsningar i v1
 
@@ -487,7 +636,7 @@ LLM tutor förstärker självständigt tänkande snarare än att ersätta det. A
 
 ---
 
-## 10. Referenser
+## 11. Referenser
 
 * Andersson, Göran. *Ekonomistyrning: beslut och handling*. Studentlitteratur. (Primärkälla.)
 * Brealey, R., Myers, S., Allen, F. *Principles of Corporate Finance*. (Inspiration för Monte Carlo extensionen.)
@@ -500,10 +649,11 @@ LLM tutor förstärker självständigt tänkande snarare än att ersätta det. A
 
 ---
 
-## 11. Versionering av detta dokument
+## 12. Versionering av detta dokument
 
 | Version | Datum | Ändring |
 |---|---|---|
 | 1.0 | 2026-04-28 | Första utgåvan vid projektstart |
 | 2.0 | 2026-04-28 | Tillagd sektion 6 om LLM design (Qwen3-14B, hybrid register, två lager humanizer, dynamisk quiz, evaluering) |
 | 2.1 | 2026-05-05 | Uppdaterad sektion 7.3 med LLM-genererade scenarier på begäran (Task 7.5) |
+| 2.2 | 2026-05-05 | Ny sektion 8 om UI-designsystemet (utils/ui.py, CSS-arkitektur, färgtokens, komponentkatalog, interaktionsflöde); omdöpta sektioner 8–11 till 9–12 |
