@@ -679,6 +679,57 @@ On generate:
 Acceptance: Each generation produces a unique question. Numeric questions verified before display. Fallback works when LLM unavailable. Chat extension works.
 ```
 
+### Task 7.5: LLM-generated scenarios on demand
+
+**Prompt for Claude Code:**
+
+```
+Add LLM-generated scenario generation to pages/1_Kalkyl.py, pages/2_Investering.py, and pages/3_Budget.py.
+
+Context: Static presets in utils/scenarios.py give students a starting point, but repeated use makes them feel like textbook exercises. This task adds a "Generera nytt exempelföretag" button alongside the existing dropdown that calls the LLM to produce a unique fictional Swedish company with plausible numbers, validated against the relevant calculator before display.
+
+Changes to utils/prompts.py:
+
+Add build_scenario_generation_prompt(module: str, calc_type: str) -> tuple[str, str]:
+  system: "Du genererar realistiska fiktiva svenska företagsscenarier. Svara endast med giltig JSON. Inga förklaringar utanför JSON."
+  user: Specifies module (kalkyl, investering, budget), calc_type (sjalvkostnad, bidrag, abc), and the exact JSON schema required.
+  Schema for sjalvkostnad: { company_name, description, direct_material, direct_labor, mo_pct, to_pct, ao_pct, fo_pct, units }
+  Schema for bidrag: { company_name, description, price_per_unit, variable_cost_per_unit, fixed_costs, units }
+  Schema for abc: { company_name, description, activities: [...], products: [...] }
+  Include instruction: "Variera bransch och storlek varje gång. Siffrorna ska producera rimliga positiva resultat."
+  Include instruction: "Ge aldrig samma foretag som CykelTech AB, SportHandel Norden AB eller NordKonsult AB."
+
+Changes to utils/scenarios.py:
+
+validate_generated_scenario() is already present. No changes needed.
+
+Changes to pages/1_Kalkyl.py:
+
+In the "Ladda exempelföretag" expander for each tab, below the static scenario dropdown:
+  Add st.divider()
+  Add st.button("Generera nytt exempelföretag med AI")
+  On click:
+    Call build_scenario_generation_prompt(module="kalkyl", calc_type=current_tab_calc_type)
+    Call utils/llm.py (non-streaming, stream=False) and parse JSON response
+    Call validate_generated_scenario(parsed_dict, calc_type) from utils/scenarios.py
+    If invalid, retry up to 2 times, then fall back to a random static scenario from SCENARIOS
+    On success, populate form fields exactly as static presets do
+    Show st.caption with company name and an "AI" label next to it
+    Store in st.session_state so the generated scenario persists until the next generate click
+  Show st.spinner("Genererar nytt scenario...") during LLM call
+  If LLMUnavailableError, show st.info("LLM ej tillgänglig. Ladda ett statiskt scenario istället.")
+
+Apply the same pattern to pages/2_Investering.py (Tab 1: grundläggande) and pages/3_Budget.py (Step 1: Resultatbudget).
+
+Grounding note: generated scenarios are inputs only, not LLM explanations, so the humanizer pipeline is NOT applied here. Only JSON parsing and calculator validation matter.
+
+Tests in tests/test_scenarios.py:
+  Mock the LLM and test that validate_generated_scenario rejects bad inputs and accepts good ones.
+  Test that build_scenario_generation_prompt returns non-empty strings containing the JSON schema keywords.
+
+Acceptance: Clicking "Generera nytt exempelföretag med AI" three times in a row produces three different company names and plausible numbers. Fallback to a static preset is triggered and logged when LLM is offline or validation fails after 2 retries.
+```
+
 ---
 
 ## Day 8: Polish, copy review, evaluation

@@ -444,7 +444,9 @@ Waterfall charts för självkostnad och inflations skattepåverkan visar hur vä
 
 ### 7.3 Princip: realistiska men fiktiva scenarier
 
-Tre scenarier täcker tillverkning (CykelTech AB), handel (SportHandel Norden AB) och tjänst (NordKonsult AB). Detta speglar den indelning Andersson använder i kapitel 6 (kostnadsfördelning per företagstyp). Siffrorna är avstämda mot rimliga svenska branschnivåer men medvetet fiktiva.
+Tre statiska scenarier täcker tillverkning (CykelTech AB), handel (SportHandel Norden AB) och tjänst (NordKonsult AB). Detta speglar den indelning Andersson använder i kapitel 6 (kostnadsfördelning per företagstyp). Siffrorna är avstämda mot rimliga svenska branschnivåer men medvetet fiktiva.
+
+Från Day 7 (Task 7.5) kompletteras de statiska förvalen med LLM-genererade scenarier på begäran. En "Generera nytt exempelföretag med AI"-knapp anropar Qwen3-14B med ett JSON-schema som specificerar exakt vilka fält som krävs för den aktuella kalkylfunktionen. Modellen instrueras att variera bransch och storlek varje gång och aldrig återge de tre fasta scenarierna. Det genererade scenariot valideras mot kalkylfunktionen innan det visas; misslyckas valideringen efter två försök används ett statiskt förval som fallback. Humanizern tillämpas inte här eftersom det är inputdata, inte LLM-förklaring, som genereras. Kombinationen av statiska förval (alltid tillgängliga, offline-robusta) och dynamisk generation (variation vid upprepat övande) uppfyller målet att appen aldrig ska kännas som ett statiskt läroboksexempel.
 
 ### 7.4 Princip: LLM som komplement, inte ersättning
 
@@ -504,3 +506,4 @@ LLM tutor förstärker självständigt tänkande snarare än att ersätta det. A
 |---|---|---|
 | 1.0 | 2026-04-28 | Första utgåvan vid projektstart |
 | 2.0 | 2026-04-28 | Tillagd sektion 6 om LLM design (Qwen3-14B, hybrid register, två lager humanizer, dynamisk quiz, evaluering) |
+| 2.1 | 2026-05-05 | Uppdaterad sektion 7.3 med LLM-genererade scenarier på begäran (Task 7.5) |
