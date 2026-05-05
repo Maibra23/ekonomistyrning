@@ -58,7 +58,7 @@ Andersson's textbook is concept rich but practice poor. Students typically read 
 
 | Module | Coverage | Kapitel | LLM features |
 |---|---|---|---|
-| Kalkyl | Självkostnadskalkyl (pålägg), bidragskalkyl, ABC kalkyl | 4, 6, 7, 8 | Auto explanation, step guide, Q&A chat |
+| Kalkyl | Självkostnadskalkyl (pålägg), bidragskalkyl, ABC kalkyl | 4, 6, 7, 8 | Auto explanation, step guide, Q&A chat, LLM-generated scenarios on demand |
 | Investering | NPV, IRR, payback, annuitet, känslighetsanalys, inflation/skatt, Monte Carlo | 10 (all sections) | Auto explanation, sensitivity narrative, Monte Carlo interpretation, Q&A chat |
 | Budget | Resultatbudget, likviditetsbudget, balansbudget med automatisk länkning | 13, 14, 15 | Budget consistency narrative, Q&A chat |
 | Standardkostnadsanalys | Volymavvikelse, prisavvikelse, effektivitetsavvikelse, fasta omkostnader | 17 | Avvikelse interpretation with probable cause analysis, Q&A chat |
@@ -87,6 +87,7 @@ Andersson's textbook is concept rich but practice poor. Students typically read 
 * As a student, I can request a step by step guide that walks me through the calculation as if a tutor were explaining it.
 * As a student, I can ask follow up questions in a chat panel and get answers grounded in my current scenario.
 * As a student, I can export the kalkyl plus the LLM explanation to Excel.
+* As a student, I can click "Generera nytt exempelföretag med AI" to get a fresh fictional Swedish company with unique numbers so that repeated practice never feels like the same textbook exercise. The generated scenario is validated by the calculator before display and falls back to a static preset if the LLM is offline.
 
 ### Investering module
 * As a student, I can enter an investment with up to 15 års kassaflöde and see NPV, IRR, payback, and annuitet computed simultaneously.
