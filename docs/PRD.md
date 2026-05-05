@@ -1,11 +1,12 @@
 # PRD: Ekonomistyrning Sandbox
 
-**Version:** 2.0
+**Version:** 2.1
 **Status:** Active
 **Owner:** Project author
-**Last updated:** 2026-04-28
+**Last updated:** 2026-05-05
 **Build window:** 9 days
 **Major change in v2:** Qwen3-14B integration via Hugging Face Inference Providers across all modules including dynamic quiz, with hybrid banking and academic register and two layer humanizer.
+**Major change in v2.1:** Added section 10 (UI architecture and design system) documenting utils/ui.py, color token semantics, component interaction model, sidebar, LLM UI elements, chart theme, and accessibility. Renumbered old sections 10–14 to 11–15.
 
 ---
 
@@ -210,7 +211,102 @@ If LLM is unavailable (timeout, rate limit, missing token):
 * **Deployment:** Streamlit Community Cloud
 * **VCS:** Git, GitHub
 
-## 10. Risk register
+## 10. UI architecture and design system
+
+### 10.1 Overview
+
+The app has a single, centralized design system implemented in `utils/ui.py`. This file owns all design decisions: color tokens, global CSS, component functions, Swedish labels, and sidebar rendering. Every page — the landing page and all five module pages — consumes it through the same three-call bootstrap:
+
+```python
+st.set_page_config(...)
+from utils.ui import inject_css, render_sidebar, ...   # noqa: E402
+inject_css()
+render_sidebar("module_key")
+```
+
+`inject_css()` calls `st.html(f"<style>{GLOBAL_CSS}</style>")`, injecting all CSS into the page head in one shot. After this call, every `.eks-*` class is available to any component rendered on that page.
+
+### 10.2 Design principles
+
+**Blue-only brand palette.** A single-hue blue palette (`primary #1E40AF`, `sidebar_bg #1E3A8A`, `primary_light #3B82F6`) gives the app a clean, professional identity without decorative color. All color tokens are centralized in the `COLORS` dict and referenced via `%(token_name)s` interpolation in `GLOBAL_CSS`, so a single edit propagates everywhere.
+
+**Semantic color for financial outcomes.** Three colors carry fixed financial meaning across every module:
+
+| Color | Hex | Means |
+|---|---|---|
+| Success green | `#059669` | Positive: NPV > 0, favorable variance, profitable |
+| Danger red | `#DC2626` | Negative: NPV < 0, unfavorable variance, loss |
+| Warning amber | `#D97706` | Boundary: breakeven zone, neutral variance, LLM offline |
+
+Students learn this color language in module 1 (Kalkyl) and it applies identically in all subsequent modules. Color is never the sole signal — every color-coded element also carries a text label and a numeric value.
+
+**Monospace numbers everywhere.** All computed numeric values use IBM Plex Mono. This differentiates calculated output from prose, aligns decimal columns visually, and echoes the spreadsheet conventions students already know.
+
+**Swedish labels only.** All user-facing strings live in the `LABELS` dict in `utils/ui.py`. No Swedish text is hardcoded in any page file, making terminology consistent and easy to update in one place.
+
+### 10.3 Component interaction model
+
+Each module page follows the same assembly sequence:
+
+```
+inject_css()              → activates all .eks-* classes in the page head
+render_sidebar()          → draws nav panel with active page highlighted
+page_title()              → module eyebrow + title + subtitle
+[Input form]              → st.form() with Swedish labels from LABELS dict
+[Calculator call]         → deterministic math in utils/kalkyl.py etc.
+render_kpi_row([...])     → primary results as color-coded KPI cards
+st.plotly_chart()         → chart styled with get_chart_layout() tokens
+[LLM pipeline]            → prompts.py → llm.py → humanizer.py → .eks-llm-section
+[Q&A chat]                → st.chat_input() → same LLM pipeline
+st.download_button()      → utils/export.py → Excel file
+footer_note()             → book reference + version badge
+```
+
+The design system is active at step 1 and shapes the visual output of every subsequent step. The calculator and the design system are independent — a page can render KPI cards without ever calling the LLM, and the LLM pipeline runs identically regardless of which visual components surround it.
+
+### 10.4 Sidebar and navigation
+
+The sidebar is the only navigation mechanism. Streamlit's auto-generated sidebar nav is hidden via CSS (`div[data-testid="stSidebarNav"] {display: none !important;}`). `render_sidebar(active_page)` draws custom links via `st.page_link()` for all six pages.
+
+The sidebar footer shows the LLM model name and a live session call counter (`N / 50`). When the cap is reached, `utils/llm.py` stops issuing calls and the page displays `LABELS["llm_cap_warn"]`. This counter is driven by `st.session_state["llm_call_count"]` and updates in real time.
+
+### 10.5 LLM UI elements
+
+Four distinct elements surface LLM state to the user:
+
+| Element | When shown | Signal |
+|---|---|---|
+| `llm_badge(True)` | Landing page, LLM reachable | Green dot "LLM online" |
+| `llm_badge(False)` | Landing page, LLM unreachable | Red dot "LLM offline" |
+| `offline_badge()` | Module page, fallback template active | Amber pill — degraded mode |
+| `.eks-llm-section` | After successful LLM call | Blue-border explanation with 4-section structure |
+| `grounding_warning()` | LLM cites number deviating > 1% from calculator | Red-border warning naming both values |
+
+The `offline_badge()` and fallback template ensure the app is always usable even when the LLM is down. The `grounding_warning()` is the visible surface of the numeric verification mechanism described in section 7.6.
+
+### 10.6 Chart theme
+
+`get_chart_layout()` in `utils/charts.py` returns a Plotly layout dict that applies design tokens to every chart in the app:
+
+- White plot area, light dotted grid matching the page background
+- Inter for titles, IBM Plex Mono for axis tick labels
+- Deep blue hover tooltips (`#1E3A8A`) matching the sidebar
+- Plotly toolbar removed via `config={"displayModeBar": False}`
+
+Chart series draw from `CHART_PALETTE` in `utils/ui.py` so color ordering is consistent across modules. Waterfall charts (Kalkyl) and horizontal bar charts (Standardkostnadsanalys) apply `success`/`danger` colors directly so students see the same green-positive / red-negative convention in charts as in KPI cards.
+
+### 10.7 Accessibility
+
+Color is never the sole differentiator. Every financial outcome that uses green/red coloring also carries:
+- A text label ("Investera" / "Avstå", "Fördelaktig" / "Ofördelaktig")
+- A numeric value readable independently of color
+- A KPI card left-border that changes color but does not alter the card's text contrast
+
+Chart axis labels, grid lines, and hover tooltips provide all data in text form regardless of color perception. This satisfies the accessibility requirement in section 8.
+
+---
+
+## 11. Risk register
 
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
@@ -226,7 +322,7 @@ If LLM is unavailable (timeout, rate limit, missing token):
 | LLM cost runs above expectations | Low | Wallet hit | Per session cap, cache aggressively, document cost in README |
 | AI tells leak through humanizer | Low | Credibility loss | Layer 1 prompt + Layer 2 regex + optional Layer 3 fallback |
 
-## 11. Definition of done (per module)
+## 12. Definition of done (per module)
 
 A module is done when:
 1. All user stories above pass manual smoke test
@@ -240,7 +336,7 @@ A module is done when:
 9. Humanizer regex pass leaves no known AI tells in 5 sample outputs
 10. Swedish copy reviewed for terminology consistency
 
-## 12. Definition of done (whole project)
+## 13. Definition of done (whole project)
 
 1. All 5 modules meet their per module definition of done
 2. PRD.md, TASKS.md, METHODOLOGY.md committed to repo, all reflecting v2 LLM integration
@@ -250,7 +346,7 @@ A module is done when:
 6. CV updated with project link
 7. End to end demo recording (60 to 90 seconds) showing one full user flow per module
 
-## 13. Evaluation methodology for LLM output
+## 14. Evaluation methodology for LLM output
 
 A small evaluation harness in `tests/eval_llm.py` runs once per release:
 * 10 fixed prompts per module
@@ -258,7 +354,7 @@ A small evaluation harness in `tests/eval_llm.py` runs once per release:
 * Manual review of 3 samples per module flags subtle issues
 * Results logged with timestamp and model version
 
-## 14. References
+## 15. References
 
 * Andersson, Göran. *Ekonomistyrning: beslut och handling*. Studentlitteratur.
 * Streamlit documentation: https://docs.streamlit.io
