@@ -1,9 +1,11 @@
-"""Kalkylmodul - Självkostnad, Bidragskalkyl, ABC-kalkyl.
+"""Kalkylmodul - Sjalvkostnad, Bidragskalkyl, ABC-kalkyl.
 
 Kapitel 4, 6, 7, 8 i Andersson, Ekonomistyrning: beslut och handling.
-All UI strings in Swedish. LLM sections are placeholders (wired in Day 7).
+All UI strings in Swedish. LLM tutor integration wired in Day 7.
 """
 from __future__ import annotations
+
+import json
 
 import numpy as np
 import pandas as pd
@@ -13,7 +15,24 @@ import streamlit as st
 from utils.charts import COLORS, PALETTE, apply_layout, color_by_sign
 from utils.export import export_to_excel
 from utils.formatting import format_percent, format_sek
+from utils.humanizer import humanize
 from utils.kalkyl import abc_calc, contribution_calc, self_cost_palagg
+from utils.llm import (
+    LLMClient,
+    LLMUnavailableError,
+    cached_chat,
+    get_llm_config,
+    get_session_calls_remaining,
+    increment_session_calls,
+    is_llm_available,
+    verify_grounding,
+)
+from utils.prompts import (
+    FALLBACK_TEMPLATES,
+    build_kalkyl_explanation_prompt,
+    build_kalkyl_step_guide_prompt,
+    build_qa_prompt,
+)
 from utils.scenarios import SCENARIOS
 from utils.ui import (
     footer_note,
@@ -23,6 +42,158 @@ from utils.ui import (
     render_kpi_row,
     render_sidebar,
 )
+
+# Try to import scenario generation prompt (may not exist yet)
+try:
+    from utils.prompts import build_scenario_generation_prompt
+
+    _HAS_SCENARIO_GEN = True
+except ImportError:
+    _HAS_SCENARIO_GEN = False
+
+# ---------------------------------------------------------------------------
+# LLM tutor helper - shared across all 3 tabs
+# ---------------------------------------------------------------------------
+
+
+def _render_llm_section(
+    calc_type: str,
+    inputs: dict,
+    outputs: dict,
+    tab_key: str,
+    scenario_name: str | None = None,
+):
+    """Render LLM tutor explanation, step guide, and Q&A chat for a kalkyl tab."""
+
+    # --- Auto explanation ---
+    st.markdown("### Tutor forklaring")
+
+    remaining = get_session_calls_remaining()
+    if remaining <= 0:
+        st.warning(
+            "Du har natt sessionsgransan (50 LLM-anrop). "
+            "Ladda om sidan for att fortsatta."
+        )
+        fallback = FALLBACK_TEMPLATES["kalkyl"](calc_type, inputs, outputs)
+        st.markdown(fallback)
+        return
+
+    try:
+        if not is_llm_available():
+            raise LLMUnavailableError("Ingen token")
+
+        sys_p, usr_p = build_kalkyl_explanation_prompt(
+            calc_type, inputs, outputs, scenario_name
+        )
+
+        # Use cached_chat for auto explanation
+        with st.spinner("Genererar forklaring..."):
+            raw_response = cached_chat(sys_p, usr_p)
+            increment_session_calls()
+
+        result = humanize(
+            raw_response,
+            required_sections=["Antagande", "Berakning", "Tolkning", "Kallor och forbehall"],
+        )
+        st.markdown(result.text)
+
+        if result.tells_found:
+            st.caption(f"Humanizer rensade: {', '.join(result.tells_found)}")
+
+        # Grounding verification
+        expected = {k: v for k, v in outputs.items() if isinstance(v, (int, float))}
+        if expected:
+            grounding = verify_grounding(result.text, expected)
+            if grounding["missing"]:
+                st.html(
+                    '<div class="eks-grounding-warn">'
+                    "OBS: Tutorn kan ha refererat fel siffra, verifiera mot berakningen ovan."
+                    "</div>"
+                )
+
+        # Store for Excel export
+        st.session_state[f"{tab_key}_llm_text"] = result.text
+
+    except LLMUnavailableError:
+        st.html(
+            '<div class="eks-offline-badge">LLM offline, visar grundforklaring</div>'
+        )
+        fallback = FALLBACK_TEMPLATES["kalkyl"](calc_type, inputs, outputs)
+        st.markdown(fallback)
+        st.session_state[f"{tab_key}_llm_text"] = fallback
+
+    # --- Step-by-step guide ---
+    if st.button("Visa steg for steg guide", key=f"{tab_key}_step_btn"):
+        try:
+            if not is_llm_available():
+                raise LLMUnavailableError("Ingen token")
+            sys_p, usr_p = build_kalkyl_step_guide_prompt(calc_type, inputs, outputs)
+            with st.spinner("Genererar steg-for-steg guide..."):
+                raw = cached_chat(sys_p, usr_p)
+                increment_session_calls()
+            result = humanize(raw)
+            with st.expander("Steg for steg guide", expanded=True):
+                st.markdown(result.text)
+        except LLMUnavailableError:
+            st.info(
+                "LLM ej tillganglig. Steg-for-steg guide kraver aktiv LLM-anslutning."
+            )
+
+    # --- Q&A chat ---
+    chat_key = f"{tab_key}_chat_history"
+    if chat_key not in st.session_state:
+        st.session_state[chat_key] = []
+
+    # Display history
+    for role, msg in st.session_state[chat_key]:
+        with st.chat_message(role):
+            st.markdown(msg)
+
+    user_question = st.chat_input(
+        "Fraga tutorn om denna kalkyl", key=f"{tab_key}_chat_input"
+    )
+    if user_question:
+        st.session_state[chat_key].append(("user", user_question))
+        with st.chat_message("user"):
+            st.markdown(user_question)
+
+        try:
+            if not is_llm_available():
+                raise LLMUnavailableError("Ingen token")
+            sys_p, usr_p = build_qa_prompt(
+                f"kalkyl ({calc_type})",
+                inputs,
+                outputs,
+                user_question,
+                chat_history=st.session_state[chat_key],
+            )
+            with st.chat_message("assistant"):
+                with st.spinner("Tanker..."):
+                    raw = cached_chat(sys_p, usr_p)
+                    increment_session_calls()
+                result = humanize(raw)
+                st.markdown(result.text)
+
+                # Grounding check on Q&A
+                expected = {
+                    k: v for k, v in outputs.items() if isinstance(v, (int, float))
+                }
+                if expected:
+                    grounding = verify_grounding(result.text, expected)
+                    if grounding["missing"]:
+                        st.html(
+                            '<div class="eks-grounding-warn">'
+                            "OBS: Tutorn kan ha refererat fel siffra, "
+                            "verifiera mot berakningen ovan."
+                            "</div>"
+                        )
+            st.session_state[chat_key].append(("assistant", result.text))
+        except LLMUnavailableError:
+            fallback_msg = "LLM ej tillganglig. Forsoket misslyckades."
+            with st.chat_message("assistant"):
+                st.info(fallback_msg)
+            st.session_state[chat_key].append(("assistant", fallback_msg))
+
 
 # ---------------------------------------------------------------------------
 # Page config (must be very first Streamlit call on every page)
@@ -151,6 +322,36 @@ with tab_sj:
                 st.session_state.sj_units = float(_inputs["units"])
                 st.rerun()
 
+        # AI scenario generation (Task 7.5)
+        if _HAS_SCENARIO_GEN:
+            st.divider()
+            if st.button("Generera nytt exempelforetag med AI", key="sj_gen_scenario"):
+                try:
+                    if not is_llm_available():
+                        raise LLMUnavailableError("Ingen token")
+                    sys_p, usr_p = build_scenario_generation_prompt(
+                        "kalkyl", "sjalvkostnad"
+                    )
+                    with st.spinner("Genererar nytt scenario..."):
+                        raw = cached_chat(sys_p, usr_p, temperature=0.7)
+                        increment_session_calls()
+                    parsed = json.loads(raw)
+                    st.session_state.sj_dm = float(parsed.get("direct_material", 850))
+                    st.session_state.sj_dl = float(parsed.get("direct_labor", 320))
+                    st.session_state.sj_mo = float(parsed.get("mo_pct", 25))
+                    st.session_state.sj_to = float(parsed.get("to_pct", 80))
+                    st.session_state.sj_ao = float(parsed.get("ao_pct", 12))
+                    st.session_state.sj_fo = float(parsed.get("fo_pct", 8))
+                    st.session_state.sj_units = float(parsed.get("units", 5000))
+                    st.caption(
+                        f"{parsed.get('company_name', 'AI-genererat')} (AI)"
+                    )
+                    st.rerun()
+                except (LLMUnavailableError, json.JSONDecodeError, Exception):
+                    st.info(
+                        "LLM ej tillganglig. Ladda ett statiskt scenario istallet."
+                    )
+
     c1, c2 = st.columns(2)
     with c1:
         dm = st.number_input(
@@ -245,13 +446,35 @@ with tab_sj:
     with st.expander("Detaljerad kostnadstabell"):
         st.dataframe(sj_df, use_container_width=True, hide_index=True)
 
-    with st.expander("Tutor förklaring (tillgänglig från dag 6)", expanded=False):
-        st.info(
-            "LLM-tutorn aktiveras i dag 6. Där får du en pedagogisk förklaring av din "
-            "självkostnadskalkyl med hänvisning till kapitel 6 i Andersson."
-        )
+    # Build inputs/outputs dicts for LLM
+    sj_inputs = {
+        "direkt_material_per_styck": dm,
+        "direkt_lon_per_styck": dl,
+        "MO_procent": mo_pct,
+        "TO_procent": to_pct,
+        "AO_procent": ao_pct,
+        "FO_procent": fo_pct,
+        "antal_enheter": int(units_sj),
+    }
+    sj_outputs = {
+        "sjalvkostnad_per_styck": sj["sjalvkostnad_per_styck"],
+        "tillverkningskostnad": sj["tillverkningskostnad"],
+        "sjalvkostnad_totalt": sj["sjalvkostnad_totalt"],
+    }
+    _render_llm_section(
+        "sjalvkostnad",
+        sj_inputs,
+        sj_outputs,
+        "sj",
+        scenario_name=sj_sel if sj_sel != "\u2014 v\u00e4lj scenario \u2014" else None,
+    )
 
-    xlsx_sj = export_to_excel({"Sjalvkostnad": sj_df})
+    # Build export sheets
+    sj_export_sheets = {"Sjalvkostnad": sj_df}
+    if "sj_llm_text" in st.session_state:
+        llm_df = pd.DataFrame({"Tutor forklaring": [st.session_state["sj_llm_text"]]})
+        sj_export_sheets["Tutor forklaring"] = llm_df
+    xlsx_sj = export_to_excel(sj_export_sheets)
     st.download_button(
         label="Exportera till Excel",
         data=xlsx_sj,
@@ -285,6 +508,39 @@ with tab_bid:
                 st.session_state.bid_fasta = float(_inputs["fixed_costs"])
                 st.session_state.bid_units = float(_inputs["units"])
                 st.rerun()
+
+        # AI scenario generation (Task 7.5)
+        if _HAS_SCENARIO_GEN:
+            st.divider()
+            if st.button("Generera nytt exempelforetag med AI", key="bid_gen_scenario"):
+                try:
+                    if not is_llm_available():
+                        raise LLMUnavailableError("Ingen token")
+                    sys_p, usr_p = build_scenario_generation_prompt(
+                        "kalkyl", "bidrag"
+                    )
+                    with st.spinner("Genererar nytt scenario..."):
+                        raw = cached_chat(sys_p, usr_p, temperature=0.7)
+                        increment_session_calls()
+                    parsed = json.loads(raw)
+                    st.session_state.bid_pris = float(
+                        parsed.get("price_per_unit", 599)
+                    )
+                    st.session_state.bid_rorlig = float(
+                        parsed.get("variable_cost_per_unit", 325)
+                    )
+                    st.session_state.bid_fasta = float(
+                        parsed.get("fixed_costs", 4_200_000)
+                    )
+                    st.session_state.bid_units = float(parsed.get("units", 35_000))
+                    st.caption(
+                        f"{parsed.get('company_name', 'AI-genererat')} (AI)"
+                    )
+                    st.rerun()
+                except (LLMUnavailableError, json.JSONDecodeError, Exception):
+                    st.info(
+                        "LLM ej tillganglig. Ladda ett statiskt scenario istallet."
+                    )
 
     c1, c2 = st.columns(2)
     with c1:
@@ -386,11 +642,26 @@ with tab_bid:
         apply_layout(fig_be, title="Nollpunktsdiagram (kr vs antal enheter)", height=320)
         st.plotly_chart(fig_be, use_container_width=True)
 
-    with st.expander("Tutor förklaring (tillgänglig från dag 6)", expanded=False):
-        st.info(
-            "LLM-tutorn aktiveras i dag 6. Där får du en pedagogisk förklaring av din "
-            "bidragskalkyl med hänvisning till kapitel 8 i Andersson."
-        )
+    # Build inputs/outputs dicts for LLM
+    bid_inputs = {
+        "pris_per_styck": pris,
+        "rorlig_kostnad_per_styck": rorlig,
+        "fasta_kostnader": fasta,
+        "volym": int(units_bid),
+    }
+    bid_outputs = {
+        "tackningsbidrag_per_styck": bid["tackningsbidrag_per_styck"],
+        "resultat": bid["resultat"],
+        "breakeven_units": bid["breakeven_units"],
+        "sakerhetsmarginal_pct": bid["sakerhetsmarginal_pct"],
+    }
+    _render_llm_section(
+        "bidrag",
+        bid_inputs,
+        bid_outputs,
+        "bid",
+        scenario_name=bid_sel if bid_sel != "\u2014 v\u00e4lj scenario \u2014" else None,
+    )
 
     bid_df = pd.DataFrame({
         "Nyckeltal": [
@@ -450,6 +721,35 @@ with tab_abc:
                     _inputs["products"], _inputs["activities"]
                 )
                 st.rerun()
+
+        # AI scenario generation (Task 7.5)
+        if _HAS_SCENARIO_GEN:
+            st.divider()
+            if st.button("Generera nytt exempelforetag med AI", key="abc_gen_scenario"):
+                try:
+                    if not is_llm_available():
+                        raise LLMUnavailableError("Ingen token")
+                    sys_p, usr_p = build_scenario_generation_prompt("kalkyl", "abc")
+                    with st.spinner("Genererar nytt scenario..."):
+                        raw = cached_chat(sys_p, usr_p, temperature=0.7)
+                        increment_session_calls()
+                    parsed = json.loads(raw)
+                    # Expect activities and products lists in the response
+                    if "activities" in parsed and "products" in parsed:
+                        st.session_state.abc_act_df = _activities_to_df(
+                            parsed["activities"]
+                        )
+                        st.session_state.abc_prod_df = _products_to_df(
+                            parsed["products"], parsed["activities"]
+                        )
+                    st.caption(
+                        f"{parsed.get('company_name', 'AI-genererat')} (AI)"
+                    )
+                    st.rerun()
+                except (LLMUnavailableError, json.JSONDecodeError, Exception):
+                    st.info(
+                        "LLM ej tillganglig. Ladda ett statiskt scenario istallet."
+                    )
 
     col_a, col_b = st.columns(2)
 
@@ -547,11 +847,27 @@ with tab_abc:
             apply_layout(fig_abc, title="Kostnadsfördelning per produkt/tjänst (kr)", height=380)
             st.plotly_chart(fig_abc, use_container_width=True)
 
-            with st.expander("Tutor förklaring (tillgänglig från dag 6)", expanded=False):
-                st.info(
-                    "LLM-tutorn aktiveras i dag 6. Där får du en pedagogisk förklaring av din "
-                    "ABC-kalkyl med hänvisning till kapitel 7 i Andersson."
+            # Build inputs/outputs dicts for LLM
+            abc_inputs_llm = {
+                "aktiviteter": str([a["name"] for a in activities]),
+                "produkter": str([p["name"] for p in products_list]),
+            }
+            abc_outputs_llm = {}
+            for _, row in abc_result.iterrows():
+                abc_outputs_llm[f"{row.name}_total_kostnad"] = float(
+                    row["total_kostnad"]
                 )
+                if "kostnad_per_styck" in abc_result.columns:
+                    abc_outputs_llm[f"{row.name}_kostnad_per_styck"] = float(
+                        row["kostnad_per_styck"]
+                    )
+            _render_llm_section(
+                "abc",
+                abc_inputs_llm,
+                abc_outputs_llm,
+                "abc",
+                scenario_name=abc_sel if abc_sel != "\u2014 v\u00e4lj scenario \u2014" else None,
+            )
 
             abc_export_df = abc_result.reset_index().rename(columns={"index": "Produkt"})
             xlsx_abc = export_to_excel({"ABC-kalkyl": abc_export_df})

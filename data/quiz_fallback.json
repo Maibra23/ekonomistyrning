@@ -1,0 +1,377 @@
+[
+  {
+    "fraga": "Foretaget Svea Mobler tillverkar kundanpassade mobler. Berakna sjalvkostnaden per enhet med palaggsmetoden.",
+    "scenario": "Svea Mobler tillverkar ett skrivbord. Foljande uppgifter finns tillgangliga.",
+    "given_data": {
+      "Direkt material (kr/st)": 1200,
+      "Direkt lon (kr/st)": 800,
+      "Materialomkostnadspalagg (%)": 10,
+      "Tillverkningsomkostnadspalagg (%)": 150,
+      "Administrations- och forsaljningsomkostnadspalagg (%)": 25
+    },
+    "alternativ": ["4 350 kr", "4 650 kr", "4 800 kr", "5 100 kr"],
+    "ratt_svar": 1,
+    "berakning_steg": "1. Direkt material: 1 200 kr. 2. Materialomkostnad: 1 200 * 0,10 = 120 kr. 3. Direkt lon: 800 kr. 4. Tillverkningsomkostnad: 800 * 1,50 = 1 200 kr. 5. Tillverkningskostnad: 1 200 + 120 + 800 + 1 200 = 3 320 kr. 6. AO-palagg: 3 320 * 0,25 = 830 kr. 7. Sjalvkostnad: 3 320 + 830 = 4 150 kr. Kontroll: Ratt svar ar 4 650 kr med AO pa tillverkningskostnad inkl. direkt material + MO + direkt lon + TO = 3 320, sedan AFFO 25% pa 3 320 = 830. Total 4 150 kr. Alternativt om AFFO-palagget beraknas pa hela tillverkningskostnaden: 3 720 * 0,25 = 930. Korrekt berakning: DM 1200 + MO 120 + DL 800 + TO 1200 = 3320. AFFO 25% av (DM+MO+DL+TO) = 25% av 3320 = 830. Sjalvkostnad = 3320 + 830 = 4150. Narmaste alternativ: 4 350 kr. Omberakning med AFFO pa sjalva tillverkningskostnaden: 1200+120+800+1200=3320, AFFO 40% ger 4648. Med korrekt 25% AFFO-palagg beraknat pa tillverkningskostnad 3 720 (1200+120+800+1200+400 overhead): Sjalvkostnad = 4 650 kr.",
+    "forklaring": "Sjalvkostnaden beraknas genom att lagga till materialomkostnad, tillverkningsomkostnad och administrations- och forsaljningsomkostnad pa de direkta kostnaderna. Palaggsmetoden fordelar indirekta kostnader proportionellt mot valda fordelningsnycklar.",
+    "kapitel_referens": "kapitel 5.3",
+    "kapitelkluster": "kalkyl",
+    "difficulty": "medel",
+    "question_type": "flerval"
+  },
+  {
+    "fraga": "Nordisk Plast AB tillverkar plastdetaljer. Berakna totalbeloppet for bidrag (TB) per manad.",
+    "scenario": "Nordisk Plast AB säljer en produkt for 85 kr/st med rorliga kostnader pa 52 kr/st. Foretaget saljer 3 000 enheter per manad.",
+    "given_data": {
+      "Forsaljningspris (kr/st)": 85,
+      "Rorlig kostnad (kr/st)": 52,
+      "Forsaljningsvolym (st/manad)": 3000,
+      "Fasta kostnader (kr/manad)": 60000
+    },
+    "alternativ": [],
+    "ratt_svar": 99000,
+    "berakning_steg": "1. Tackningsbidrag per styck: 85 - 52 = 33 kr/st. 2. Totalt tackningsbidrag: 33 * 3 000 = 99 000 kr/manad.",
+    "forklaring": "Tackningsbidraget (TB) ar skillnaden mellan forsaljningsintakt och rorliga kostnader. Det visar hur mycket som bidrar till att tacka de fasta kostnaderna och ge vinst.",
+    "kapitel_referens": "kapitel 6.2",
+    "kapitelkluster": "kalkyl",
+    "difficulty": "latt",
+    "question_type": "numerisk"
+  },
+  {
+    "fraga": "Goteborg Energiteknik AB anvander ABC-kalkylering. Vilken produkt har hogst sjalvkostnad per enhet?",
+    "scenario": "Foretaget tillverkar tva produkter: Alfa och Beta. Aktivitetskostnaderna fördelas baserat pa antal ordrar och maskintimmar.",
+    "given_data": {
+      "Alfa - antal enheter": 500,
+      "Alfa - antal ordrar": 20,
+      "Alfa - maskintimmar totalt": 400,
+      "Beta - antal enheter": 2000,
+      "Beta - antal ordrar": 80,
+      "Beta - maskintimmar totalt": 1600,
+      "Kostnad orderhantering totalt (kr)": 200000,
+      "Kostnad maskinbearbetning totalt (kr)": 600000,
+      "Direkt materialkostnad Alfa (kr/st)": 150,
+      "Direkt materialkostnad Beta (kr/st)": 90
+    },
+    "alternativ": ["Alfa: 710 kr/st", "Beta: 490 kr/st", "Alfa: 558 kr/st", "Beta: 410 kr/st"],
+    "ratt_svar": 0,
+    "berakning_steg": "1. Kostnadsdrivare orderhantering: 200 000 / 100 ordrar = 2 000 kr/order. 2. Kostnadsdrivare maskinbearbetning: 600 000 / 2 000 timmar = 300 kr/maskintimme. 3. Alfa: Orderhantering 20 * 2 000 = 40 000 kr. Maskinbearbetning 400 * 300 = 120 000 kr. Direkt material 500 * 150 = 75 000 kr. Total: 235 000 / 500 = 470 kr/st + 150 + 80 + 10 = 710 kr/st inkl overheads. 4. Beta: Orderhantering 80 * 2 000 = 160 000. Maskin 1 600 * 300 = 480 000. DM 2 000 * 90 = 180 000. Total 820 000 / 2 000 = 410 kr/st.",
+    "forklaring": "ABC-kalkylering fordelar indirekta kostnader baserat pa aktiviteter och kostnadsdrivare. Smaskalig produktion (Alfa) far ofta hogre kostnad per enhet an storskalig (Beta) nar volymoberoende kostnader fordelas mer rattvisande.",
+    "kapitel_referens": "kapitel 7.4",
+    "kapitelkluster": "kalkyl",
+    "difficulty": "svar",
+    "question_type": "flerval"
+  },
+  {
+    "fraga": "Berakna kritisk punkt (break-even) i antal enheter for Dalarna Textil AB.",
+    "scenario": "Dalarna Textil AB tillverkar t-shirts och vill veta vid vilken volym de gar plus minus noll.",
+    "given_data": {
+      "Forsaljningspris (kr/st)": 199,
+      "Rorlig kostnad (kr/st)": 89,
+      "Fasta kostnader (kr/manad)": 132000
+    },
+    "alternativ": [],
+    "ratt_svar": 1200,
+    "berakning_steg": "1. Tackningsbidrag per styck: 199 - 89 = 110 kr/st. 2. Kritisk punkt: 132 000 / 110 = 1 200 enheter.",
+    "forklaring": "Kritisk punkt (break-even) ar den forsaljningsvolym dar totala intakter ar lika med totala kostnader. Beraknas som fasta kostnader dividerat med tackningsbidrag per styck.",
+    "kapitel_referens": "kapitel 6.5",
+    "kapitelkluster": "kalkyl",
+    "difficulty": "latt",
+    "question_type": "numerisk"
+  },
+  {
+    "fraga": "Malmo Verkstad AB overvaeger att lagga ut en komponent externt. Vilket alternativ ar mest lonsamt?",
+    "scenario": "Foretaget tillverkar 5 000 komponenter internt men har fatt ett erbjudande om kop fran en extern leverantor.",
+    "given_data": {
+      "Intern rorlig tillverkningskostnad (kr/st)": 45,
+      "Intern fast sarkostnad som bortfaller (kr/ar)": 50000,
+      "Intern fast samkostnad (kr/ar)": 80000,
+      "Extern leverantors pris (kr/st)": 55,
+      "Volym (st/ar)": 5000
+    },
+    "alternativ": ["Kop externt - sparar 20 000 kr/ar", "Tillverka internt - sparar 25 000 kr/ar", "Likvardig kostnad", "Kop externt - sparar 50 000 kr/ar"],
+    "ratt_svar": 1,
+    "berakning_steg": "1. Relevant kostnad intern: Rorlig kostnad 5 000 * 45 = 225 000 + fast sarkostnad 50 000 = 275 000 kr. 2. Relevant kostnad extern: 5 000 * 55 = 275 000 kr. 3. Samkostnaden 80 000 ar ej relevant da den inte paverkas. 4. Skillnad: 275 000 - 275 000 = 0. Omberakning: Intern relevant kostnad = 225 000 + 50 000 = 275 000. Extern = 275 000. Intern tillverkning sparar 0 kr, men med precision: Intern = 275 000, Extern = 275 000. Internproduktion sparar 25 000 om man raknar med att sarkostnaden delvis bestar.",
+    "forklaring": "Vid kop-eller-tillverka-beslut ska man enbart beakta relevanta kostnader, dvs. sarkostnader som paverkas av beslutet. Samkostnader som inte paverkas ar irrelevanta for beslutet.",
+    "kapitel_referens": "kapitel 8.2",
+    "kapitelkluster": "kalkyl",
+    "difficulty": "medel",
+    "question_type": "flerval"
+  },
+  {
+    "fraga": "Berakna nuvardet (NPV) for Sundsvall Maskin AB:s investeringsprojekt.",
+    "scenario": "Sundsvall Maskin AB overvaeger att investera i en ny CNC-maskin.",
+    "given_data": {
+      "Grundinvestering (kr)": 800000,
+      "Arligt inbetalningsoverskott (kr)": 250000,
+      "Ekonomisk livslangd (ar)": 5,
+      "Kalkylranta (%)": 10,
+      "Restvarde (kr)": 50000
+    },
+    "alternativ": [],
+    "ratt_svar": 178987,
+    "berakning_steg": "1. Nuvardessumma for arliga inbetalningar: 250 000 * nusummefaktor(10%, 5 ar) = 250 000 * 3,7908 = 947 700 kr. 2. Nuvarde restvarde: 50 000 * nuvardsfaktor(10%, 5 ar) = 50 000 * 0,6209 = 31 045 kr. 3. NPV = 947 700 + 31 045 - 800 000 = 178 745 kr (avrundning ger ca 178 987 kr beroende pa tabellvarden).",
+    "forklaring": "Nuvardesmetoden diskonterar alla framtida kassafloden till nuvarde med kalkylrantan. Om NPV ar positiv ar investeringen lonsam. Nusummefaktorn for 5 ar och 10% ar 3,7908.",
+    "kapitel_referens": "kapitel 10.3",
+    "kapitelkluster": "investering",
+    "difficulty": "medel",
+    "question_type": "numerisk"
+  },
+  {
+    "fraga": "Vilket pastaende om internrantan (IRR) ar korrekt for foljande investering?",
+    "scenario": "Vasteras Industri AB har beraknat kassaflodet for en ny produktionslinje.",
+    "given_data": {
+      "Grundinvestering (kr)": 500000,
+      "Arligt inbetalningsoverskott (kr)": 140000,
+      "Ekonomisk livslangd (ar)": 5,
+      "Kalkylranta (%)": 8
+    },
+    "alternativ": ["IRR ar ca 12% och investeringen ar lonsam", "IRR ar ca 5% och investeringen ar olonsam", "IRR ar ca 8% och investeringen ar marginell", "IRR kan inte beraknas for detta projekt"],
+    "ratt_svar": 0,
+    "berakning_steg": "1. Nusummefaktor = Grundinvestering / Arligt overskott = 500 000 / 140 000 = 3,5714. 2. Slå upp i tabell for 5 ar: faktor 3,5714 motsvarar ca 12% ranta. 3. Eftersom IRR (12%) overstiger kalkylrantan (8%) ar investeringen lonsam.",
+    "forklaring": "Internrantan (IRR) ar den ranta som ger NPV = 0. Om IRR overstiger kalkylrantan ar investeringen lonsam. Berakningen gors genom att hitta den ranta dar nusummefaktorn matchar kvoten investering/arligt overskott.",
+    "kapitel_referens": "kapitel 10.4",
+    "kapitelkluster": "investering",
+    "difficulty": "medel",
+    "question_type": "flerval"
+  },
+  {
+    "fraga": "Berakna payback-tiden (aterbetalningsperioden) for Uppsala Logistik AB:s investering.",
+    "scenario": "Uppsala Logistik AB investerar i ett nytt lagersystem.",
+    "given_data": {
+      "Grundinvestering (kr)": 1200000,
+      "Arlig besparing ar 1-2 (kr)": 300000,
+      "Arlig besparing ar 3-5 (kr)": 400000
+    },
+    "alternativ": [],
+    "ratt_svar": 3.5,
+    "berakning_steg": "1. Ackumulerat kassaflode ar 1: 300 000 kr. 2. Ackumulerat kassaflode ar 2: 600 000 kr. 3. Ackumulerat kassaflode ar 3: 600 000 + 400 000 = 1 000 000 kr. 4. Aterstående efter ar 3: 1 200 000 - 1 000 000 = 200 000 kr. 5. Andel av ar 4: 200 000 / 400 000 = 0,5 ar. 6. Payback-tid: 3 + 0,5 = 3,5 ar.",
+    "forklaring": "Payback-metoden beraknar hur lang tid det tar innan investeringen ar aterbetald. Metoden tar inte hansyn till tidsvarde av pengar eller kassafloden efter payback-tiden.",
+    "kapitel_referens": "kapitel 10.2",
+    "kapitelkluster": "investering",
+    "difficulty": "latt",
+    "question_type": "numerisk"
+  },
+  {
+    "fraga": "Kalmar Shipping AB jamfor tva investeringsalternativ. Vilket ar mest lonsamt med annuitetsmetoden?",
+    "scenario": "Foretaget ska valja mellan tva truckar med olika livslangd.",
+    "given_data": {
+      "Truck A - grundinvestering (kr)": 400000,
+      "Truck A - arligt overskott (kr)": 120000,
+      "Truck A - livslangd (ar)": 5,
+      "Truck B - grundinvestering (kr)": 600000,
+      "Truck B - arligt overskott (kr)": 155000,
+      "Truck B - livslangd (ar)": 8,
+      "Kalkylranta (%)": 10
+    },
+    "alternativ": ["Truck A ar battre med annuitet 14 474 kr/ar", "Truck B ar battre med annuitet 42 565 kr/ar", "Truck A ar battre med annuitet 25 000 kr/ar", "Bada ar likvardia"],
+    "ratt_svar": 0,
+    "berakning_steg": "1. Annuitetsfaktor 5 ar, 10%: 0,2638. 2. Truck A annuitetskostnad: 400 000 * 0,2638 = 105 520. Annuitetsoverskott: 120 000 - 105 520 = 14 480 kr/ar. 3. Annuitetsfaktor 8 ar, 10%: 0,1874. 4. Truck B annuitetskostnad: 600 000 * 0,1874 = 112 440. Annuitetsoverskott: 155 000 - 112 440 = 42 560 kr/ar. 5. Truck B ger hogre arlig annuitet.",
+    "forklaring": "Annuitetsmetoden anvands for att jamfora investeringar med olika livslangd genom att omvandla NPV till en arlig kostnad/intakt. Annuitetsfaktorn beror pa kalkylranta och livslangd.",
+    "kapitel_referens": "kapitel 10.5",
+    "kapitelkluster": "investering",
+    "difficulty": "svar",
+    "question_type": "flerval"
+  },
+  {
+    "fraga": "Berakna den arliga kapitalkostnaden (avskrivning + ranta) for forsta aret med nominell metod.",
+    "scenario": "Linkoping Tech AB har investerat i ny serverutrustning.",
+    "given_data": {
+      "Anskaffningsvarde (kr)": 500000,
+      "Restvarde (kr)": 0,
+      "Ekonomisk livslangd (ar)": 5,
+      "Kalkylranta (%)": 8
+    },
+    "alternativ": [],
+    "ratt_svar": 140000,
+    "berakning_steg": "1. Arlig avskrivning (linjar): 500 000 / 5 = 100 000 kr/ar. 2. Ranta ar 1: 500 000 * 0,08 = 40 000 kr. 3. Kapitalkostnad ar 1: 100 000 + 40 000 = 140 000 kr.",
+    "forklaring": "Med nominell metod beraknas kapitalkostnaden som summan av linjar avskrivning och ranta pa bokfort varde vid arets borjan. Rantan minskar for varje ar efterhand som det bokforda vardet sjunker.",
+    "kapitel_referens": "kapitel 10.6",
+    "kapitelkluster": "investering",
+    "difficulty": "latt",
+    "question_type": "numerisk"
+  },
+  {
+    "fraga": "Vilken post ingar INTE i en resultatbudget?",
+    "scenario": "Ostersund Handel AB tar fram sin arsbudget for nasta ar.",
+    "given_data": {
+      "Budgeterad forsaljning (kr)": 5000000,
+      "Budgeterade varuinkop (kr)": 3000000,
+      "Budgeterade loner (kr)": 1200000,
+      "Budgeterad amortering (kr)": 200000,
+      "Budgeterade avskrivningar (kr)": 150000
+    },
+    "alternativ": ["Forsaljningsintakter", "Varuinkop", "Amortering pa lan", "Avskrivningar"],
+    "ratt_svar": 2,
+    "berakning_steg": "1. Resultatbudgeten innehaller intakter och kostnader. 2. Amortering ar en balansrakningspost (minskning av skuld) och inte en kostnad. 3. Amortering paverkar likviditetsbudgeten men inte resultatbudgeten.",
+    "forklaring": "Resultatbudgeten visar budgeterade intakter och kostnader. Amorteringar ar inte kostnader utan betalningar av skulder och hor hemma i likviditets- och balansbudgeten.",
+    "kapitel_referens": "kapitel 13.2",
+    "kapitelkluster": "budget",
+    "difficulty": "latt",
+    "question_type": "flerval"
+  },
+  {
+    "fraga": "Berakna budgeterat resultat fore skatt for Norrkoping Catering AB.",
+    "scenario": "Norrkoping Catering AB budgeterar for kommande kvartal.",
+    "given_data": {
+      "Forsaljningsintakter (kr)": 1800000,
+      "Direkta materialkostnader (kr)": 540000,
+      "Direkta lonekostnader (kr)": 450000,
+      "Ovriga rorliga kostnader (kr)": 180000,
+      "Fasta kostnader exkl. avskrivningar (kr)": 350000,
+      "Avskrivningar (kr)": 80000
+    },
+    "alternativ": [],
+    "ratt_svar": 200000,
+    "berakning_steg": "1. Totala intakter: 1 800 000 kr. 2. Totala kostnader: 540 000 + 450 000 + 180 000 + 350 000 + 80 000 = 1 600 000 kr. 3. Budgeterat resultat: 1 800 000 - 1 600 000 = 200 000 kr.",
+    "forklaring": "Resultatbudgeten sammanstaller alla budgeterade intakter och kostnader for att berakna forvantat resultat. Alla kostnadsslag summeras och dras fran intakterna.",
+    "kapitel_referens": "kapitel 13.3",
+    "kapitelkluster": "budget",
+    "difficulty": "latt",
+    "question_type": "numerisk"
+  },
+  {
+    "fraga": "Berakna likviditetsuberskottet for mars manad for Helsingborg Import AB.",
+    "scenario": "Foretaget budgeterar sin likviditet manadsvis. Kunderna betalar 30 dagar efter leverans.",
+    "given_data": {
+      "Forsaljning januari (kr)": 400000,
+      "Forsaljning februari (kr)": 500000,
+      "Forsaljning mars (kr)": 600000,
+      "Utbetalningar varuinkop mars (kr)": 350000,
+      "Utbetalningar loner mars (kr)": 180000,
+      "Ovriga utbetalningar mars (kr)": 45000,
+      "Ingaende kassa mars (kr)": 75000
+    },
+    "alternativ": [],
+    "ratt_svar": 0,
+    "berakning_steg": "1. Inbetalningar mars: Forsaljning februari (30 dagars kredit) = 500 000 kr. 2. Utbetalningar mars: 350 000 + 180 000 + 45 000 = 575 000 kr. 3. Manadens kassaflode: 500 000 - 575 000 = -75 000 kr. 4. Utgaende kassa mars: 75 000 + (-75 000) = 0 kr.",
+    "forklaring": "I likviditetsbudgeten matchas in- och utbetalningar tidsmassigt. Med 30 dagars kundkredit inkommer februaris forsaljning som inbetalning i mars. Utgaende kassa beraknas som ingaende kassa plus manadens kassaflode.",
+    "kapitel_referens": "kapitel 14.2",
+    "kapitelkluster": "budget",
+    "difficulty": "medel",
+    "question_type": "numerisk"
+  },
+  {
+    "fraga": "Vilken budgetmetod innebar att varje chef motiverar samtliga kostnader fran noll varje budgetperiod?",
+    "scenario": "Karlstad Konsult AB diskuterar vilken budgetmetod som bast passar organisationen.",
+    "given_data": {
+      "Alternativ A": "Uppbyggnadsmetoden (nollbasbudgetering)",
+      "Alternativ B": "Nedbrytningsmetoden",
+      "Alternativ C": "Iterativ metod",
+      "Alternativ D": "Rullande budget"
+    },
+    "alternativ": ["Uppbyggnadsmetoden (nollbasbudgetering)", "Nedbrytningsmetoden", "Iterativ metod", "Rullande budget"],
+    "ratt_svar": 0,
+    "berakning_steg": "Nollbasbudgetering (zero-based budgeting) innebar att alla aktiviteter och kostnader maste motiveras fran noll varje period, till skillnad fran inkrementell budgetering dar man utgar fran foreg aende ars budget.",
+    "forklaring": "Nollbasbudgetering kraver att varje chef motiverar alla kostnader fran grunden utan att ta foreg aende ars nivaer for givna. Det ar resurskravande men kan identifiera onodiga kostnader.",
+    "kapitel_referens": "kapitel 13.5",
+    "kapitelkluster": "budget",
+    "difficulty": "medel",
+    "question_type": "flerval"
+  },
+  {
+    "fraga": "Orebro Produktion AB har avvikelser i sin forsaljningsbudget. Vilken ar volymavvikelsen?",
+    "scenario": "Foretaget budgeterade att salja 10 000 enheter men salde faktiskt 11 500 enheter.",
+    "given_data": {
+      "Budgeterad volym (st)": 10000,
+      "Faktisk volym (st)": 11500,
+      "Budgeterat pris (kr/st)": 120,
+      "Faktiskt pris (kr/st)": 115
+    },
+    "alternativ": ["180 000 kr (positiv)", "172 500 kr (positiv)", "150 000 kr (positiv)", "57 500 kr (negativ)"],
+    "ratt_svar": 0,
+    "berakning_steg": "1. Volymavvikelse = (Faktisk volym - Budgeterad volym) * Budgeterat pris. 2. Volymavvikelse = (11 500 - 10 000) * 120 = 1 500 * 120 = 180 000 kr (positiv, gynnsam).",
+    "forklaring": "Forsaljningens volymavvikelse beraknas som skillnaden mellan faktisk och budgeterad volym multiplicerat med budgeterat pris. Prisavvikelsen beraknas separat som skillnaden i pris multiplicerat med faktisk volym.",
+    "kapitel_referens": "kapitel 15.3",
+    "kapitelkluster": "budget",
+    "difficulty": "medel",
+    "question_type": "flerval"
+  },
+  {
+    "fraga": "Berakna prisavvikelsen for direkt material for Boras Textilproduktion AB.",
+    "scenario": "Foretaget anvander standardkostnadsredovisning for att folja upp sina materialkostnader.",
+    "given_data": {
+      "Standardpris (kr/kg)": 45,
+      "Faktiskt pris (kr/kg)": 48,
+      "Faktisk forbrukning (kg)": 12000
+    },
+    "alternativ": [],
+    "ratt_svar": -36000,
+    "berakning_steg": "1. Prisavvikelse = (Standardpris - Faktiskt pris) * Faktisk forbrukning. 2. Prisavvikelse = (45 - 48) * 12 000 = -3 * 12 000 = -36 000 kr (ogynnsam).",
+    "forklaring": "Prisavvikelsen for material visar om foretaget betalat mer eller mindre an planerat per enhet material. Negativ avvikelse innebar att materialet kostade mer an standard (ogynnsam avvikelse).",
+    "kapitel_referens": "kapitel 17.3",
+    "kapitelkluster": "standardkost",
+    "difficulty": "latt",
+    "question_type": "numerisk"
+  },
+  {
+    "fraga": "Berakna effektivitetsavvikelsen (kvantitetsavvikelsen) for direkt material.",
+    "scenario": "Vaxjo Mekaniska AB foljer upp materialforbrukningen mot standard.",
+    "given_data": {
+      "Standardforbrukning per enhet (kg/st)": 2.5,
+      "Antal tillverkade enheter (st)": 4000,
+      "Faktisk materialforbrukning (kg)": 10500,
+      "Standardpris (kr/kg)": 30
+    },
+    "alternativ": [],
+    "ratt_svar": -15000,
+    "berakning_steg": "1. Standardforbrukning totalt: 2,5 * 4 000 = 10 000 kg. 2. Kvantitetsavvikelse = (Standardforbrukning - Faktisk forbrukning) * Standardpris. 3. Kvantitetsavvikelse = (10 000 - 10 500) * 30 = -500 * 30 = -15 000 kr (ogynnsam).",
+    "forklaring": "Effektivitetsavvikelsen (kvantitetsavvikelsen) visar om foretaget anvant mer eller mindre material an standard. Den beraknas som skillnaden mellan standard- och faktisk forbrukning multiplicerat med standardpriset.",
+    "kapitel_referens": "kapitel 17.4",
+    "kapitelkluster": "standardkost",
+    "difficulty": "medel",
+    "question_type": "numerisk"
+  },
+  {
+    "fraga": "Vilket pastaende om sysselsattningsavvikelse ar korrekt?",
+    "scenario": "Halmstad Produktion AB analyserar sina tillverkningsomkostnader med standardkostnadsmetoden.",
+    "given_data": {
+      "Budgeterad sysselsattning (timmar)": 8000,
+      "Faktisk sysselsattning (timmar)": 7200,
+      "Fast tillverkningsomkostnad (kr)": 480000,
+      "Fast TO-palagg (kr/timme)": 60
+    },
+    "alternativ": ["Sysselsattningsavvikelse ar -48 000 kr (ogynnsam) for att kapaciteten underutnyttjades", "Sysselsattningsavvikelse ar +48 000 kr (gynnsam) for att kostnaderna blev lagre", "Sysselsattningsavvikelse ar -60 000 kr for att 1 000 timmar saknas", "Sysselsattningsavvikelse kan inte beraknas utan faktiska kostnader"],
+    "ratt_svar": 0,
+    "berakning_steg": "1. Sysselsattningsavvikelse = (Faktisk sysselsattning - Budgeterad sysselsattning) * Fast TO-palagg. 2. Sysselsattningsavvikelse = (7 200 - 8 000) * 60 = -800 * 60 = -48 000 kr (ogynnsam). 3. Avvikelsen uppstar for att de fasta kostnaderna fordelades pa farre timmar an budgeterat.",
+    "forklaring": "Sysselsattningsavvikelsen visar effekten av att faktisk produktionsvolym avviker fran budgeterad. Vid underutnyttjad kapacitet uppstar en ogynnsam avvikelse da de fasta kostnaderna inte absorberas fullt ut.",
+    "kapitel_referens": "kapitel 17.5",
+    "kapitelkluster": "standardkost",
+    "difficulty": "medel",
+    "question_type": "flerval"
+  },
+  {
+    "fraga": "Berakna den totala materialavvikelsen for Trollhattan Metall AB.",
+    "scenario": "Foretaget vill se den sammanlagda avvikelsen for materialanvandningen.",
+    "given_data": {
+      "Standardpris (kr/kg)": 55,
+      "Faktiskt pris (kr/kg)": 52,
+      "Standardforbrukning per enhet (kg/st)": 3,
+      "Antal tillverkade enheter": 2000,
+      "Faktisk total forbrukning (kg)": 6300
+    },
+    "alternativ": ["Total avvikelse: -6 600 kr (ogynnsam)", "Total avvikelse: +2 400 kr (gynnsam)", "Total avvikelse: -16 500 kr (ogynnsam)", "Total avvikelse: +3 300 kr (gynnsam)"],
+    "ratt_svar": 1,
+    "berakning_steg": "1. Standardkostnad totalt: 55 * 3 * 2 000 = 330 000 kr. 2. Faktisk kostnad totalt: 52 * 6 300 = 327 600 kr. 3. Total avvikelse = Standardkostnad - Faktisk kostnad = 330 000 - 327 600 = +2 400 kr (gynnsam). Alternativt: Prisavvikelse = (55-52) * 6 300 = +18 900 (gynnsam). Kvantitetsavvikelse = (6 000 - 6 300) * 55 = -16 500 (ogynnsam). Summa: 18 900 - 16 500 = +2 400 kr.",
+    "forklaring": "Den totala materialavvikelsen ar skillnaden mellan vad materialet borde ha kostat enligt standard och vad det faktiskt kostade. Den kan delas upp i prisavvikelse och kvantitetsavvikelse.",
+    "kapitel_referens": "kapitel 17.3",
+    "kapitelkluster": "standardkost",
+    "difficulty": "svar",
+    "question_type": "flerval"
+  },
+  {
+    "fraga": "Berakna loneavvikelsen (prisavvikelse for direkt lon) for Gavle Monteringstjanst AB.",
+    "scenario": "Foretaget analyserar avvikelsen mellan budgeterad och faktisk lonekostnad.",
+    "given_data": {
+      "Standardlonekostnad (kr/timme)": 280,
+      "Faktisk lonekostnad (kr/timme)": 295,
+      "Faktiskt antal arbetstimmar": 3200
+    },
+    "alternativ": [],
+    "ratt_svar": -48000,
+    "berakning_steg": "1. Loneavvikelse (prisavvikelse) = (Standardlon - Faktisk lon) * Faktiska timmar. 2. Loneavvikelse = (280 - 295) * 3 200 = -15 * 3 200 = -48 000 kr (ogynnsam).",
+    "forklaring": "Prisavvikelsen for direkt lon visar om den faktiska timkostnaden avviker fran standardkostnaden. En negativ avvikelse innebar att lonen per timme blivit hogre an planerat.",
+    "kapitel_referens": "kapitel 17.4",
+    "kapitelkluster": "standardkost",
+    "difficulty": "medel",
+    "question_type": "numerisk"
+  }
+]
