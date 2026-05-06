@@ -15,19 +15,44 @@ import re
 from dataclasses import dataclass
 from typing import Iterator
 
+# Load .env file if python-dotenv is available
+try:
+    from dotenv import load_dotenv as _load_dotenv
+
+    _load_dotenv()
+except ImportError:
+    pass
+
 NBSP = "\u00a0"
 
-DEFAULT_MODEL = "Qwen/Qwen3-14B"
+DEFAULT_MODEL = "Qwen/Qwen3-8B"
 DEFAULT_PROVIDER = "auto"
-DEFAULT_TIMEOUT = 30
-DEFAULT_MAX_TOKENS = 800
+DEFAULT_TIMEOUT = 60
+DEFAULT_MAX_TOKENS = 4096
 DEFAULT_TEMPERATURE = 0.4
 SESSION_CALL_CAP = 50
+
+# Qwen3 models emit <think>...</think> reasoning blocks before the response.
+# This pattern strips them so callers only see the final answer.
+THINK_TAG_PATTERN = re.compile(r"<think>[\s\S]*?</think>\s*", flags=re.DOTALL)
 
 # Swedish formatted number pattern: "1 234,56" or "1234,56" or "12,5" or "850"
 SWEDISH_NUMBER_PATTERN = re.compile(
     r"(?<![A-Za-z\d])-?\d{1,3}(?:[\u00a0\s]\d{3})*(?:,\d+)?(?![A-Za-z])"
 )
+
+
+def _strip_think_tags(text: str) -> str:
+    """Remove Qwen3 <think>...</think> reasoning blocks from output.
+
+    If the model ran out of tokens mid-thinking (no </think>), strip
+    everything from <think> onward.
+    """
+    cleaned = THINK_TAG_PATTERN.sub("", text)
+    # Handle unclosed <think> (model hit token limit during reasoning)
+    if "<think>" in cleaned:
+        cleaned = cleaned.split("<think>")[0]
+    return cleaned.strip()
 
 
 class LLMUnavailableError(RuntimeError):
@@ -152,7 +177,8 @@ class LLMClient:
                 max_tokens=max_new_tokens,
                 temperature=temperature,
             )
-            return response.choices[0].message.content or ""
+            raw = response.choices[0].message.content or ""
+            return _strip_think_tags(raw)
         except Exception as exc:
             raise LLMUnavailableError(f"LLM anrop misslyckades: {exc}") from exc
 
@@ -163,7 +189,11 @@ class LLMClient:
         max_new_tokens: int = DEFAULT_MAX_TOKENS,
         temperature: float = DEFAULT_TEMPERATURE,
     ) -> Iterator[str]:
-        """Streaming chat completion. Yields text chunks."""
+        """Streaming chat completion. Yields text chunks.
+
+        Buffers output until any <think>...</think> block is fully consumed,
+        then yields only the post-thinking content.
+        """
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
@@ -176,11 +206,27 @@ class LLMClient:
                 temperature=temperature,
                 stream=True,
             )
+            in_think = False
             for chunk in stream:
                 if chunk.choices and chunk.choices[0].delta:
                     delta = chunk.choices[0].delta.content
-                    if delta:
-                        yield delta
+                    if not delta:
+                        continue
+                    # Track <think> blocks and suppress them
+                    if "<think>" in delta:
+                        in_think = True
+                        delta = delta.split("<think>")[0]
+                        if delta.strip():
+                            yield delta
+                        continue
+                    if in_think:
+                        if "</think>" in delta:
+                            in_think = False
+                            delta = delta.split("</think>", 1)[1]
+                            if delta.strip():
+                                yield delta
+                        continue
+                    yield delta
         except Exception as exc:
             raise LLMUnavailableError(f"LLM stream misslyckades: {exc}") from exc
 

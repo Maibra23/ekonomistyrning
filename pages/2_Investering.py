@@ -12,6 +12,7 @@ import streamlit as st
 from utils.charts import COLORS, apply_layout
 from utils.export import export_to_excel
 from utils.formatting import format_percent, format_sek, format_years
+from utils.humanizer import humanize
 from utils.investering import (
     annuity,
     irr,
@@ -20,6 +21,19 @@ from utils.investering import (
     npv_with_inflation_tax,
     payback,
     sensitivity_analysis,
+)
+from utils.llm import (
+    LLMUnavailableError,
+    cached_chat,
+    get_session_calls_remaining,
+    increment_session_calls,
+    is_llm_available,
+    verify_grounding,
+)
+from utils.prompts import (
+    build_investering_explanation_prompt,
+    build_qa_prompt,
+    FALLBACK_TEMPLATES,
 )
 from utils.ui import footer_note, inject_css, kpi_card, page_title, render_kpi_row, render_sidebar
 
@@ -95,6 +109,96 @@ if "inv_rate" not in st.session_state:
     st.session_state["inv_rate"] = _DEFAULT_RATE
 if "inv_cf_df" not in st.session_state:
     st.session_state["inv_cf_df"] = _init_cf_df(_DEFAULT_YEARS)
+
+# ---------------------------------------------------------------------------
+# LLM helper
+# ---------------------------------------------------------------------------
+
+
+def _render_investering_llm(
+    method: str,
+    inputs: dict,
+    outputs: dict,
+    tab_key: str,
+):
+    """Render LLM explanation and Q&A for an investering tab."""
+    st.markdown("### Tutor forklaring")
+
+    remaining = get_session_calls_remaining()
+    if remaining <= 0:
+        st.warning("Du har natt sessionsgransan (50 LLM-anrop). Ladda om sidan for att fortsatta.")
+        fallback = FALLBACK_TEMPLATES["investering"](method, inputs, outputs)
+        st.markdown(fallback)
+        return
+
+    try:
+        if not is_llm_available():
+            raise LLMUnavailableError("Ingen token")
+        sys_p, usr_p = build_investering_explanation_prompt(method, inputs, outputs)
+        with st.spinner("Genererar forklaring..."):
+            raw = cached_chat(sys_p, usr_p)
+            increment_session_calls()
+        result = humanize(raw, required_sections=["Antagande", "Berakning", "Tolkning", "Kallor och forbehall"])
+        st.markdown(result.text)
+
+        # Grounding verification
+        expected = {k: v for k, v in outputs.items() if isinstance(v, (int, float)) and v is not None}
+        if expected:
+            grounding = verify_grounding(result.text, expected)
+            if grounding["missing"]:
+                st.html(
+                    '<div class="eks-grounding-warn">'
+                    "OBS: Tutorn kan ha refererat fel siffra, verifiera mot berakningen ovan."
+                    "</div>"
+                )
+    except LLMUnavailableError:
+        st.html('<div class="eks-offline-badge">LLM offline, visar grundforklaring</div>')
+        fallback = FALLBACK_TEMPLATES["investering"](method, inputs, outputs)
+        st.markdown(fallback)
+
+    # Q&A chat (shared across all tabs on one page)
+    chat_key = "inv_chat_history"
+    if chat_key not in st.session_state:
+        st.session_state[chat_key] = []
+
+    for role, msg in st.session_state[chat_key]:
+        with st.chat_message(role):
+            st.markdown(msg)
+
+    user_q = st.chat_input("Fraga tutorn om denna investering", key=f"{tab_key}_chat_input")
+    if user_q:
+        st.session_state[chat_key].append(("user", user_q))
+        with st.chat_message("user"):
+            st.markdown(user_q)
+        try:
+            if not is_llm_available():
+                raise LLMUnavailableError("Ingen token")
+            sys_p, usr_p = build_qa_prompt(
+                f"investering ({method})", inputs, outputs, user_q,
+                chat_history=st.session_state[chat_key],
+            )
+            with st.chat_message("assistant"):
+                with st.spinner("Tanker..."):
+                    raw = cached_chat(sys_p, usr_p)
+                    increment_session_calls()
+                result = humanize(raw)
+                st.markdown(result.text)
+                expected = {k: v for k, v in outputs.items() if isinstance(v, (int, float)) and v is not None}
+                if expected:
+                    grounding = verify_grounding(result.text, expected)
+                    if grounding["missing"]:
+                        st.html(
+                            '<div class="eks-grounding-warn">'
+                            "OBS: Tutorn kan ha refererat fel siffra, verifiera mot berakningen ovan."
+                            "</div>"
+                        )
+            st.session_state[chat_key].append(("assistant", result.text))
+        except LLMUnavailableError:
+            msg = "LLM ej tillganglig."
+            with st.chat_message("assistant"):
+                st.info(msg)
+            st.session_state[chat_key].append(("assistant", msg))
+
 
 # ---------------------------------------------------------------------------
 # Page header
@@ -304,8 +408,20 @@ with tab1:
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
-    with st.expander("Tutor forklaring", expanded=False):
-        st.info("LLM forklaring kommer har (kopplas in Dag 7).")
+    # LLM explanation and Q&A for Tab 1
+    tab1_inputs = {
+        "grundinvestering": grundinvestering,
+        "kalkylranta": rate,
+        "antal_ar": antal_ar,
+        "kassafloden": str(cash_flows),
+    }
+    tab1_outputs = {
+        "npv": npv_val,
+        "irr": irr_val if irr_val is not None else 0,
+        "aterbetalingstid": payback_val if payback_val is not None else 0,
+        "annuitet": annuitet_val,
+    }
+    _render_investering_llm("npv", tab1_inputs, tab1_outputs, "inv_tab1")
 
     st.html(footer_note(updated="2026-05-06"))
 
@@ -351,6 +467,10 @@ with tab2:
             value=30,
             help="Övre gräns for parametervariation",
         )
+
+    # Initialize variables for LLM scope
+    critical_var = None
+    base_npv = 0.0
 
     with col_sa_res:
         if not base_cfs:
@@ -405,7 +525,6 @@ with tab2:
             pos_mask = sa_df["npv"] > 0
             neg_mask = sa_df["npv"] < 0
             if pos_mask.any() and neg_mask.any():
-                critical_var: float | None = None
                 for i in range(len(sa_df) - 1):
                     n1 = sa_df["npv"].iloc[i]
                     n2 = sa_df["npv"].iloc[i + 1]
@@ -428,8 +547,17 @@ with tab2:
                     "NPV är positivt i hela variationsintervallet. Investeringen är robust."
                 )
 
-    with st.expander("Tutor forklaring", expanded=False):
-        st.info("LLM forklaring kommer har (kopplas in Dag 7).")
+    # LLM explanation and Q&A for Tab 2
+    sa_inputs = {
+        "parameter": sa_param,
+        "variation_min": sa_min,
+        "variation_max": sa_max,
+        "bas_npv": base_npv,
+    }
+    sa_outputs = {"bas_npv": base_npv}
+    if critical_var is not None:
+        sa_outputs["kritisk_variation"] = critical_var
+    _render_investering_llm("sensitivity", sa_inputs, sa_outputs, "inv_tab2")
 
     st.html(footer_note(updated="2026-05-06"))
 
@@ -575,8 +703,20 @@ with tab3:
                 f"= {nom_rate * 100:.2f}% | Kapitel 10.11"
             )
 
-    with st.expander("Tutor forklaring", expanded=False):
-        st.info("LLM forklaring kommer har (kopplas in Dag 7).")
+    # LLM explanation and Q&A for Tab 3
+    if it_cfs:
+        it_inputs_llm = {
+            "real_kalkylranta": real_rate_pct / 100.0,
+            "inflation": inflation_pct / 100.0,
+            "skattesats": tax_pct / 100.0,
+            "avskrivning_per_ar": depreciation,
+        }
+        it_outputs_llm = {
+            "nominell_kalkylranta": it_res["nominal_discount_rate"],
+            "npv_fore_skatt": it_res["npv_before_tax"],
+            "npv_efter_skatt": it_res["npv_after_tax"],
+        }
+        _render_investering_llm("inflation_skatt", it_inputs_llm, it_outputs_llm, "inv_tab3")
 
     st.html(footer_note(updated="2026-05-06"))
 
@@ -780,7 +920,21 @@ with tab4:
         else:
             st.info("Tryck 'Kör simulering' for att starta Monte Carlo-analysen.")
 
-    with st.expander("Tutor forklaring", expanded=False):
-        st.info("LLM forklaring kommer har (kopplas in Dag 7).")
+    # LLM explanation and Q&A for Tab 4
+    if mc_result is not None:
+        mc_inputs_llm = {
+            "grundinvestering_medel": mc_inv_mean,
+            "grundinvestering_std": mc_inv_std,
+            "kalkylranta_medel": mc_rate_mean,
+            "antal_simuleringar": n_sims,
+        }
+        mc_outputs_llm = {
+            "medel_npv": mc_result["mean"],
+            "median_npv": mc_result["median"],
+            "p5": mc_result["p5"],
+            "p95": mc_result["p95"],
+            "sannolikhet_positiv_npv": mc_result["prob_positive_npv"],
+        }
+        _render_investering_llm("monte_carlo", mc_inputs_llm, mc_outputs_llm, "inv_tab4")
 
     st.html(footer_note(updated="2026-05-06"))

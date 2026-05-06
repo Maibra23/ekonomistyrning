@@ -354,7 +354,144 @@ def fallback_investering_template(
     )
 
 
+def fallback_budget_template(
+    calc_type: str, inputs: dict[str, Any], outputs: dict[str, Any]
+) -> str:
+    """Return a fallback four section explanation for budget analysis."""
+    inputs_lines = "\n".join(f"- {k}: {v}" for k, v in inputs.items())
+    outputs_lines = "\n".join(f"- {k}: {v}" for k, v in outputs.items())
+
+    return (
+        f"**Antagande**\n"
+        f"Budgeten bygger på kapitel 13 till 15 och antar stabil affärsmodell utan "
+        f"extraordinära poster under perioden.\n\n"
+        f"**Beräkning**\n"
+        f"Indata:\n{inputs_lines}\n\n"
+        f"Resultat:\n{outputs_lines}\n\n"
+        f"**Tolkning**\n"
+        f"Kontrollera att de tre delbudgetarna är inbördes konsistenta. Resultatbudgetens "
+        f"årsresultat ska återspeglas i balansbudgetens förändring av eget kapital, och "
+        f"likviditetsbudgetens kassaförändring ska stämma med balansbudgetens likvida medel.\n\n"
+        f"**Källor och förbehåll**\n"
+        f"Förenklad modell enligt kapitel 13 till 15. Periodiseringseffekter och "
+        f"säsongsvariationer fångas inte fullt ut."
+    )
+
+
+def fallback_standardkost_template(
+    calc_type: str, inputs: dict[str, Any], outputs: dict[str, Any]
+) -> str:
+    """Return a fallback four section explanation for variance analysis."""
+    inputs_lines = "\n".join(f"- {k}: {v}" for k, v in inputs.items())
+    outputs_lines = "\n".join(f"- {k}: {v}" for k, v in outputs.items())
+
+    return (
+        f"**Antagande**\n"
+        f"Analysen följer kapitel 17 och delar upp totalavvikelsen i volym, pris och "
+        f"effektivitetskomponenter.\n\n"
+        f"**Beräkning**\n"
+        f"Indata:\n{inputs_lines}\n\n"
+        f"Resultat:\n{outputs_lines}\n\n"
+        f"**Tolkning**\n"
+        f"Identifiera den dominerande avvikelsen. Stor prisavvikelse pekar mot "
+        f"inköpsfunktionen, stor effektivitetsavvikelse mot produktionen, och stor "
+        f"volymavvikelse mot försäljningen eller marknadsefterfrågan.\n\n"
+        f"**Källor och förbehåll**\n"
+        f"Förenklad modell enligt kapitel 17. Samspelseffekter mellan komponenterna "
+        f"kan ge mindre avstämningsdifferenser."
+    )
+
+
+def build_scenario_generation_prompt(
+    module: str, calc_type: str
+) -> tuple[str, str]:
+    """Build prompt for LLM-generated fictional company scenarios.
+
+    module in {"kalkyl", "investering", "budget"}.
+    calc_type specifies the sub-type within the module.
+    """
+    system_prompt = (
+        "Du genererar realistiska fiktiva svenska foretagsscenarier for utbildningssyfte. "
+        "Svara ENDAST med giltig JSON. Inga forklaringar utanfor JSON-blocket."
+    )
+
+    schemas = {
+        "sjalvkostnad": (
+            '{\n'
+            '  "company_name": "Foretagsnamn AB",\n'
+            '  "description": "Kort beskrivning av foretaget",\n'
+            '  "direct_material": 0,\n'
+            '  "direct_labor": 0,\n'
+            '  "mo_pct": 0,\n'
+            '  "to_pct": 0,\n'
+            '  "ao_pct": 0,\n'
+            '  "fo_pct": 0,\n'
+            '  "units": 0\n'
+            '}'
+        ),
+        "bidrag": (
+            '{\n'
+            '  "company_name": "Foretagsnamn AB",\n'
+            '  "description": "Kort beskrivning av foretaget",\n'
+            '  "price_per_unit": 0,\n'
+            '  "variable_cost_per_unit": 0,\n'
+            '  "fixed_costs": 0,\n'
+            '  "units": 0\n'
+            '}'
+        ),
+        "abc": (
+            '{\n'
+            '  "company_name": "Foretagsnamn AB",\n'
+            '  "description": "Kort beskrivning av foretaget",\n'
+            '  "activities": [\n'
+            '    {"name": "Aktivitet1", "total_cost": 0, "cost_driver": "timmar", "total_driver_volume": 0}\n'
+            '  ],\n'
+            '  "products": [\n'
+            '    {"name": "Produkt1", "direct_cost": 0, "driver_consumption": {"Aktivitet1": 0}, "units": 0}\n'
+            '  ]\n'
+            '}'
+        ),
+        "investering": (
+            '{\n'
+            '  "company_name": "Foretagsnamn AB",\n'
+            '  "description": "Kort beskrivning",\n'
+            '  "initial_investment": 0,\n'
+            '  "cash_flows": [0, 0, 0, 0, 0],\n'
+            '  "discount_rate": 0.10,\n'
+            '  "n_years": 5\n'
+            '}'
+        ),
+        "budget": (
+            '{\n'
+            '  "company_name": "Foretagsnamn AB",\n'
+            '  "description": "Kort beskrivning",\n'
+            '  "forsaljning": 0,\n'
+            '  "rorliga_kostnader": 0,\n'
+            '  "personalkostnader": 0,\n'
+            '  "lokalkostnader": 0,\n'
+            '  "avskrivningar": 0,\n'
+            '  "ovriga_kostnader": 0,\n'
+            '  "finansiella_kostnader": 0\n'
+            '}'
+        ),
+    }
+
+    schema = schemas.get(calc_type, schemas.get(module, '{}'))
+
+    user_prompt = (
+        f"Generera ett realistiskt fiktivt svenskt foretag for modulen {module}, "
+        f"berakningstyp: {calc_type}.\n\n"
+        f"JSON-schema:\n{schema}\n\n"
+        "Variera bransch och storlek. Siffrorna ska producera rimliga positiva resultat. "
+        "Ge aldrig samma foretag som CykelTech AB, SportHandel Norden AB eller NordKonsult AB. "
+        "Svara ENDAST med JSON."
+    )
+    return system_prompt, user_prompt
+
+
 FALLBACK_TEMPLATES: dict[str, callable] = {
     "kalkyl": fallback_kalkyl_template,
     "investering": fallback_investering_template,
+    "budget": fallback_budget_template,
+    "standardkost": fallback_standardkost_template,
 }

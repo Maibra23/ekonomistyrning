@@ -18,6 +18,20 @@ from utils.budget import (
 from utils.charts import COLORS, apply_layout
 from utils.export import export_to_excel
 from utils.formatting import format_sek
+from utils.llm import (
+    LLMUnavailableError,
+    cached_chat,
+    get_session_calls_remaining,
+    increment_session_calls,
+    is_llm_available,
+    verify_grounding,
+)
+from utils.humanizer import humanize
+from utils.prompts import (
+    build_budget_consistency_prompt,
+    build_qa_prompt,
+    FALLBACK_TEMPLATES,
+)
 from utils.ui import (
     footer_note,
     inject_css,
@@ -318,11 +332,8 @@ with st.expander("Steg 1: Resultatbudget", expanded=True):
         fig_resultat.update_layout(xaxis_tickangle=-45)
         st.plotly_chart(fig_resultat, use_container_width=True)
 
-    with st.expander("Tutor forklaring", expanded=False):
-        st.info("LLM forklaring kommer har (kopplas in Dag 7).")
-
 # ===========================================================================
-# STEG 2 — LIKVIDITETSBUDGET
+# STEG 2 -- LIKVIDITETSBUDGET
 # ===========================================================================
 
 with st.expander("Steg 2: Likviditetsbudget", expanded=True):
@@ -494,11 +505,8 @@ with st.expander("Steg 2: Likviditetsbudget", expanded=True):
         fig_likviditet.update_layout(xaxis_tickangle=-25)
         st.plotly_chart(fig_likviditet, use_container_width=True)
 
-    with st.expander("Tutor forklaring", expanded=False):
-        st.info("LLM forklaring kommer har (kopplas in Dag 7).")
-
 # ===========================================================================
-# STEG 3 — BALANSBUDGET
+# STEG 3 -- BALANSBUDGET
 # ===========================================================================
 
 with st.expander("Steg 3: Balansbudget", expanded=True):
@@ -726,11 +734,115 @@ with st.expander("Steg 3: Balansbudget", expanded=True):
         fig_balans.update_layout(barmode="group", xaxis_tickangle=-30)
         st.plotly_chart(fig_balans, use_container_width=True)
 
-    with st.expander("Tutor forklaring", expanded=False):
-        st.info("LLM forklaring kommer har (kopplas in Dag 7).")
+# ===========================================================================
+# LLM SAMMANFATTANDE ANALYS
+# ===========================================================================
+
+st.markdown("### Sammanfattande analys")
+
+remaining = get_session_calls_remaining()
+if remaining <= 0:
+    st.warning("Du har natt sessionsgransan (50 LLM-anrop). Ladda om sidan for att fortsatta.")
+else:
+    # Build summary dicts from the computed DataFrames
+    resultat_summary = {
+        "forsaljning": forsaljning,
+        "arets_resultat": arets_resultat,
+        "bruttoresultat": bruttoresultat,
+        "rorelseresultat": rorelseresultat,
+    }
+    likviditet_summary = {
+        "opening_cash": opening_cash,
+        "forandring_likvida_medel": forandring,
+        "likvida_medel_ub": likvida_ub,
+        "delta_rorelsekapital": delta_rk,
+    }
+    balans_summary_dict = {
+        "summa_tillgangar_ub": summa_tillgangar_ub,
+        "summa_skulder_ek_ub": summa_skulder_ek_ub,
+        "differens": difference,
+    }
+
+    try:
+        if not is_llm_available():
+            raise LLMUnavailableError("Ingen token")
+        sys_p, usr_p = build_budget_consistency_prompt(
+            resultat_summary, likviditet_summary, balans_summary_dict,
+            is_balanced, difference,
+        )
+        with st.spinner("Analyserar budgetkonsistens..."):
+            raw = cached_chat(sys_p, usr_p)
+            increment_session_calls()
+        result = humanize(raw, required_sections=["Antagande", "Berakning", "Tolkning", "Kallor och forbehall"])
+        st.markdown(result.text)
+
+        if result.tells_found:
+            st.caption(f"Humanizer rensade: {', '.join(result.tells_found)}")
+
+        # Grounding
+        expected_nums = {
+            "forsaljning": forsaljning,
+            "arets_resultat": arets_resultat,
+            "likvida_medel_ub": likvida_ub,
+        }
+        grounding = verify_grounding(result.text, expected_nums)
+        if grounding["missing"]:
+            st.html(
+                '<div class="eks-grounding-warn">'
+                "OBS: Tutorn kan ha refererat fel siffra, verifiera mot berakningen ovan."
+                "</div>"
+            )
+    except LLMUnavailableError:
+        st.html('<div class="eks-offline-badge">LLM offline, visar grundforklaring</div>')
+        budget_inputs = {
+            "forsaljning": forsaljning,
+            "arets_resultat": arets_resultat,
+        }
+        budget_outputs = {
+            "likvida_medel_ub": likvida_ub,
+            "summa_tillgangar_ub": summa_tillgangar_ub,
+            "balanserad": is_balanced,
+        }
+        fallback = FALLBACK_TEMPLATES["budget"]("budget", budget_inputs, budget_outputs)
+        st.markdown(fallback)
+
+# Q&A chat
+if "budget_chat_history" not in st.session_state:
+    st.session_state["budget_chat_history"] = []
+
+for role, msg in st.session_state["budget_chat_history"]:
+    with st.chat_message(role):
+        st.markdown(msg)
+
+user_q = st.chat_input("Fraga tutorn om budgeten")
+if user_q:
+    st.session_state["budget_chat_history"].append(("user", user_q))
+    with st.chat_message("user"):
+        st.markdown(user_q)
+    try:
+        if not is_llm_available():
+            raise LLMUnavailableError("Ingen token")
+        budget_ctx_inputs = {"forsaljning": forsaljning, "arets_resultat": arets_resultat}
+        budget_ctx_outputs = {"likvida_medel_ub": likvida_ub, "balanserad": is_balanced}
+        sys_p, usr_p = build_qa_prompt(
+            "budget", budget_ctx_inputs, budget_ctx_outputs, user_q,
+            chat_history=st.session_state["budget_chat_history"],
+        )
+        with st.chat_message("assistant"):
+            with st.spinner("Tanker..."):
+                raw = cached_chat(sys_p, usr_p)
+                increment_session_calls()
+            result = humanize(raw)
+            st.markdown(result.text)
+        st.session_state["budget_chat_history"].append(("assistant", result.text))
+    except LLMUnavailableError:
+        msg = "LLM ej tillganglig."
+        with st.chat_message("assistant"):
+            st.info(msg)
+        st.session_state["budget_chat_history"].append(("assistant", msg))
 
 # ===========================================================================
-# BOTTOM — EXPORT
+# BOTTOM -- EXPORT
 # ===========================================================================
 
 st.divider()

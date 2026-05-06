@@ -17,8 +17,10 @@ from utils.prompts import (
     build_qa_prompt,
     build_quiz_generation_prompt,
     build_standardkost_interpretation_prompt,
+    fallback_budget_template,
     fallback_investering_template,
     fallback_kalkyl_template,
+    fallback_standardkost_template,
 )
 
 
@@ -197,10 +199,41 @@ def test_fallback_investering_template():
     assert "12345" in out
 
 
+def test_fallback_budget_template():
+    out = fallback_budget_template(
+        "budget", {"forsaljning": 5000000}, {"arets_resultat": 350000}
+    )
+    assert "Antagande" in out
+    assert "Beräkning" in out
+    assert "Tolkning" in out
+    assert "Källor och förbehåll" in out
+    assert "5000000" in out
+    assert "350000" in out
+    assert "kapitel 13" in out
+
+
+def test_fallback_standardkost_template():
+    out = fallback_standardkost_template(
+        "standardkost",
+        {"standard_pris": 50, "verkligt_pris": 55},
+        {"prisavvikelse": 5000, "total_avvikelse": 8000},
+    )
+    assert "Antagande" in out
+    assert "Beräkning" in out
+    assert "Tolkning" in out
+    assert "Källor och förbehåll" in out
+    assert "50" in out
+    assert "5000" in out
+    assert "kapitel 17" in out
+
+
 def test_fallback_templates_dict():
     assert "kalkyl" in FALLBACK_TEMPLATES
     assert "investering" in FALLBACK_TEMPLATES
-    assert callable(FALLBACK_TEMPLATES["kalkyl"])
+    assert "budget" in FALLBACK_TEMPLATES
+    assert "standardkost" in FALLBACK_TEMPLATES
+    for key in FALLBACK_TEMPLATES:
+        assert callable(FALLBACK_TEMPLATES[key])
 
 
 def test_no_dashes_in_system_prompt():

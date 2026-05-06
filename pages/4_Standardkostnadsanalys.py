@@ -12,6 +12,20 @@ import streamlit as st
 from utils.charts import COLORS, apply_layout
 from utils.export import export_to_excel
 from utils.formatting import format_sek
+from utils.llm import (
+    LLMUnavailableError,
+    cached_chat,
+    get_session_calls_remaining,
+    increment_session_calls,
+    is_llm_available,
+    verify_grounding,
+)
+from utils.humanizer import humanize
+from utils.prompts import (
+    build_standardkost_interpretation_prompt,
+    build_qa_prompt,
+    FALLBACK_TEMPLATES,
+)
 from utils.standardkost import (
     variance_decomposition_rorlig,
     variance_fixed_overhead,
@@ -261,8 +275,44 @@ with tab1:
                 "Kontrollera inmatade varden."
             )
 
-    with st.expander("Tutor forklaring", expanded=False):
-        st.info("LLM forklaring kommer har (kopplas in Dag 7).")
+        # LLM interpretation
+        st.markdown("### Tolkning")
+        remaining = get_session_calls_remaining()
+        if remaining > 0:
+            try:
+                if not is_llm_available():
+                    raise LLMUnavailableError("Ingen token")
+                component_results = [{
+                    "typ": "Rorlig kostnad",
+                    "volymavvikelse": rorlig_result["volymavvikelse"],
+                    "prisavvikelse": rorlig_result["prisavvikelse"],
+                    "effektivitetsavvikelse": rorlig_result["effektivitetsavvikelse"],
+                    "total": rorlig_result["total"],
+                }]
+                sys_p, usr_p = build_standardkost_interpretation_prompt(component_results)
+                with st.spinner("Analyserar avvikelser..."):
+                    raw = cached_chat(sys_p, usr_p)
+                    increment_session_calls()
+                result = humanize(raw, required_sections=["Antagande", "Berakning", "Tolkning", "Kallor och forbehall"])
+                st.markdown(result.text)
+
+                expected = {
+                    "volymavvikelse": rorlig_result["volymavvikelse"],
+                    "prisavvikelse": rorlig_result["prisavvikelse"],
+                    "effektivitetsavvikelse": rorlig_result["effektivitetsavvikelse"],
+                }
+                grounding = verify_grounding(result.text, expected)
+                if grounding["missing"]:
+                    st.html(
+                        '<div class="eks-grounding-warn">'
+                        "OBS: Tutorn kan ha refererat fel siffra."
+                        "</div>"
+                    )
+            except LLMUnavailableError:
+                st.html('<div class="eks-offline-badge">LLM offline, visar grundforklaring</div>')
+                sk_inputs = {"standard_volym": std_volym, "verklig_volym": verk_volym}
+                sk_outputs = {"total_avvikelse": rorlig_result["total"]}
+                st.markdown(FALLBACK_TEMPLATES["standardkost"]("standardkost", sk_inputs, sk_outputs))
 
     st.html(footer_note(updated="2026-05-06"))
 
@@ -361,8 +411,32 @@ with tab2:
 
         st.caption("Kapitel 17.7: Fasta omkostnadsavvikelser.")
 
-    with st.expander("Tutor forklaring", expanded=False):
-        st.info("LLM forklaring kommer har (kopplas in Dag 7).")
+    # LLM interpretation for fixed overhead
+    st.markdown("### Tolkning")
+    if get_session_calls_remaining() > 0:
+        try:
+            if not is_llm_available():
+                raise LLMUnavailableError("Ingen token")
+            component_results = [{
+                "typ": "Fast omkostnad",
+                "budgeterat": fast_result["standard_belopp"],
+                "verkligt": fast_result["verkligt_belopp"],
+                "avvikelse": fast_result["avvikelse"],
+                "fordelaktig": fast_result["favorable"],
+            }]
+            sys_p, usr_p = build_standardkost_interpretation_prompt(component_results)
+            with st.spinner("Analyserar..."):
+                raw = cached_chat(sys_p, usr_p)
+                increment_session_calls()
+            result = humanize(raw)
+            st.markdown(result.text)
+        except LLMUnavailableError:
+            st.html('<div class="eks-offline-badge">LLM offline, visar grundforklaring</div>')
+            st.markdown(FALLBACK_TEMPLATES["standardkost"](
+                "standardkost",
+                {"budgeterat": budget_belopp, "verkligt": verkligt_belopp},
+                {"avvikelse": fast_result["avvikelse"]},
+            ))
 
     st.html(footer_note(updated="2026-05-06"))
 
@@ -499,7 +573,66 @@ with tab3:
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
-    with st.expander("Tutor forklaring", expanded=False):
-        st.info("LLM forklaring kommer har (kopplas in Dag 7).")
+    # LLM interpretation
+    st.markdown("### Tolkning")
+    if get_session_calls_remaining() > 0 and bar_values:
+        try:
+            if not is_llm_available():
+                raise LLMUnavailableError("Ingen token")
+            all_components = []
+            if rorlig_res:
+                all_components.append({
+                    "typ": "Rorlig",
+                    "volymavvikelse": rorlig_res["volymavvikelse"],
+                    "prisavvikelse": rorlig_res["prisavvikelse"],
+                    "effektivitetsavvikelse": rorlig_res["effektivitetsavvikelse"],
+                })
+            if fast_res:
+                all_components.append({
+                    "typ": "Fast",
+                    "avvikelse": fast_res["avvikelse"],
+                })
+            sys_p, usr_p = build_standardkost_interpretation_prompt(all_components)
+            with st.spinner("Analyserar sammanstallning..."):
+                raw = cached_chat(sys_p, usr_p)
+                increment_session_calls()
+            result = humanize(raw)
+            st.markdown(result.text)
+        except LLMUnavailableError:
+            st.html('<div class="eks-offline-badge">LLM offline, visar grundforklaring</div>')
+            st.markdown(FALLBACK_TEMPLATES["standardkost"](
+                "standardkost",
+                {"rorlig_total": rorlig_total, "fast_avvikelse": fast_avvikelse},
+                {"total_avvikelse": total_all},
+            ))
+
+    # Q&A chat
+    if "sk_chat_history" not in st.session_state:
+        st.session_state["sk_chat_history"] = []
+    for role, msg in st.session_state["sk_chat_history"]:
+        with st.chat_message(role):
+            st.markdown(msg)
+    user_q = st.chat_input("Fraga tutorn om standardkostnadsanalysen", key="sk_chat_input")
+    if user_q:
+        st.session_state["sk_chat_history"].append(("user", user_q))
+        with st.chat_message("user"):
+            st.markdown(user_q)
+        try:
+            if not is_llm_available():
+                raise LLMUnavailableError("Ingen token")
+            sk_ctx = {"total_avvikelse": total_all} if 'total_all' in dir() else {}
+            sys_p, usr_p = build_qa_prompt("standardkost", sk_ctx, sk_ctx, user_q, chat_history=st.session_state["sk_chat_history"])
+            with st.chat_message("assistant"):
+                with st.spinner("Tanker..."):
+                    raw = cached_chat(sys_p, usr_p)
+                    increment_session_calls()
+                result = humanize(raw)
+                st.markdown(result.text)
+            st.session_state["sk_chat_history"].append(("assistant", result.text))
+        except LLMUnavailableError:
+            msg = "LLM ej tillganglig."
+            with st.chat_message("assistant"):
+                st.info(msg)
+            st.session_state["sk_chat_history"].append(("assistant", msg))
 
     st.html(footer_note(updated="2026-05-06"))
