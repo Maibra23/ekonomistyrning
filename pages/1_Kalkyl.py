@@ -66,13 +66,13 @@ def _render_llm_section(
     """Render LLM tutor explanation, step guide, and Q&A chat for a kalkyl tab."""
 
     # --- Auto explanation ---
-    st.markdown("### Tutor forklaring")
+    st.markdown("### Tutor förklaring")
 
     remaining = get_session_calls_remaining()
     if remaining <= 0:
         st.warning(
-            "Du har natt sessionsgransan (50 LLM-anrop). "
-            "Ladda om sidan for att fortsatta."
+            "Du har nått sessionsgränsen (50 LLM-anrop). "
+            "Ladda om sidan för att fortsätta."
         )
         fallback = FALLBACK_TEMPLATES["kalkyl"](calc_type, inputs, outputs)
         st.markdown(fallback)
@@ -87,7 +87,7 @@ def _render_llm_section(
         )
 
         # Use cached_chat for auto explanation
-        with st.spinner("Genererar forklaring..."):
+        with st.spinner("Genererar förklaring..."):
             raw_response = cached_chat(sys_p, usr_p)
             increment_session_calls()
 
@@ -107,7 +107,7 @@ def _render_llm_section(
             if grounding["missing"]:
                 st.html(
                     '<div class="eks-grounding-warn">'
-                    "OBS: Tutorn kan ha refererat fel siffra, verifiera mot berakningen ovan."
+                    "OBS: Tutorn kan ha refererat fel siffra, verifiera mot beräkningen ovan."
                     "</div>"
                 )
 
@@ -116,27 +116,27 @@ def _render_llm_section(
 
     except LLMUnavailableError:
         st.html(
-            '<div class="eks-offline-badge">LLM offline, visar grundforklaring</div>'
+            '<div class="eks-offline-badge">LLM offline, visar grundförklaring</div>'
         )
         fallback = FALLBACK_TEMPLATES["kalkyl"](calc_type, inputs, outputs)
         st.markdown(fallback)
         st.session_state[f"{tab_key}_llm_text"] = fallback
 
     # --- Step-by-step guide ---
-    if st.button("Visa steg for steg guide", key=f"{tab_key}_step_btn"):
+    if st.button("Visa steg för steg guide", key=f"{tab_key}_step_btn"):
         try:
             if not is_llm_available():
                 raise LLMUnavailableError("Ingen token")
             sys_p, usr_p = build_kalkyl_step_guide_prompt(calc_type, inputs, outputs)
-            with st.spinner("Genererar steg-for-steg guide..."):
+            with st.spinner("Genererar steg-för-steg guide..."):
                 raw = cached_chat(sys_p, usr_p)
                 increment_session_calls()
             result = humanize(raw)
-            with st.expander("Steg for steg guide", expanded=True):
+            with st.expander("Steg för steg guide", expanded=True):
                 st.markdown(result.text)
         except LLMUnavailableError:
             st.info(
-                "LLM ej tillganglig. Steg-for-steg guide kraver aktiv LLM-anslutning."
+                "LLM ej tillgänglig. Steg-för-steg guide kräver aktiv LLM-anslutning."
             )
 
     # --- Q&A chat ---
@@ -150,7 +150,7 @@ def _render_llm_section(
             st.markdown(msg)
 
     user_question = st.chat_input(
-        "Fraga tutorn om denna kalkyl", key=f"{tab_key}_chat_input"
+        "Fråga tutorn om denna kalkyl", key=f"{tab_key}_chat_input"
     )
     if user_question:
         st.session_state[chat_key].append(("user", user_question))
@@ -168,7 +168,7 @@ def _render_llm_section(
                 chat_history=st.session_state[chat_key],
             )
             with st.chat_message("assistant"):
-                with st.spinner("Tanker..."):
+                with st.spinner("Tänker..."):
                     raw = cached_chat(sys_p, usr_p)
                     increment_session_calls()
                 result = humanize(raw)
@@ -184,12 +184,12 @@ def _render_llm_section(
                         st.html(
                             '<div class="eks-grounding-warn">'
                             "OBS: Tutorn kan ha refererat fel siffra, "
-                            "verifiera mot berakningen ovan."
+                            "verifiera mot beräkningen ovan."
                             "</div>"
                         )
             st.session_state[chat_key].append(("assistant", result.text))
         except LLMUnavailableError:
-            fallback_msg = "LLM ej tillganglig. Forsoket misslyckades."
+            fallback_msg = "LLM ej tillgänglig. Försöket misslyckades."
             with st.chat_message("assistant"):
                 st.info(fallback_msg)
             st.session_state[chat_key].append(("assistant", fallback_msg))
@@ -200,7 +200,7 @@ def _render_llm_section(
 # ---------------------------------------------------------------------------
 
 st.set_page_config(
-    page_title="Kalkylering — Ekonomistyrning",
+    page_title="Kalkylering, Ekonomistyrning",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -306,10 +306,10 @@ with tab_sj:
     with st.expander("Ladda exempelföretag", expanded=False):
         sj_sel = st.selectbox(
             "Välj scenario",
-            ["— välj scenario —"] + list(sj_scenarios.keys()),
+            ["- välj scenario -"] + list(sj_scenarios.keys()),
             key="sj_scenario_sel",
         )
-        if sj_sel != "— välj scenario —":
+        if sj_sel != "- välj scenario -":
             _desc, _inputs, _ = sj_scenarios[sj_sel]
             st.caption(_desc)
             if st.button("Ladda värdena", key="sj_load"):
@@ -325,7 +325,7 @@ with tab_sj:
         # AI scenario generation (Task 7.5)
         if _HAS_SCENARIO_GEN:
             st.divider()
-            if st.button("Generera nytt exempelforetag med AI", key="sj_gen_scenario"):
+            if st.button("Generera nytt exempelföretag med AI", key="sj_gen_scenario"):
                 try:
                     if not is_llm_available():
                         raise LLMUnavailableError("Ingen token")
@@ -349,7 +349,7 @@ with tab_sj:
                     st.rerun()
                 except (LLMUnavailableError, json.JSONDecodeError, Exception):
                     st.info(
-                        "LLM ej tillganglig. Ladda ett statiskt scenario istallet."
+                        "LLM ej tillgänglig. Ladda ett statiskt scenario istället."
                     )
 
     c1, c2 = st.columns(2)
@@ -365,23 +365,23 @@ with tab_sj:
             help="Direkt lönekostnad per tillverkad enhet (kapitel 6.2)",
         )
         mo_pct = st.number_input(
-            "MO — Materialomkostnad (%)",
+            "MO (Materialomkostnad) (%)",
             min_value=0.0, max_value=500.0, step=1.0, key="sj_mo",
             help="Pålägg på direkt material för indirekta materialkostnader (kapitel 6.3)",
         )
         to_pct = st.number_input(
-            "TO — Tillverkningsomkostnad (%)",
+            "TO (Tillverkningsomkostnad) (%)",
             min_value=0.0, max_value=500.0, step=1.0, key="sj_to",
             help="Pålägg på direkt lön för tillverkningsomkostnader (kapitel 6.3)",
         )
     with c2:
         ao_pct = st.number_input(
-            "AO — Administrationsomkostnad (%)",
+            "AO (Administrationsomkostnad) (%)",
             min_value=0.0, max_value=200.0, step=1.0, key="sj_ao",
             help="Pålägg på tillverkningskostnad för administrationskostnader (kapitel 6.3)",
         )
         fo_pct = st.number_input(
-            "FO — Försäljningsomkostnad (%)",
+            "FO (Försäljningsomkostnad) (%)",
             min_value=0.0, max_value=200.0, step=1.0, key="sj_fo",
             help="Pålägg på tillverkningskostnad för försäljningskostnader (kapitel 6.3)",
         )
@@ -483,7 +483,7 @@ with tab_sj:
         key="sj_export",
     )
 
-    st.caption("Referens: Andersson, Ekonomistyrning kapitel 6 — Självkostnadskalkylering med påläggsmetoden")
+    st.caption("Referens: Andersson, Ekonomistyrning kapitel 6, Självkostnadskalkylering med påläggsmetoden")
     st.html(footer_note(updated="2026-05-06"))
 
 # ===========================================================================
@@ -496,10 +496,10 @@ with tab_bid:
     with st.expander("Ladda exempelföretag", expanded=False):
         bid_sel = st.selectbox(
             "Välj scenario",
-            ["— välj scenario —"] + list(bid_scenarios.keys()),
+            ["- välj scenario -"] + list(bid_scenarios.keys()),
             key="bid_scenario_sel",
         )
-        if bid_sel != "— välj scenario —":
+        if bid_sel != "- välj scenario -":
             _desc, _inputs, _ = bid_scenarios[bid_sel]
             st.caption(_desc)
             if st.button("Ladda värdena", key="bid_load"):
@@ -512,7 +512,7 @@ with tab_bid:
         # AI scenario generation (Task 7.5)
         if _HAS_SCENARIO_GEN:
             st.divider()
-            if st.button("Generera nytt exempelforetag med AI", key="bid_gen_scenario"):
+            if st.button("Generera nytt exempelföretag med AI", key="bid_gen_scenario"):
                 try:
                     if not is_llm_available():
                         raise LLMUnavailableError("Ingen token")
@@ -539,7 +539,7 @@ with tab_bid:
                     st.rerun()
                 except (LLMUnavailableError, json.JSONDecodeError, Exception):
                     st.info(
-                        "LLM ej tillganglig. Ladda ett statiskt scenario istallet."
+                        "LLM ej tillgänglig. Ladda ett statiskt scenario istället."
                     )
 
     c1, c2 = st.columns(2)
@@ -571,7 +571,7 @@ with tab_bid:
 
     if tb <= 0:
         st.warning(
-            f"Täckningsbidrag per styck är {format_sek(tb, decimals=2)} — "
+            f"Täckningsbidrag per styck är {format_sek(tb, decimals=2)}, "
             "negativt TB innebär att varje såld enhet ökar förlusten. "
             "Nollpunktsanalys är inte tillämplig."
         )
@@ -590,7 +590,7 @@ with tab_bid:
         ),
         kpi_card(
             "Säkerhetsmarginal",
-            format_percent(bid["sakerhetsmarginal_pct"]) if bid["sakerhetsmarginal_pct"] is not None else "—",
+            format_percent(bid["sakerhetsmarginal_pct"]) if bid["sakerhetsmarginal_pct"] is not None else "-",
         ),
     ])
 
@@ -681,10 +681,10 @@ with tab_bid:
             format_sek(bid["total_tackningsbidrag"]),
             format_sek(bid["fasta_kostnader"]),
             format_sek(bid["resultat"]),
-            f"{int(bid['breakeven_units'])}" if bid["breakeven_units"] else "—",
-            format_sek(bid["breakeven_revenue"]) if bid["breakeven_revenue"] else "—",
-            f"{int(bid['sakerhetsmarginal_units'])}" if bid["sakerhetsmarginal_units"] else "—",
-            format_percent(bid["sakerhetsmarginal_pct"]) if bid["sakerhetsmarginal_pct"] else "—",
+            f"{int(bid['breakeven_units'])}" if bid["breakeven_units"] else "-",
+            format_sek(bid["breakeven_revenue"]) if bid["breakeven_revenue"] else "-",
+            f"{int(bid['sakerhetsmarginal_units'])}" if bid["sakerhetsmarginal_units"] else "-",
+            format_percent(bid["sakerhetsmarginal_pct"]) if bid["sakerhetsmarginal_pct"] else "-",
         ],
     })
     xlsx_bid = export_to_excel({"Bidragskalkyl": bid_df})
@@ -696,7 +696,7 @@ with tab_bid:
         key="bid_export",
     )
 
-    st.caption("Referens: Andersson, Ekonomistyrning kapitel 8 — Bidragskalkyl och nollpunktsanalys")
+    st.caption("Referens: Andersson, Ekonomistyrning kapitel 8, Bidragskalkyl och nollpunktsanalys")
     st.html(footer_note(updated="2026-05-06"))
 
 # ===========================================================================
@@ -709,10 +709,10 @@ with tab_abc:
     with st.expander("Ladda exempelföretag", expanded=False):
         abc_sel = st.selectbox(
             "Välj scenario",
-            ["— välj scenario —"] + list(abc_scenarios.keys()),
+            ["- välj scenario -"] + list(abc_scenarios.keys()),
             key="abc_scenario_sel",
         )
-        if abc_sel != "— välj scenario —":
+        if abc_sel != "- välj scenario -":
             _desc, _inputs, _ = abc_scenarios[abc_sel]
             st.caption(_desc)
             if st.button("Ladda värdena", key="abc_load"):
@@ -725,7 +725,7 @@ with tab_abc:
         # AI scenario generation (Task 7.5)
         if _HAS_SCENARIO_GEN:
             st.divider()
-            if st.button("Generera nytt exempelforetag med AI", key="abc_gen_scenario"):
+            if st.button("Generera nytt exempelföretag med AI", key="abc_gen_scenario"):
                 try:
                     if not is_llm_available():
                         raise LLMUnavailableError("Ingen token")
@@ -748,7 +748,7 @@ with tab_abc:
                     st.rerun()
                 except (LLMUnavailableError, json.JSONDecodeError, Exception):
                     st.info(
-                        "LLM ej tillganglig. Ladda ett statiskt scenario istallet."
+                        "LLM ej tillgänglig. Ladda ett statiskt scenario istället."
                     )
 
     col_a, col_b = st.columns(2)
@@ -886,5 +886,5 @@ with tab_abc:
                 "produkttabellens kolumner matchar aktivitetsnamnen."
             )
 
-    st.caption("Referens: Andersson, Ekonomistyrning kapitel 7 — Aktivitetsbaserad kalkylering (ABC)")
+    st.caption("Referens: Andersson, Ekonomistyrning kapitel 7, Aktivitetsbaserad kalkylering (ABC)")
     st.html(footer_note(updated="2026-05-06"))

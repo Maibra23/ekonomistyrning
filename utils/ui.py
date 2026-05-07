@@ -94,7 +94,7 @@ LABELS: dict[str, str] = {
     "llm_forklaring": "Förklaring",
     "llm_steg": "Steg-för-steg-guide",
     "llm_fraga": "Ställ en fråga...",
-    "llm_offline": "LLM offline — visar grundförklaring",
+    "llm_offline": "LLM offline, visar grundforklaring",
     "llm_cap_warn": (
         "Du har nått sessionsgränsen (50 LLM-anrop). "
         "Ladda om sidan för att fortsätta."
@@ -749,7 +749,7 @@ _NAV_PAGES: list[tuple[str, str, str]] = [
 
 
 def render_sidebar(active_page: str) -> None:
-    """Render the full sidebar with brand, navigation, and session info.
+    """Render the full sidebar with brand, navigation, LLM status, and session info.
 
     Args:
         active_page: One of 'hem', 'kalkyl', 'investering', 'budget',
@@ -761,7 +761,7 @@ def render_sidebar(active_page: str) -> None:
             '<div class="eks-brand-bar"></div>'
             '<span class="eks-brand-mark">EKS</span>'
             '<span class="eks-brand-title">Ekonomistyrning</span>'
-            '<span class="eks-brand-sub">Andersson kap. 4&ndash;17</span>'
+            '<span class="eks-brand-sub">Andersson kap. 4 till 17</span>'
             "</div>"
         )
 
@@ -769,13 +769,33 @@ def render_sidebar(active_page: str) -> None:
         for _key, label, path in _NAV_PAGES:
             st.page_link(path, label=label)
 
+        # LLM status badge in sidebar
+        try:
+            from utils.llm import is_llm_available
+            _online = is_llm_available()
+        except Exception:
+            _online = False
+        _badge_color = COLORS["success"] if _online else COLORS["neutral"]
+        _badge_text = "LLM online" if _online else "LLM offline"
+        st.html(
+            f'<div style="padding:8px 16px;">'
+            f'<span class="eks-llm-badge" style="color:{_badge_color}">'
+            f"&#9679; {_badge_text}"
+            f"</span>"
+            f"</div>"
+        )
+
         st.html('<span class="eks-sidebar-section-label">INFORMATION</span>')
         st.page_link("streamlit_app.py", label="Om appen")
 
         llm_calls = st.session_state.get("llm_call_count", 0)
         st.html(
             f'<div class="eks-sidebar-footer">'
-            f"Qwen3-14B via Hugging Face<br>"
-            f"LLM-anrop: {llm_calls} / 50"
+            f"v0.2.0 | 2026-05-07<br>"
+            f"Qwen3-14B via HF Inference Providers<br>"
+            f"LLM-anrop: {llm_calls} / 50<br>"
+            f'<span style="font-size:9px;opacity:0.7;">'
+            f"Prompts behandlas av Hugging Face"
+            f"</span>"
             f"</div>"
         )

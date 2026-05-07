@@ -42,7 +42,7 @@ from utils.ui import footer_note, inject_css, kpi_card, page_title, render_kpi_r
 # ---------------------------------------------------------------------------
 
 st.set_page_config(
-    page_title="Investeringsbedömning — Ekonomistyrning",
+    page_title="Investeringsbedomning, Ekonomistyrning",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -126,7 +126,7 @@ def _render_investering_llm(
 
     remaining = get_session_calls_remaining()
     if remaining <= 0:
-        st.warning("Du har natt sessionsgransan (50 LLM-anrop). Ladda om sidan for att fortsatta.")
+        st.warning("Du har nått sessionsgränsen (50 LLM-anrop). Ladda om sidan för att fortsätta.")
         fallback = FALLBACK_TEMPLATES["investering"](method, inputs, outputs)
         st.markdown(fallback)
         return
@@ -277,7 +277,7 @@ with tab1:
                 "Kassaflöde (kr)": st.column_config.NumberColumn(
                     "Kassaflöde (kr)",
                     format="%.0f",
-                    help="Nettokassaflöde for respektive år",
+                    help="Nettokassaflöde för respektive år",
                 ),
             },
         )
@@ -301,7 +301,7 @@ with tab1:
         irr_variant = (
             "success" if (irr_val is not None and irr_val >= rate) else "danger"
         )
-        pb_str = format_years(payback_val) if payback_val is not None else "Ej aterbetald"
+        pb_str = format_years(payback_val) if payback_val is not None else "Ej återbetald"
 
         render_kpi_row([
             kpi_card(
@@ -314,8 +314,8 @@ with tab1:
                 irr_str,
                 variant=irr_variant if irr_val is not None else "default",
             ),
-            kpi_card("Aterbetalingstid", pb_str),
-            kpi_card("Annuitet", format_sek(annuitet_val) + "/ar"),
+            kpi_card("Återbetalningstid", pb_str),
+            kpi_card("Annuitet", format_sek(annuitet_val) + "/år"),
         ])
 
         # Recommendation banner
@@ -330,7 +330,7 @@ with tab1:
                 f"vid kalkylräntan {kalkylranta} %. Investeringen täcker inte avkastningskravet."
             )
         else:
-            st.info("Investeringen är precis pa gränsen (NPV = 0). Övriga faktorer avgör.")
+            st.info("Investeringen är precis pågränsen (NPV = 0). Övriga faktorer avgör.")
 
         # Bar chart (cash flows) + cumulative discounted line
         years = list(range(1, antal_ar + 1))
@@ -374,7 +374,7 @@ with tab1:
         disc_pb_txt = (
             f"Diskonterad återbetalningstid: {format_years(payback_disc_val)}"
             if payback_disc_val is not None
-            else "Diskonterad återbetalningstid: ej aterbetald inom perioden"
+            else "Diskonterad återbetalningstid: ej återbetald inom perioden"
         )
         st.caption(f"{disc_pb_txt} | Kapitel 10.3")
 
@@ -383,21 +383,21 @@ with tab1:
         "Parameter": [
             "Grundinvestering",
             "Kalkylränta",
-            "Antal ar",
+            "Antal år",
             "NPV",
             "IRR",
-            "Aterbetalingstid",
-            "Diskonterad aterbetalingstid",
-            "Annuitet (kr/ar)",
+            "Återbetalningstid",
+            "Diskonterad återbetalningstid",
+            "Annuitet (kr/år)",
         ],
         "Värde": [
             format_sek(grundinvestering),
             format_percent(rate),
-            f"{antal_ar} ar",
+            f"{antal_ar} år",
             format_sek(npv_val),
             irr_str,
             pb_str,
-            format_years(payback_disc_val) if payback_disc_val is not None else "Ej aterbetald",
+            format_years(payback_disc_val) if payback_disc_val is not None else "Ej återbetald",
             format_sek(annuitet_val),
         ],
     })
@@ -458,14 +458,14 @@ with tab2:
             min_value=-50,
             max_value=0,
             value=-30,
-            help="Nedre gräns for parametervariation",
+            help="Nedre gräns för parametervariation",
         )
         sa_max = st.slider(
             "Högsta variation (%)",
             min_value=0,
             max_value=100,
             value=30,
-            help="Övre gräns for parametervariation",
+            help="Övre gräns för parametervariation",
         )
 
     # Initialize variables for LLM scope
@@ -474,7 +474,7 @@ with tab2:
 
     with col_sa_res:
         if not base_cfs:
-            st.warning("Ange kassaflöden i fliken 'Grundläggande metoder' forst.")
+            st.warning("Ange kassaflöden i fliken 'Grundläggande metoder' först.")
         else:
             sa_df = sensitivity_analysis(
                 base_cfs,
@@ -538,7 +538,7 @@ with tab2:
                     st.info(
                         f"Kritisk variation: {critical_var:.1f} %. "
                         f"Om {param_label.lower()} ändras med mer än "
-                        f"{abs(critical_var):.1f} % {direction} fran basfallet blir NPV negativt."
+                        f"{abs(critical_var):.1f} % {direction} frånbasfallet blir NPV negativt."
                     )
             elif not pos_mask.any():
                 st.error("NPV är negativt i hela variationsintervallet. Investeringen är känslig.")
@@ -605,7 +605,7 @@ with tab3:
             value=3.0,
             step=0.5,
             format="%.1f",
-            help="Förväntad genomsnittlig KPI-inflation per ar",
+            help="Förväntad genomsnittlig KPI-inflation per år",
         )
         tax_pct = st.number_input(
             "Bolagsskattesats (%)",
@@ -624,7 +624,7 @@ with tab3:
             ),
             step=10_000.0,
             format="%.0f",
-            help="Avskrivning som dras av fran skattepliktig inkomst (rak avskrivning)",
+            help="Avskrivning som dras av frånskattepliktig inkomst (rak avskrivning)",
         )
 
     with col_it_res:
@@ -727,8 +727,8 @@ with tab3:
 with tab4:
     st.markdown(
         "Monte Carlo-simulering skattar NPV-fördelningen genom att slumpmässigt dra "
-        "grundinvestering, kassaflöden och kalkylränta fran normala sannolikhetsfördelningar. "
-        "Resultatet visar riskprofilen och sannolikheten for positivt utfall. "
+        "grundinvestering, kassaflöden och kalkylränta frånnormala sannolikhetsfördelningar. "
+        "Resultatet visar riskprofilen och sannolikheten för positivt utfall. "
         "Kapitel 10.9."
     )
 
@@ -742,7 +742,7 @@ with tab4:
             value=float(st.session_state["inv_initial"]),
             step=10_000.0,
             format="%.0f",
-            help="Medelvärde for grundinvesteringen",
+            help="Medelvärde för grundinvesteringen",
         )
         mc_inv_std = st.number_input(
             "Standardavvikelse grundinvestering (kr)",
@@ -761,7 +761,7 @@ with tab4:
             value=float(st.session_state["inv_rate"]),
             step=0.5,
             format="%.1f",
-            help="Medelvärde for kalkylräntan",
+            help="Medelvärde för kalkylräntan",
         )
         mc_rate_std = st.number_input(
             "Standardavvikelse kalkylränta (%)",
@@ -900,25 +900,25 @@ with tab4:
             # Swedish decision text
             if prob_pct >= 70:
                 st.success(
-                    f"Stark sannolikhet for positivt utfall ({prob_pct:.1f} %). "
-                    "Investeringen forväntas skapa värde i det stora flertalet scenarier."
+                    f"Stark sannolikhet för positivt utfall ({prob_pct:.1f} %). "
+                    "Investeringen förväntas skapa värde i det stora flertalet scenarier."
                 )
             elif prob_pct >= 50:
                 st.warning(
-                    f"Mattlig sannolikhet for positivt utfall ({prob_pct:.1f} %). "
-                    "Grundlig riskbedömning och känslighetsanalys rekommenderas innan beslut."
+                    f"Måttlig sannolikhet för positivt utfall ({prob_pct:.1f} %). "
+                    "Grundlig riskbedömning och känslighetsanalys rekommenderas före beslut."
                 )
             else:
                 st.error(
-                    f"Lag sannolikhet for positivt utfall ({prob_pct:.1f} %). "
-                    "Investeringen bedöms som riskfylld. Övervag alternativ eller omstrukturering."
+                    f"Låg sannolikhet för positivt utfall ({prob_pct:.1f} %). "
+                    "Investeringen bedöms som riskfylld. Överväg alternativ eller omstrukturering."
                 )
 
             st.caption(
-                f"Simulering baserad pa {n_sims:,} iterationer, seed = 42 | Kapitel 10.9"
+                f"Simulering baserad på{n_sims:,} iterationer, seed = 42 | Kapitel 10.9"
             )
         else:
-            st.info("Tryck 'Kör simulering' for att starta Monte Carlo-analysen.")
+            st.info("Tryck 'Kör simulering' för att starta Monte Carlo-analysen.")
 
     # LLM explanation and Q&A for Tab 4
     if mc_result is not None:

@@ -53,7 +53,7 @@ st.html(
     page_title(
         eyebrow="KAPITEL 4-17",
         title="Kunskapstest",
-        subtitle="Testa dina kunskaper med AI-genererade fragor. Valj amnesomrade, svarighetsgrad och fragtyp.",
+        subtitle="Testa dina kunskaper med AI-genererade frågor. Välj ämnesområde, svårighetsgrad och frågetyp.",
     )
 )
 
@@ -69,7 +69,7 @@ if "quiz_answered" not in st.session_state:
 col1, col2, col3 = st.columns(3)
 with col1:
     kapitelkluster = st.selectbox(
-        "Amnesomrade",
+        "Ämnesområde",
         ["kalkyl", "investering", "budget", "standardkost"],
         format_func=lambda x: {
             "kalkyl": "Kalkylering (kap. 4-8)",
@@ -80,14 +80,14 @@ with col1:
     )
 with col2:
     difficulty = st.selectbox(
-        "Svarighetsgrad",
+        "Svårighetsgrad",
         ["latt", "medel", "svar"],
-        format_func=lambda x: {"latt": "Latt", "medel": "Medel", "svar": "Svar"}[x],
+        format_func=lambda x: {"latt": "Lätt", "medel": "Medel", "svar": "Svår"}[x],
         index=1,
     )
 with col3:
     question_type = st.selectbox(
-        "Fragtyp",
+        "Frågetyp",
         ["flerval", "numerisk"],
         format_func=lambda x: {"flerval": "Flerval (4 alternativ)", "numerisk": "Numerisk"}[x],
     )
@@ -180,14 +180,14 @@ def _generate_question(kluster: str, diff: str, qtype: str) -> dict | None:
 
 
 # Generate button
-if st.button("Generera fraga", type="primary", use_container_width=True):
-    with st.spinner("Genererar fraga..."):
+if st.button("Generera fråga", type="primary", use_container_width=True):
+    with st.spinner("Genererar fråga..."):
         q = _generate_question(kapitelkluster, difficulty, question_type)
     if q:
         st.session_state["quiz_current"] = q
         st.session_state["quiz_answered"] = False
     else:
-        st.error("Kunde inte generera en fraga. Forsok igen.")
+        st.error("Kunde inte generera en fråga. Försök igen.")
 
 # Display current question
 q = st.session_state.get("quiz_current")
@@ -210,7 +210,7 @@ if q:
     # Answer input
     if q.get("question_type") == "flerval" and q.get("alternativ"):
         user_answer = st.radio(
-            "Valj svar:",
+            "Välj svar:",
             options=list(range(len(q["alternativ"]))),
             format_func=lambda i: q["alternativ"][i],
             key="quiz_answer_radio",
@@ -237,25 +237,25 @@ if q:
 
         if correct:
             st.session_state["quiz_score"]["correct"] += 1
-            st.success("Ratt svar!")
+            st.success("Rätt svar!")
         else:
             if q.get("question_type") == "flerval" and q.get("alternativ"):
                 correct_idx = q.get("ratt_svar", 0)
                 if isinstance(correct_idx, int) and 0 <= correct_idx < len(q["alternativ"]):
-                    st.error(f"Fel svar. Ratt svar: {q['alternativ'][correct_idx]}")
+                    st.error(f"Fel svar. Rätt svar: {q['alternativ'][correct_idx]}")
                 else:
                     st.error("Fel svar.")
             else:
-                st.error(f"Fel svar. Ratt svar: {q.get('ratt_svar')}")
+                st.error(f"Fel svar. Rätt svar: {q.get('ratt_svar')}")
 
         # Show explanation
         if q.get("berakning_steg"):
-            with st.expander("Berakningssteg", expanded=True):
+            with st.expander("Beräkningssteg", expanded=True):
                 humanized = humanize(q["berakning_steg"])
                 st.markdown(humanized.text)
 
         if q.get("forklaring"):
-            with st.expander("Forklaring", expanded=True):
+            with st.expander("Förklaring", expanded=True):
                 humanized = humanize(q["forklaring"])
                 st.markdown(humanized.text)
 
@@ -266,8 +266,8 @@ if q:
     if st.session_state["quiz_answered"]:
         bcol1, bcol2, bcol3 = st.columns(3)
         with bcol1:
-            if st.button("Ny fraga", key="quiz_new"):
-                with st.spinner("Genererar ny fraga..."):
+            if st.button("Ny fråga", key="quiz_new"):
+                with st.spinner("Genererar ny fråga..."):
                     new_q = _generate_question(kapitelkluster, difficulty, question_type)
                 if new_q:
                     st.session_state["quiz_current"] = new_q
@@ -277,15 +277,15 @@ if q:
             harder_diff = {"latt": "medel", "medel": "svar", "svar": "svar"}.get(
                 difficulty, "svar"
             )
-            if st.button("Liknande fraga men svarare", key="quiz_harder"):
-                with st.spinner("Genererar svarare fraga..."):
+            if st.button("Liknande fråga men svårare", key="quiz_harder"):
+                with st.spinner("Genererar svårare fråga..."):
                     new_q = _generate_question(kapitelkluster, harder_diff, question_type)
                 if new_q:
                     st.session_state["quiz_current"] = new_q
                     st.session_state["quiz_answered"] = False
                     st.rerun()
         with bcol3:
-            if st.button("Forklara djupare", key="quiz_explain"):
+            if st.button("Förklara djupare", key="quiz_explain"):
                 try:
                     if not is_llm_available():
                         raise LLMUnavailableError("Ingen token")
@@ -295,13 +295,13 @@ if q:
                         {"ratt_svar": q.get("ratt_svar")},
                         f"Forklara denna fraga och svaret djupare: {q.get('fraga', '')}",
                     )
-                    with st.spinner("Forklarar..."):
+                    with st.spinner("Förklarar..."):
                         raw = cached_chat(sys_p, usr_p)
                         increment_session_calls()
                     result = humanize(raw)
                     st.markdown(result.text)
                 except LLMUnavailableError:
-                    st.info("LLM ej tillganglig for djupare forklaring.")
+                    st.info("LLM ej tillgänglig för djupare förklaring.")
 
 # Score tracker
 st.divider()
@@ -311,10 +311,10 @@ if score["total"] > 0:
 
     render_kpi_row(
         [
-            kpi_card("Besvarade fragor", str(score["total"])),
-            kpi_card("Ratta svar", str(score["correct"]), variant="success"),
+            kpi_card("Besvarade frågor", str(score["total"])),
+            kpi_card("Rätta svar", str(score["correct"]), variant="success"),
             kpi_card(
-                "Andel ratt",
+                "Andel rätt",
                 f"{pct:.0f} %",
                 variant="success" if pct >= 60 else "danger",
             ),
@@ -347,6 +347,6 @@ if score["total"] > 0:
     apply_layout(fig_gauge, height=280)
     st.plotly_chart(fig_gauge, use_container_width=True)
 else:
-    st.info("Inga fragor besvarade annu. Tryck 'Generera fraga' for att borja.")
+    st.info("Inga frågor besvarade ännu. Tryck 'Generera fråga' för att börja.")
 
 st.html(footer_note(updated="2026-05-07"))
