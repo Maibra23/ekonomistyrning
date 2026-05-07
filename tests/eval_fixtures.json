@@ -1,0 +1,210 @@
+{
+  "kalkyl": [
+    {
+      "calc_type": "sjalvkostnad",
+      "inputs": {"direkt_material_per_styck": 850, "direkt_lon_per_styck": 320, "MO_procent": 25, "TO_procent": 80, "AO_procent": 12, "FO_procent": 8, "antal_enheter": 5000},
+      "outputs": {"sjalvkostnad_per_styck": 2082.0, "tillverkningskostnad": 1638.5, "sjalvkostnad_totalt": 10410000.0}
+    },
+    {
+      "calc_type": "sjalvkostnad",
+      "inputs": {"direkt_material_per_styck": 400, "direkt_lon_per_styck": 200, "MO_procent": 20, "TO_procent": 60, "AO_procent": 10, "FO_procent": 5, "antal_enheter": 10000},
+      "outputs": {"sjalvkostnad_per_styck": 1010.0, "tillverkningskostnad": 800.0, "sjalvkostnad_totalt": 10100000.0}
+    },
+    {
+      "calc_type": "bidrag",
+      "inputs": {"pris_per_styck": 599, "rorlig_kostnad_per_styck": 325, "fasta_kostnader": 4200000, "volym": 35000},
+      "outputs": {"tackningsbidrag_per_styck": 274, "resultat": 5390000.0, "breakeven_units": 15328.5}
+    },
+    {
+      "calc_type": "bidrag",
+      "inputs": {"pris_per_styck": 150, "rorlig_kostnad_per_styck": 80, "fasta_kostnader": 1000000, "volym": 20000},
+      "outputs": {"tackningsbidrag_per_styck": 70, "resultat": 400000.0, "breakeven_units": 14285.7}
+    },
+    {
+      "calc_type": "abc",
+      "inputs": {"aktiviteter": "Planering, Faltarbete, Rapportering", "produkter": "Standardrevision, Komplex revision"},
+      "outputs": {"Standardrevision_total_kostnad": 5050000.0, "Komplex_revision_total_kostnad": 5850000.0}
+    },
+    {
+      "calc_type": "sjalvkostnad",
+      "inputs": {"direkt_material_per_styck": 1200, "direkt_lon_per_styck": 500, "MO_procent": 30, "TO_procent": 100, "AO_procent": 15, "FO_procent": 10, "antal_enheter": 2000},
+      "outputs": {"sjalvkostnad_per_styck": 3310.0, "tillverkningskostnad": 2560.0, "sjalvkostnad_totalt": 6620000.0}
+    },
+    {
+      "calc_type": "bidrag",
+      "inputs": {"pris_per_styck": 1200, "rorlig_kostnad_per_styck": 750, "fasta_kostnader": 8000000, "volym": 25000},
+      "outputs": {"tackningsbidrag_per_styck": 450, "resultat": 3250000.0, "breakeven_units": 17777.8}
+    },
+    {
+      "calc_type": "sjalvkostnad",
+      "inputs": {"direkt_material_per_styck": 50, "direkt_lon_per_styck": 120, "MO_procent": 15, "TO_procent": 40, "AO_procent": 8, "FO_procent": 6, "antal_enheter": 50000},
+      "outputs": {"sjalvkostnad_per_styck": 251.3, "tillverkningskostnad": 225.5, "sjalvkostnad_totalt": 12565000.0}
+    },
+    {
+      "calc_type": "bidrag",
+      "inputs": {"pris_per_styck": 350, "rorlig_kostnad_per_styck": 210, "fasta_kostnader": 2500000, "volym": 30000},
+      "outputs": {"tackningsbidrag_per_styck": 140, "resultat": 1700000.0, "breakeven_units": 17857.1}
+    },
+    {
+      "calc_type": "abc",
+      "inputs": {"aktiviteter": "Montering, Kvalitetskontroll", "produkter": "Produkt A, Produkt B"},
+      "outputs": {"Produkt_A_total_kostnad": 800000.0, "Produkt_B_total_kostnad": 1200000.0}
+    }
+  ],
+  "investering": [
+    {
+      "method": "npv",
+      "inputs": {"grundinvestering": 1000000, "kalkylranta": 0.10, "antal_ar": 5, "kassafloden": "[250000, 250000, 250000, 250000, 250000]"},
+      "outputs": {"npv": -52303.0, "irr": 0.078, "aterbetalingstid": 4.0, "annuitet": 263797.5}
+    },
+    {
+      "method": "npv",
+      "inputs": {"grundinvestering": 500000, "kalkylranta": 0.08, "antal_ar": 3, "kassafloden": "[200000, 200000, 200000]"},
+      "outputs": {"npv": 15420.0, "irr": 0.097, "aterbetalingstid": 2.5, "annuitet": 194017.5}
+    },
+    {
+      "method": "sensitivity",
+      "inputs": {"parameter": "cash_flows", "variation_min": -30, "variation_max": 30, "bas_npv": 100000},
+      "outputs": {"bas_npv": 100000}
+    },
+    {
+      "method": "inflation_skatt",
+      "inputs": {"real_kalkylranta": 0.10, "inflation": 0.03, "skattesats": 0.206, "avskrivning_per_ar": 200000},
+      "outputs": {"nominell_kalkylranta": 0.133, "npv_fore_skatt": 150000, "npv_efter_skatt": 120000}
+    },
+    {
+      "method": "monte_carlo",
+      "inputs": {"grundinvestering_medel": 1000000, "grundinvestering_std": 100000, "kalkylranta_medel": 10, "antal_simuleringar": 10000},
+      "outputs": {"medel_npv": 50000, "median_npv": 48000, "p5": -120000, "p95": 220000, "sannolikhet_positiv_npv": 0.65}
+    },
+    {
+      "method": "npv",
+      "inputs": {"grundinvestering": 2000000, "kalkylranta": 0.12, "antal_ar": 8, "kassafloden": "[400000, 400000, 400000, 400000, 400000, 400000, 400000, 400000]"},
+      "outputs": {"npv": -12600.0, "irr": 0.118, "aterbetalingstid": 5.0}
+    },
+    {
+      "method": "npv",
+      "inputs": {"grundinvestering": 300000, "kalkylranta": 0.05, "antal_ar": 4, "kassafloden": "[100000, 100000, 100000, 100000]"},
+      "outputs": {"npv": 54595.0, "irr": 0.126, "aterbetalingstid": 3.0}
+    },
+    {
+      "method": "sensitivity",
+      "inputs": {"parameter": "discount_rate", "variation_min": -50, "variation_max": 50, "bas_npv": 200000},
+      "outputs": {"bas_npv": 200000}
+    },
+    {
+      "method": "inflation_skatt",
+      "inputs": {"real_kalkylranta": 0.08, "inflation": 0.02, "skattesats": 0.206, "avskrivning_per_ar": 150000},
+      "outputs": {"nominell_kalkylranta": 0.1016, "npv_fore_skatt": 80000, "npv_efter_skatt": 65000}
+    },
+    {
+      "method": "monte_carlo",
+      "inputs": {"grundinvestering_medel": 500000, "grundinvestering_std": 50000, "kalkylranta_medel": 8, "antal_simuleringar": 10000},
+      "outputs": {"medel_npv": 75000, "sannolikhet_positiv_npv": 0.72}
+    }
+  ],
+  "budget": [
+    {
+      "method": "budget",
+      "inputs": {"forsaljning": 12000000, "arets_resultat": 1588000},
+      "outputs": {"likvida_medel_ub": 600000, "summa_tillgangar_ub": 4800000, "balanserad": true}
+    },
+    {
+      "method": "budget",
+      "inputs": {"forsaljning": 8000000, "arets_resultat": 800000},
+      "outputs": {"likvida_medel_ub": 350000, "balanserad": true}
+    },
+    {
+      "method": "budget",
+      "inputs": {"forsaljning": 20000000, "arets_resultat": 3000000},
+      "outputs": {"likvida_medel_ub": 1200000, "balanserad": true}
+    },
+    {
+      "method": "budget",
+      "inputs": {"forsaljning": 5000000, "arets_resultat": -200000},
+      "outputs": {"likvida_medel_ub": -50000, "balanserad": false}
+    },
+    {
+      "method": "budget",
+      "inputs": {"forsaljning": 15000000, "arets_resultat": 2200000},
+      "outputs": {"likvida_medel_ub": 900000, "balanserad": true}
+    },
+    {
+      "method": "budget",
+      "inputs": {"forsaljning": 6000000, "arets_resultat": 400000},
+      "outputs": {"likvida_medel_ub": 200000, "balanserad": true}
+    },
+    {
+      "method": "budget",
+      "inputs": {"forsaljning": 10000000, "arets_resultat": 1200000},
+      "outputs": {"likvida_medel_ub": 500000, "balanserad": true}
+    },
+    {
+      "method": "budget",
+      "inputs": {"forsaljning": 3000000, "arets_resultat": 100000},
+      "outputs": {"likvida_medel_ub": 80000, "balanserad": true}
+    },
+    {
+      "method": "budget",
+      "inputs": {"forsaljning": 25000000, "arets_resultat": 5000000},
+      "outputs": {"likvida_medel_ub": 2000000, "balanserad": true}
+    },
+    {
+      "method": "budget",
+      "inputs": {"forsaljning": 18000000, "arets_resultat": 2800000},
+      "outputs": {"likvida_medel_ub": 1100000, "balanserad": true}
+    }
+  ],
+  "standardkost": [
+    {
+      "method": "standardkost",
+      "inputs": {"standard_volym": 1000, "verklig_volym": 1100, "standard_pris": 50, "verkligt_pris": 55},
+      "outputs": {"total_avvikelse": 15500, "volymavvikelse": 5000, "prisavvikelse": 11550}
+    },
+    {
+      "method": "standardkost",
+      "inputs": {"standard_volym": 5000, "verklig_volym": 4800, "standard_pris": 30, "verkligt_pris": 28},
+      "outputs": {"total_avvikelse": -8640}
+    },
+    {
+      "method": "standardkost",
+      "inputs": {"standard_volym": 2000, "verklig_volym": 2200, "standard_pris": 100, "verkligt_pris": 105},
+      "outputs": {"total_avvikelse": 31100}
+    },
+    {
+      "method": "standardkost",
+      "inputs": {"standard_volym": 800, "verklig_volym": 750, "standard_pris": 75, "verkligt_pris": 70},
+      "outputs": {"total_avvikelse": -7500}
+    },
+    {
+      "method": "standardkost",
+      "inputs": {"standard_volym": 3000, "verklig_volym": 3000, "standard_pris": 40, "verkligt_pris": 42},
+      "outputs": {"total_avvikelse": 12600}
+    },
+    {
+      "method": "standardkost",
+      "inputs": {"standard_volym": 1500, "verklig_volym": 1600, "standard_pris": 60, "verkligt_pris": 58},
+      "outputs": {"total_avvikelse": 3280}
+    },
+    {
+      "method": "standardkost",
+      "inputs": {"standard_volym": 10000, "verklig_volym": 9500, "standard_pris": 20, "verkligt_pris": 21},
+      "outputs": {"total_avvikelse": -450}
+    },
+    {
+      "method": "standardkost",
+      "inputs": {"standard_volym": 500, "verklig_volym": 600, "standard_pris": 200, "verkligt_pris": 210},
+      "outputs": {"total_avvikelse": 26000}
+    },
+    {
+      "method": "standardkost",
+      "inputs": {"standard_volym": 4000, "verklig_volym": 3800, "standard_pris": 45, "verkligt_pris": 44},
+      "outputs": {"total_avvikelse": -5320}
+    },
+    {
+      "method": "standardkost",
+      "inputs": {"standard_volym": 7000, "verklig_volym": 7200, "standard_pris": 35, "verkligt_pris": 37},
+      "outputs": {"total_avvikelse": 21440}
+    }
+  ]
+}

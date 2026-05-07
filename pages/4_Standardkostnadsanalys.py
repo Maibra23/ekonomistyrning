@@ -54,8 +54,8 @@ st.html(
         title="Standardkostnadsanalys",
         subtitle=(
             "Analysera avvikelser mellan standardkostnad och verkligt utfall. "
-            "Bryt ner i volym-, pris- och effektivitetsavvikelser for rorliga kostnader, "
-            "och jamfor budgeterade mot verkliga fasta omkostnader."
+            "Bryt ner i volym-, pris- och effektivitetsavvikelser för rörliga kostnader, "
+            "och jämför budgeterade mot verkliga fasta omkostnader."
         ),
     )
 )
@@ -65,9 +65,9 @@ st.html(
 # ---------------------------------------------------------------------------
 
 tab1, tab2, tab3 = st.tabs([
-    "Rorliga kostnader",
+    "Rörliga kostnader",
     "Fasta omkostnader",
-    "Sammanstallning",
+    "Sammanställning",
 ])
 
 # ===========================================================================
@@ -76,7 +76,7 @@ tab1, tab2, tab3 = st.tabs([
 
 with tab1:
     st.markdown(
-        "Ange standardvarden och verkligt utfall for en rorlig kostnadspost. "
+        "Ange standardvärden och verkligt utfall för en rörlig kostnadspost. "
         "Avvikelsen bryts ner i tre komponenter: volym, pris och effektivitet. Kapitel 17.2-17.4."
     )
 
@@ -103,13 +103,13 @@ with tab1:
             help="Standardpris per insatsenhet (t.ex. kr/kg)",
         )
         std_forbrukning = st.number_input(
-            "Standard forbrukning (enheter/styck)",
+            "Standard förbrukning (enheter/styck)",
             min_value=0.0,
             value=2.0,
             step=0.1,
             format="%.2f",
             key="std_forbrukning",
-            help="Standard insatsforbrukning per producerad enhet",
+            help="Standard insatsförbrukning per producerad enhet",
         )
 
     with col_verk:
@@ -133,7 +133,7 @@ with tab1:
             help="Faktiskt pris per insatsenhet",
         )
         verk_forbrukning = st.number_input(
-            "Verklig forbrukning (enheter/styck)",
+            "Verklig förbrukning (enheter/styck)",
             min_value=0.0,
             value=2.1,
             step=0.1,
@@ -153,7 +153,7 @@ with tab1:
     )
 
     if all_zero:
-        st.info("Alla varden ar noll. Ange standardvarden och verkligt utfall for att berakna avvikelser.")
+        st.info("Alla värden är noll. Ange standardvärden och verkligt utfall för att beräkna avvikelser.")
     else:
         # Calculate variance decomposition
         rorlig_result = variance_decomposition_rorlig(
@@ -272,7 +272,7 @@ with tab1:
         else:
             st.warning(
                 "Avstamning: Komponenterna summerar inte exakt till totalavvikelsen. "
-                "Kontrollera inmatade varden."
+                "Kontrollera inmatade värden."
             )
 
         # LLM interpretation
@@ -309,7 +309,7 @@ with tab1:
                         "</div>"
                     )
             except LLMUnavailableError:
-                st.html('<div class="eks-offline-badge">LLM offline, visar grundforklaring</div>')
+                st.html('<div class="eks-offline-badge">LLM offline, visar grundförklaring</div>')
                 sk_inputs = {"standard_volym": std_volym, "verklig_volym": verk_volym}
                 sk_outputs = {"total_avvikelse": rorlig_result["total"]}
                 st.markdown(FALLBACK_TEMPLATES["standardkost"]("standardkost", sk_inputs, sk_outputs))
@@ -322,8 +322,8 @@ with tab1:
 
 with tab2:
     st.markdown(
-        "Jamfor budgeterade fasta omkostnader med verkligt utfall. "
-        "En enkel differensanalys som visar om foretaget overskridit eller underskridit budget. "
+        "Jämför budgeterade fasta omkostnader med verkligt utfall. "
+        "En enkel differensanalys som visar om företaget överskridit eller underskridit budget. "
         "Kapitel 17.7."
     )
 
@@ -338,7 +338,7 @@ with tab2:
             step=10_000.0,
             format="%.0f",
             key="fast_budget",
-            help="Budgeterade fasta omkostnader for perioden",
+            help="Budgeterade fasta omkostnader för perioden",
         )
         verkligt_belopp = st.number_input(
             "Verkligt belopp (kr)",
@@ -347,7 +347,7 @@ with tab2:
             step=10_000.0,
             format="%.0f",
             key="fast_verkligt",
-            help="Verkliga fasta omkostnader for perioden",
+            help="Verkliga fasta omkostnader för perioden",
         )
 
     with col_fix_res:
@@ -382,14 +382,14 @@ with tab2:
         # Success/error message
         if fast_result["favorable"]:
             st.success(
-                f"Fordelaktig avvikelse: Verkliga fasta omkostnader understeg budget "
+                f"Fördelaktig avvikelse: Verkliga fasta omkostnader understeg budget "
                 f"med {format_sek(abs(fast_result['avvikelse']))}."
             )
         elif fast_result["avvikelse"] == 0:
             st.info("Inga avvikelser. Verkliga fasta omkostnader matchar budget exakt.")
         else:
             st.error(
-                f"Ofordelaktig avvikelse: Verkliga fasta omkostnader oversteg budget "
+                f"Ofördelaktig avvikelse: Verkliga fasta omkostnader översteg budget "
                 f"med {format_sek(abs(fast_result['avvikelse']))}."
             )
 
@@ -431,7 +431,7 @@ with tab2:
             result = humanize(raw)
             st.markdown(result.text)
         except LLMUnavailableError:
-            st.html('<div class="eks-offline-badge">LLM offline, visar grundforklaring</div>')
+            st.html('<div class="eks-offline-badge">LLM offline, visar grundförklaring</div>')
             st.markdown(FALLBACK_TEMPLATES["standardkost"](
                 "standardkost",
                 {"budgeterat": budget_belopp, "verkligt": verkligt_belopp},
@@ -446,8 +446,8 @@ with tab2:
 
 with tab3:
     st.markdown(
-        "Sammanstallning av alla avvikelser fran rorliga kostnader och fasta omkostnader. "
-        "Ger en helhetsbild av kostnadsavvikelserna for perioden."
+        "Sammanställning av alla avvikelser från rörliga kostnader och fasta omkostnader. "
+        "Ger en helhetsbild av kostnadsavvikelserna för perioden."
     )
 
     rorlig_res = st.session_state.get("sk_rorlig_result")
@@ -455,8 +455,8 @@ with tab3:
 
     if rorlig_res is None and fast_res is None:
         st.info(
-            "Inga berakningar tillgangliga. "
-            "Fyll i varden i flikarna 'Rorliga kostnader' och 'Fasta omkostnader' forst."
+            "Inga beräkningar tillgängliga. "
+            "Fyll i värden i flikarna 'Rörliga kostnader' och 'Fasta omkostnader' först."
         )
     else:
         # Calculate totals
@@ -476,7 +476,7 @@ with tab3:
                 variant=total_variant,
             ),
             kpi_card(
-                "Rorliga kostnader",
+                "Rörliga kostnader",
                 format_sek(rorlig_total),
                 variant=rorlig_variant,
             ),
@@ -519,7 +519,7 @@ with tab3:
             textfont=dict(size=10),
         ))
         fig_summary.add_hline(y=0, line_dash="dot", line_color=COLORS["neutral"], line_width=1)
-        apply_layout(fig_summary, title="Sammanstallning av alla avvikelser", height=420)
+        apply_layout(fig_summary, title="Sammanställning av alla avvikelser", height=420)
         st.plotly_chart(fig_summary, use_container_width=True)
 
         # Identify dominant variance
@@ -528,10 +528,10 @@ with tab3:
             max_idx = abs_values.index(max(abs_values))
             dominant_name = bar_names[max_idx]
             dominant_value = bar_values[max_idx]
-            dominant_direction = "fordelaktig" if dominant_value < 0 else "ofordelaktig"
+            dominant_direction = "fördelaktig" if dominant_value < 0 else "ofördelaktig"
             st.info(
-                f"Storsta avvikelse: {dominant_name} pa {format_sek(dominant_value)} "
-                f"({dominant_direction}). Denna komponent bor prioriteras vid uppfoljning."
+                f"Största avvikelse: {dominant_name} på {format_sek(dominant_value)} "
+                f"({dominant_direction}). Denna komponent bör prioriteras vid uppföljning."
             )
 
         # Excel export
@@ -540,17 +540,17 @@ with tab3:
             summary_rows.append({
                 "Komponent": "Volymavvikelse",
                 "Belopp (kr)": rorlig_res["volymavvikelse"],
-                "Typ": "Rorlig",
+                "Typ": "Rörlig",
             })
             summary_rows.append({
                 "Komponent": "Prisavvikelse",
                 "Belopp (kr)": rorlig_res["prisavvikelse"],
-                "Typ": "Rorlig",
+                "Typ": "Rörlig",
             })
             summary_rows.append({
                 "Komponent": "Effektivitetsavvikelse",
                 "Belopp (kr)": rorlig_res["effektivitetsavvikelse"],
-                "Typ": "Rorlig",
+                "Typ": "Rörlig",
             })
         if fast_res:
             summary_rows.append({
@@ -568,7 +568,7 @@ with tab3:
 
         st.download_button(
             "Exportera till Excel",
-            data=export_to_excel({"Sammanstallning": export_df}),
+            data=export_to_excel({"Sammanställning": export_df}),
             file_name="standardkostnadsanalys.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
@@ -593,13 +593,13 @@ with tab3:
                     "avvikelse": fast_res["avvikelse"],
                 })
             sys_p, usr_p = build_standardkost_interpretation_prompt(all_components)
-            with st.spinner("Analyserar sammanstallning..."):
+            with st.spinner("Analyserar sammanställning..."):
                 raw = cached_chat(sys_p, usr_p)
                 increment_session_calls()
             result = humanize(raw)
             st.markdown(result.text)
         except LLMUnavailableError:
-            st.html('<div class="eks-offline-badge">LLM offline, visar grundforklaring</div>')
+            st.html('<div class="eks-offline-badge">LLM offline, visar grundförklaring</div>')
             st.markdown(FALLBACK_TEMPLATES["standardkost"](
                 "standardkost",
                 {"rorlig_total": rorlig_total, "fast_avvikelse": fast_avvikelse},
@@ -612,7 +612,7 @@ with tab3:
     for role, msg in st.session_state["sk_chat_history"]:
         with st.chat_message(role):
             st.markdown(msg)
-    user_q = st.chat_input("Fraga tutorn om standardkostnadsanalysen", key="sk_chat_input")
+    user_q = st.chat_input("Fråga tutorn om standardkostnadsanalysen", key="sk_chat_input")
     if user_q:
         st.session_state["sk_chat_history"].append(("user", user_q))
         with st.chat_message("user"):
@@ -623,14 +623,14 @@ with tab3:
             sk_ctx = {"total_avvikelse": total_all} if 'total_all' in dir() else {}
             sys_p, usr_p = build_qa_prompt("standardkost", sk_ctx, sk_ctx, user_q, chat_history=st.session_state["sk_chat_history"])
             with st.chat_message("assistant"):
-                with st.spinner("Tanker..."):
+                with st.spinner("Tänker..."):
                     raw = cached_chat(sys_p, usr_p)
                     increment_session_calls()
                 result = humanize(raw)
                 st.markdown(result.text)
             st.session_state["sk_chat_history"].append(("assistant", result.text))
         except LLMUnavailableError:
-            msg = "LLM ej tillganglig."
+            msg = "LLM ej tillgänglig."
             with st.chat_message("assistant"):
                 st.info(msg)
             st.session_state["sk_chat_history"].append(("assistant", msg))

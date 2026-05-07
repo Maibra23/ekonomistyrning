@@ -19,7 +19,7 @@ def test_format_sek_negative():
 
 
 def test_format_sek_none():
-    assert format_sek(None) == "—"
+    assert format_sek(None) == "-"
 
 
 def test_format_percent_basic():

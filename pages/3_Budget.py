@@ -130,8 +130,8 @@ st.html(
         eyebrow="KAPITEL 13-15",
         title="Budget och budgetering",
         subtitle=(
-            "Bygg resultatbudget, likviditetsbudget och balansbudget steg for steg. "
-            "Exempelforetag NordTech AB med 12 MSEK i forsaljning."
+            "Bygg resultatbudget, likviditetsbudget och balansbudget steg för steg. "
+            "Exempelföretag NordTech AB med 12 MSEK i försäljning."
         ),
     )
 )
@@ -159,25 +159,25 @@ with st.expander("Steg 1: Resultatbudget", expanded=True):
     with col_in1:
         st.markdown("**Intakter**")
         forsaljning = st.number_input(
-            "Forsaljning (kr)",
+            "Försäljning (kr)",
             min_value=0.0,
             value=float(st.session_state["bud_forsaljning"]),
             step=100_000.0,
             format="%.0f",
             key="inp_forsaljning",
-            help="Budgeterad total forsaljning for perioden",
+            help="Budgeterad total försäljning för perioden",
         )
         st.session_state["bud_forsaljning"] = forsaljning
 
         st.markdown("**Kostnader**")
         rorliga = st.number_input(
-            "Rorliga kostnader (kr)",
+            "Rörliga kostnader (kr)",
             min_value=0.0,
             value=float(st.session_state["bud_rorliga"]),
             step=100_000.0,
             format="%.0f",
             key="inp_rorliga",
-            help="Rorliga kostnader (material, varor, etc.)",
+            help="Rörliga kostnader (material, varor, etc.)",
         )
         st.session_state["bud_rorliga"] = rorliga
 
@@ -188,7 +188,7 @@ with st.expander("Steg 1: Resultatbudget", expanded=True):
             step=100_000.0,
             format="%.0f",
             key="inp_personal",
-            help="Loner, sociala avgifter, pensioner",
+            help="Löner, sociala avgifter, pensioner",
         )
         st.session_state["bud_personal"] = personal
 
@@ -199,7 +199,7 @@ with st.expander("Steg 1: Resultatbudget", expanded=True):
             step=50_000.0,
             format="%.0f",
             key="inp_lokal",
-            help="Hyra, el, uppvarmning",
+            help="Hyra, el, uppvärmning",
         )
         st.session_state["bud_lokal"] = lokal
 
@@ -210,18 +210,18 @@ with st.expander("Steg 1: Resultatbudget", expanded=True):
             step=50_000.0,
             format="%.0f",
             key="inp_avskrivningar",
-            help="Planmasiga avskrivningar pa anlagningstillgangar",
+            help="Planmässiga avskrivningar på anläggningstillgångar",
         )
         st.session_state["bud_avskrivningar"] = avskrivningar
 
         ovriga = st.number_input(
-            "Ovriga kostnader (kr)",
+            "Övriga kostnader (kr)",
             min_value=0.0,
             value=float(st.session_state["bud_ovriga"]),
             step=50_000.0,
             format="%.0f",
             key="inp_ovriga",
-            help="Ovriga externa kostnader",
+            help="Övriga externa kostnader",
         )
         st.session_state["bud_ovriga"] = ovriga
 
@@ -232,7 +232,7 @@ with st.expander("Steg 1: Resultatbudget", expanded=True):
             step=10_000.0,
             format="%.0f",
             key="inp_finansiella",
-            help="Rantor pa lan och krediter",
+            help="Räntor på lån och krediter",
         )
         st.session_state["bud_finansiella"] = finansiella
 
@@ -280,12 +280,12 @@ with st.expander("Steg 1: Resultatbudget", expanded=True):
                 variant="success" if bruttoresultat >= 0 else "danger",
             ),
             kpi_card(
-                "Rorelseresultat",
+                "Rörelseresultat",
                 format_sek(rorelseresultat),
                 variant="success" if rorelseresultat >= 0 else "danger",
             ),
             kpi_card(
-                "Arets resultat",
+                "Årets resultat",
                 format_sek(arets_resultat),
                 variant="success" if arets_resultat >= 0 else "danger",
             ),
@@ -348,11 +348,11 @@ with st.expander("Steg 2: Likviditetsbudget", expanded=True):
             step=50_000.0,
             format="%.0f",
             key="inp_opening_cash",
-            help="Ingaende balans for likvida medel",
+            help="Ingående balans för likvida medel",
         )
         st.session_state["bud_opening_cash"] = opening_cash
 
-        st.markdown("**Rorelsekapital (dagar)**")
+        st.markdown("**Rörelsekapital (dagar)**")
         kf_dagar = st.number_input(
             "Kundfordringar (dagar)",
             min_value=0.0,
@@ -366,14 +366,14 @@ with st.expander("Steg 2: Likviditetsbudget", expanded=True):
         st.session_state["bud_kf_dagar"] = kf_dagar
 
         ls_dagar = st.number_input(
-            "Leverantorsskulder (dagar)",
+            "Leverantörsskulder (dagar)",
             min_value=0.0,
             max_value=365.0,
             value=float(st.session_state["bud_ls_dagar"]),
             step=1.0,
             format="%.0f",
             key="inp_ls_dagar",
-            help="Genomsnittlig betaltid till leverantorer i dagar",
+            help="Genomsnittlig betaltid till leverantörer i dagar",
         )
         st.session_state["bud_ls_dagar"] = ls_dagar
 
@@ -385,7 +385,7 @@ with st.expander("Steg 2: Likviditetsbudget", expanded=True):
             step=1.0,
             format="%.0f",
             key="inp_lager_dagar",
-            help="Genomsnittlig liggtid for lager i dagar",
+            help="Genomsnittlig liggtid för lager i dagar",
         )
         st.session_state["bud_lager_dagar"] = lager_dagar
 
@@ -397,7 +397,7 @@ with st.expander("Steg 2: Likviditetsbudget", expanded=True):
             step=50_000.0,
             format="%.0f",
             key="inp_investeringar",
-            help="Planerade investeringar i anlagningstillgangar (utflode)",
+            help="Planerade investeringar i anläggningstillgångar (utflöde)",
         )
         st.session_state["bud_investeringar"] = investeringar_belopp
 
@@ -407,7 +407,7 @@ with st.expander("Steg 2: Likviditetsbudget", expanded=True):
             step=50_000.0,
             format="%.0f",
             key="inp_finansiering",
-            help="Nettoupplaning av lan (positivt = inflode, negativt = amortering)",
+            help="Nettoupplåning av lån (positivt = inflöde, negativt = amortering)",
         )
         st.session_state["bud_finansiering"] = finansiering_belopp
 
@@ -439,7 +439,7 @@ with st.expander("Steg 2: Likviditetsbudget", expanded=True):
 
         render_kpi_row([
             kpi_card(
-                "Forandring likvida medel",
+                "Förändring likvida medel",
                 format_sek(forandring),
                 variant="success" if forandring >= 0 else "danger",
             ),
@@ -449,7 +449,7 @@ with st.expander("Steg 2: Likviditetsbudget", expanded=True):
                 variant="success" if likvida_ub >= 0 else "danger",
             ),
             kpi_card(
-                "Delta rorelsekapital",
+                "Delta rörelsekapital",
                 format_sek(delta_rk),
                 variant="warning",
             ),
@@ -458,9 +458,9 @@ with st.expander("Steg 2: Likviditetsbudget", expanded=True):
         # Warning for negative closing cash
         if likvida_ub < 0:
             st.error(
-                f"Varning: Likvida medel UB ar negativa ({format_sek(likvida_ub)}). "
-                "Foretaget behover ytterligare finansiering eller lagre investeringar "
-                "for att undvika likviditetsbrist."
+                f"Varning: Likvida medel UB är negativa ({format_sek(likvida_ub)}). "
+                "Företaget behöver ytterligare finansiering eller lägre investeringar "
+                "för att undvika likviditetsbrist."
             )
 
         # DataFrame display
@@ -501,7 +501,7 @@ with st.expander("Steg 2: Likviditetsbudget", expanded=True):
             textfont=dict(size=10),
         ))
         fig_likviditet.add_hline(y=0, line_dash="dot", line_color=COLORS["neutral"], line_width=1)
-        apply_layout(fig_likviditet, title="Kassaflodeskomponenter", height=400)
+        apply_layout(fig_likviditet, title="Kassaflödeskomponenter", height=400)
         fig_likviditet.update_layout(xaxis_tickangle=-25)
         st.plotly_chart(fig_likviditet, use_container_width=True)
 
@@ -513,15 +513,15 @@ with st.expander("Steg 3: Balansbudget", expanded=True):
     col_in3, col_res3 = st.columns([1, 2], gap="large")
 
     with col_in3:
-        st.markdown("**Ingaende balansposter - Tillgangar**")
+        st.markdown("**Ingående balansposter - Tillgångar**")
         ob_anlaggning = st.number_input(
-            "Anlaggningstillgangar IB (kr)",
+            "Anläggningstillgångar IB (kr)",
             min_value=0.0,
             value=float(st.session_state["bud_ob_anlaggning"]),
             step=100_000.0,
             format="%.0f",
             key="inp_ob_anlaggning",
-            help="Ingaende balans for anlagningstillgangar",
+            help="Ingående balans för anläggningstillgångar",
         )
         st.session_state["bud_ob_anlaggning"] = ob_anlaggning
 
@@ -532,7 +532,7 @@ with st.expander("Steg 3: Balansbudget", expanded=True):
             step=50_000.0,
             format="%.0f",
             key="inp_ob_lager",
-            help="Ingaende balans for lager",
+            help="Ingående balans för lager",
         )
         st.session_state["bud_ob_lager"] = ob_lager
 
@@ -543,7 +543,7 @@ with st.expander("Steg 3: Balansbudget", expanded=True):
             step=50_000.0,
             format="%.0f",
             key="inp_ob_kundfordringar",
-            help="Ingaende balans for kundfordringar",
+            help="Ingående balans för kundfordringar",
         )
         st.session_state["bud_ob_kundfordringar"] = ob_kundfordringar
 
@@ -555,11 +555,11 @@ with st.expander("Steg 3: Balansbudget", expanded=True):
             value=ob_likvida,
             format="%.0f",
             key="inp_ob_likvida",
-            help="Synkroniserad fran Steg 2 (Ingaende likvida medel)",
+            help="Synkroniserad från Steg 2 (Ingående likvida medel)",
             disabled=True,
         )
 
-        st.markdown("**Ingaende balansposter - Skulder och EK**")
+        st.markdown("**Ingående balansposter - Skulder och EK**")
         ob_eget_kapital = st.number_input(
             "Eget kapital IB (kr)",
             min_value=0.0,
@@ -567,29 +567,29 @@ with st.expander("Steg 3: Balansbudget", expanded=True):
             step=100_000.0,
             format="%.0f",
             key="inp_ob_eget_kapital",
-            help="Ingaende balans for eget kapital",
+            help="Ingående balans för eget kapital",
         )
         st.session_state["bud_ob_eget_kapital"] = ob_eget_kapital
 
         ob_langsiktiga = st.number_input(
-            "Langsiktiga skulder IB (kr)",
+            "Långsiktiga skulder IB (kr)",
             min_value=0.0,
             value=float(st.session_state["bud_ob_langsiktiga"]),
             step=100_000.0,
             format="%.0f",
             key="inp_ob_langsiktiga",
-            help="Ingaende balans for langsiktiga skulder (banklan etc.)",
+            help="Ingående balans för långsiktiga skulder (banklån etc.)",
         )
         st.session_state["bud_ob_langsiktiga"] = ob_langsiktiga
 
         ob_leverantorsskulder = st.number_input(
-            "Leverantorsskulder IB (kr)",
+            "Leverantörsskulder IB (kr)",
             min_value=0.0,
             value=float(st.session_state["bud_ob_leverantorsskulder"]),
             step=50_000.0,
             format="%.0f",
             key="inp_ob_leverantorsskulder",
-            help="Ingaende balans for leverantorsskulder",
+            help="Ingående balans för leverantörsskulder",
         )
         st.session_state["bud_ob_leverantorsskulder"] = ob_leverantorsskulder
 
@@ -601,7 +601,7 @@ with st.expander("Steg 3: Balansbudget", expanded=True):
             step=50_000.0,
             format="%.0f",
             key="inp_nyanskaffning",
-            help="Nyanskaffade anlagningstillgangar under perioden",
+            help="Nyanskaffade anläggningstillgångar under perioden",
         )
         st.session_state["bud_nyanskaffning"] = nyanskaffning
 
@@ -612,7 +612,7 @@ with st.expander("Steg 3: Balansbudget", expanded=True):
             step=50_000.0,
             format="%.0f",
             key="inp_avskrivningar_balans",
-            help="Periodens avskrivningar (bor stamma med resultatbudgetens avskrivningar)",
+            help="Periodens avskrivningar (bör stämma med resultatbudgetens avskrivningar)",
         )
         st.session_state["bud_avskrivningar_balans"] = avskrivningar_balans
 
@@ -642,12 +642,12 @@ with st.expander("Steg 3: Balansbudget", expanded=True):
         is_balanced, difference = validate_budget_balance(balans_df)
 
         if is_balanced:
-            st.success("Balansbudgeten ar i balans. Tillgangar = Skulder + Eget kapital.")
+            st.success("Balansbudgeten är i balans. Tillgångar = Skulder + Eget kapital.")
         else:
             st.error(
-                f"Balansbudgeten ar INTE i balans. Differens: {format_sek(difference)}. "
+                f"Balansbudgeten är INTE i balans. Differens: {format_sek(difference)}. "
                 "Trolig orsak: Kontrollera att likvida medel IB, investeringar och "
-                "avskrivningar stammer overens mellan stegen."
+                "avskrivningar stämmer överens mellan stegen."
             )
 
         # Display as formatted table — show side by side
@@ -660,10 +660,10 @@ with st.expander("Steg 3: Balansbudget", expanded=True):
                 return ""
             return format_sek(float(val))
 
-        display_balans["Ingaende (kr)"] = display_balans["Ingaende"].apply(_fmt_or_blank)
-        display_balans["Utgaende (kr)"] = display_balans["Utgaende"].apply(_fmt_or_blank)
+        display_balans["Ingående (kr)"] = display_balans["Ingaende"].apply(_fmt_or_blank)
+        display_balans["Utgående (kr)"] = display_balans["Utgaende"].apply(_fmt_or_blank)
         st.dataframe(
-            display_balans[["Post", "Ingaende (kr)", "Utgaende (kr)"]],
+            display_balans[["Post", "Ingående (kr)", "Utgående (kr)"]],
             use_container_width=True,
             hide_index=True,
         )
@@ -678,7 +678,7 @@ with st.expander("Steg 3: Balansbudget", expanded=True):
 
         render_kpi_row([
             kpi_card(
-                "Summa tillgangar UB",
+                "Summa tillgångar UB",
                 format_sek(summa_tillgangar_ub),
                 variant="success" if is_balanced else "danger",
             ),
@@ -719,18 +719,18 @@ with st.expander("Steg 3: Balansbudget", expanded=True):
         fig_balans.add_trace(go.Bar(
             x=item_posts,
             y=ingaende_vals,
-            name="Ingaende balans",
+            name="Ingående balans",
             marker_color=COLORS["primary_light"],
             opacity=0.8,
         ))
         fig_balans.add_trace(go.Bar(
             x=item_posts,
             y=utgaende_vals,
-            name="Utgaende balans",
+            name="Utgående balans",
             marker_color=COLORS["primary"],
             opacity=0.9,
         ))
-        apply_layout(fig_balans, title="Ingaende vs utgaende balans", height=420)
+        apply_layout(fig_balans, title="Ingående vs utgående balans", height=420)
         fig_balans.update_layout(barmode="group", xaxis_tickangle=-30)
         st.plotly_chart(fig_balans, use_container_width=True)
 
@@ -742,7 +742,7 @@ st.markdown("### Sammanfattande analys")
 
 remaining = get_session_calls_remaining()
 if remaining <= 0:
-    st.warning("Du har natt sessionsgransan (50 LLM-anrop). Ladda om sidan for att fortsatta.")
+    st.warning("Du har nått sessionsgränsen (50 LLM-anrop). Ladda om sidan för att fortsätta.")
 else:
     # Build summary dicts from the computed DataFrames
     resultat_summary = {
@@ -773,7 +773,7 @@ else:
         with st.spinner("Analyserar budgetkonsistens..."):
             raw = cached_chat(sys_p, usr_p)
             increment_session_calls()
-        result = humanize(raw, required_sections=["Antagande", "Berakning", "Tolkning", "Kallor och forbehall"])
+        result = humanize(raw, required_sections=["Antagande", "Beräkning", "Tolkning", "Källor och förbehåll"])
         st.markdown(result.text)
 
         if result.tells_found:
@@ -789,11 +789,11 @@ else:
         if grounding["missing"]:
             st.html(
                 '<div class="eks-grounding-warn">'
-                "OBS: Tutorn kan ha refererat fel siffra, verifiera mot berakningen ovan."
+                "OBS: Tutorn kan ha refererat fel siffra, verifiera mot beräkningen ovan."
                 "</div>"
             )
     except LLMUnavailableError:
-        st.html('<div class="eks-offline-badge">LLM offline, visar grundforklaring</div>')
+        st.html('<div class="eks-offline-badge">LLM offline, visar grundförklaring</div>')
         budget_inputs = {
             "forsaljning": forsaljning,
             "arets_resultat": arets_resultat,
@@ -814,7 +814,7 @@ for role, msg in st.session_state["budget_chat_history"]:
     with st.chat_message(role):
         st.markdown(msg)
 
-user_q = st.chat_input("Fraga tutorn om budgeten")
+user_q = st.chat_input("Fråga tutorn om budgeten")
 if user_q:
     st.session_state["budget_chat_history"].append(("user", user_q))
     with st.chat_message("user"):
@@ -829,14 +829,14 @@ if user_q:
             chat_history=st.session_state["budget_chat_history"],
         )
         with st.chat_message("assistant"):
-            with st.spinner("Tanker..."):
+            with st.spinner("Tänker..."):
                 raw = cached_chat(sys_p, usr_p)
                 increment_session_calls()
             result = humanize(raw)
             st.markdown(result.text)
         st.session_state["budget_chat_history"].append(("assistant", result.text))
     except LLMUnavailableError:
-        msg = "LLM ej tillganglig."
+        msg = "LLM ej tillgänglig."
         with st.chat_message("assistant"):
             st.info(msg)
         st.session_state["budget_chat_history"].append(("assistant", msg))

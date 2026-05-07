@@ -142,7 +142,7 @@ def render_landing() -> None:
         st.html(nav_card(
             "Kunskapstest",
             "LLM-genererade scenariofrågor per kapitelkluster. Numeriska svar "
-            "verifieras mot kalkylator. Kapitel 4–17.",
+            "verifieras mot kalkylator. Kapitel 4 till 17.",
         ))
         st.page_link("pages/5_Kunskapstest.py", label="Öppna modul →")
 
