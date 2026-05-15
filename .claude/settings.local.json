@@ -3,7 +3,23 @@
     "allow": [
       "Bash(python:*)",
       "Bash(pip install:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(git *)",
+      "Read(//Users/Brook/.claude/skills/**)",
+      "Read(//Users/Brook/.claude/plugins/**)",
+      "Bash(curl -s http://localhost:8501/)",
+      "Bash(curl -s http://localhost:8501/Kalkyl)",
+      "Bash(curl -s http://localhost:8501/Investering)",
+      "Bash(curl -s -o /tmp/p1.html -w \"Kalkyl HTTP %{http_code}\\\\n\" http://localhost:8501/Kalkyl)",
+      "Bash(curl -s -o /tmp/p2.html -w \"Investering HTTP %{http_code}\\\\n\" http://localhost:8501/Investering)",
+      "Bash(curl -s -o /tmp/p3.html -w \"Budget HTTP %{http_code}\\\\n\" http://localhost:8501/Budget)",
+      "Bash(curl -s -o /tmp/p4.html -w \"Standardkost HTTP %{http_code}\\\\n\" http://localhost:8501/Standardkostnadsanalys)",
+      "Bash(curl -s -o /tmp/p5.html -w \"Quiz HTTP %{http_code}\\\\n\" http://localhost:8501/Kunskapstest)",
+      "mcp__plugin_playwright_playwright__browser_navigate",
+      "mcp__plugin_playwright_playwright__browser_snapshot",
+      "mcp__plugin_playwright_playwright__browser_console_messages",
+      "mcp__plugin_playwright_playwright__browser_wait_for",
+      "mcp__plugin_playwright_playwright__browser_evaluate"
     ]
   }
 }
