@@ -472,8 +472,8 @@ with tab_sj:
     # Build export sheets
     sj_export_sheets = {"Sjalvkostnad": sj_df}
     if "sj_llm_text" in st.session_state:
-        llm_df = pd.DataFrame({"Tutor forklaring": [st.session_state["sj_llm_text"]]})
-        sj_export_sheets["Tutor forklaring"] = llm_df
+        llm_df = pd.DataFrame({"Tutor förklaring": [st.session_state["sj_llm_text"]]})
+        sj_export_sheets["Tutor förklaring"] = llm_df
     xlsx_sj = export_to_excel(sj_export_sheets)
     st.download_button(
         label="Exportera till Excel",

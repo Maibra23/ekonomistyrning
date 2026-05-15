@@ -42,7 +42,7 @@ from utils.ui import footer_note, inject_css, kpi_card, page_title, render_kpi_r
 # ---------------------------------------------------------------------------
 
 st.set_page_config(
-    page_title="Investeringsbedomning, Ekonomistyrning",
+    page_title="Investeringsbedömning, Ekonomistyrning",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -122,7 +122,7 @@ def _render_investering_llm(
     tab_key: str,
 ):
     """Render LLM explanation and Q&A for an investering tab."""
-    st.markdown("### Tutor forklaring")
+    st.markdown("### Tutor förklaring")
 
     remaining = get_session_calls_remaining()
     if remaining <= 0:
@@ -135,7 +135,7 @@ def _render_investering_llm(
         if not is_llm_available():
             raise LLMUnavailableError("Ingen token")
         sys_p, usr_p = build_investering_explanation_prompt(method, inputs, outputs)
-        with st.spinner("Genererar forklaring..."):
+        with st.spinner("Genererar förklaring..."):
             raw = cached_chat(sys_p, usr_p)
             increment_session_calls()
         result = humanize(raw, required_sections=["Antagande", "Berakning", "Tolkning", "Kallor och forbehall"])
@@ -148,11 +148,11 @@ def _render_investering_llm(
             if grounding["missing"]:
                 st.html(
                     '<div class="eks-grounding-warn">'
-                    "OBS: Tutorn kan ha refererat fel siffra, verifiera mot berakningen ovan."
+                    "OBS: Tutorn kan ha refererat fel siffra, verifiera mot beräkningen ovan."
                     "</div>"
                 )
     except LLMUnavailableError:
-        st.html('<div class="eks-offline-badge">LLM offline, visar grundforklaring</div>')
+        st.html('<div class="eks-offline-badge">LLM offline, visar grundförklaring</div>')
         fallback = FALLBACK_TEMPLATES["investering"](method, inputs, outputs)
         st.markdown(fallback)
 
@@ -189,7 +189,7 @@ def _render_investering_llm(
                     if grounding["missing"]:
                         st.html(
                             '<div class="eks-grounding-warn">'
-                            "OBS: Tutorn kan ha refererat fel siffra, verifiera mot berakningen ovan."
+                            "OBS: Tutorn kan ha refererat fel siffra, verifiera mot beräkningen ovan."
                             "</div>"
                         )
             st.session_state[chat_key].append(("assistant", result.text))

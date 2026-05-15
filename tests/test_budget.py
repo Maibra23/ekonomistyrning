@@ -36,16 +36,16 @@ class TestResultatbudget:
 
     @pytest.fixture
     def nordtech_revenues(self) -> dict[str, float]:
-        return {"Forsaljning": 12_000_000.0}
+        return {"Försäljning": 12_000_000.0}
 
     @pytest.fixture
     def nordtech_costs(self) -> dict[str, float]:
         return {
-            "Rorliga kostnader": 4_800_000.0,
+            "Rörliga kostnader": 4_800_000.0,
             "Personalkostnader": 3_200_000.0,
             "Lokalkostnader": 800_000.0,
             "Avskrivningar": 600_000.0,
-            "Ovriga kostnader": 400_000.0,
+            "Övriga kostnader": 400_000.0,
             "Finansiella kostnader": 200_000.0,
         }
 
@@ -57,17 +57,17 @@ class TestResultatbudget:
     def test_rorelseresultat(self, nordtech_revenues, nordtech_costs):
         # 7.2M - 3.2M - 0.8M - 0.6M - 0.4M = 2.2M
         df = build_resultatbudget(nordtech_revenues, nordtech_costs)
-        assert _get_post(df, "Rorelseresultat") == pytest.approx(2_200_000.0)
+        assert _get_post(df, "Rörelseresultat") == pytest.approx(2_200_000.0)
 
     def test_resultat_fore_skatt(self, nordtech_revenues, nordtech_costs):
         # 2.2M - 0.2M = 2.0M
         df = build_resultatbudget(nordtech_revenues, nordtech_costs)
-        assert _get_post(df, "Resultat fore skatt") == pytest.approx(2_000_000.0)
+        assert _get_post(df, "Resultat före skatt") == pytest.approx(2_000_000.0)
 
     def test_arets_resultat(self, nordtech_revenues, nordtech_costs):
         # 2.0M * (1 - 0.206) = 2.0M * 0.794 = 1_588_000
         df = build_resultatbudget(nordtech_revenues, nordtech_costs)
-        assert _get_post(df, "Arets resultat") == pytest.approx(1_588_000.0)
+        assert _get_post(df, "Årets resultat") == pytest.approx(1_588_000.0)
 
     def test_output_columns(self, nordtech_revenues, nordtech_costs):
         df = build_resultatbudget(nordtech_revenues, nordtech_costs)
@@ -75,19 +75,19 @@ class TestResultatbudget:
 
     def test_zero_revenue_negative_result_no_tax(self):
         """Zero revenues result in losses; tax should be zero."""
-        revenues = {"Forsaljning": 0.0}
+        revenues = {"Försäljning": 0.0}
         costs = {
-            "Rorliga kostnader": 0.0,
+            "Rörliga kostnader": 0.0,
             "Personalkostnader": 500_000.0,
             "Lokalkostnader": 100_000.0,
             "Avskrivningar": 50_000.0,
-            "Ovriga kostnader": 0.0,
+            "Övriga kostnader": 0.0,
             "Finansiella kostnader": 10_000.0,
         }
         df = build_resultatbudget(revenues, costs)
-        resultat_fore_skatt = _get_post(df, "Resultat fore skatt")
+        resultat_fore_skatt = _get_post(df, "Resultat före skatt")
         skatt = _get_post(df, "Skatt")
-        arets_resultat = _get_post(df, "Arets resultat")
+        arets_resultat = _get_post(df, "Årets resultat")
 
         assert resultat_fore_skatt < 0
         assert skatt == 0.0
@@ -97,27 +97,27 @@ class TestResultatbudget:
     def test_custom_tax_rate(self, nordtech_revenues, nordtech_costs):
         """Custom tax rate of 30% should yield different result."""
         df = build_resultatbudget(nordtech_revenues, nordtech_costs, skattesats=0.30)
-        # Resultat fore skatt = 2M, skatt = 2M * 0.30 = 600k
-        # Arets resultat = 2M - 600k = 1.4M
-        assert _get_post(df, "Arets resultat") == pytest.approx(1_400_000.0)
+        # Resultat före skatt = 2M, skatt = 2M * 0.30 = 600k
+        # Årets resultat = 2M - 600k = 1.4M
+        assert _get_post(df, "Årets resultat") == pytest.approx(1_400_000.0)
 
     def test_loss_with_custom_tax_rate(self):
         """Losses should not be taxed even with custom rate."""
-        revenues = {"Forsaljning": 100_000.0}
+        revenues = {"Försäljning": 100_000.0}
         costs = {
-            "Rorliga kostnader": 50_000.0,
+            "Rörliga kostnader": 50_000.0,
             "Personalkostnader": 200_000.0,
             "Lokalkostnader": 0.0,
             "Avskrivningar": 0.0,
-            "Ovriga kostnader": 0.0,
+            "Övriga kostnader": 0.0,
             "Finansiella kostnader": 0.0,
         }
         df = build_resultatbudget(revenues, costs, skattesats=0.50)
         assert _get_post(df, "Skatt") == 0.0
         # Bruttoresultat = 100k - 50k = 50k
-        # Rorelseresultat = 50k - 200k = -150k
-        # Resultat fore skatt = -150k
-        assert _get_post(df, "Arets resultat") == pytest.approx(-150_000.0)
+        # Rörelseresultat = 50k - 200k = -150k
+        # Resultat före skatt = -150k
+        assert _get_post(df, "Årets resultat") == pytest.approx(-150_000.0)
 
 
 # ---------------------------------------------------------------------------
@@ -130,13 +130,13 @@ class TestLikviditetsbudget:
     @pytest.fixture
     def resultat_df(self) -> pd.DataFrame:
         """A simple resultatbudget for testing."""
-        revenues = {"Forsaljning": 12_000_000.0}
+        revenues = {"Försäljning": 12_000_000.0}
         costs = {
-            "Rorliga kostnader": 4_800_000.0,
+            "Rörliga kostnader": 4_800_000.0,
             "Personalkostnader": 3_200_000.0,
             "Lokalkostnader": 800_000.0,
             "Avskrivningar": 600_000.0,
-            "Ovriga kostnader": 400_000.0,
+            "Övriga kostnader": 400_000.0,
             "Finansiella kostnader": 200_000.0,
         }
         return build_resultatbudget(revenues, costs)
@@ -154,7 +154,7 @@ class TestLikviditetsbudget:
             forsaljning=12_000_000.0,
             inkop=4_800_000.0,
         )
-        avskrivningar_post = _get_post(df, "Avskrivningar (aterforing)")
+        avskrivningar_post = _get_post(df, "Avskrivningar (återföring)")
         assert avskrivningar_post == pytest.approx(600_000.0)
 
     def test_closing_equals_opening_plus_forandring(self, resultat_df):
@@ -171,7 +171,7 @@ class TestLikviditetsbudget:
             forsaljning=12_000_000.0,
             inkop=4_800_000.0,
         )
-        forandring = _get_post(df, "Forandring likvida medel")
+        forandring = _get_post(df, "Förändring likvida medel")
         ub = _get_post(df, "Likvida medel UB")
         ib = _get_post(df, "Likvida medel IB")
 
@@ -197,7 +197,7 @@ class TestLikviditetsbudget:
             forsaljning=12_000_000.0,
             inkop=4_800_000.0,
         )
-        delta_rk = _get_post(df, "Delta rorelsekapital")
+        delta_rk = _get_post(df, "Delta rörelsekapital")
         # Stored as negative (capital tied up = negative cash effect)
         expected_delta_rk = -(12_000_000 * 30 / 365 + 4_800_000 * 45 / 365 - 4_800_000 * 30 / 365)
         assert delta_rk == pytest.approx(expected_delta_rk, rel=1e-4)
@@ -229,7 +229,7 @@ class TestLikviditetsbudget:
             forsaljning=12_000_000.0,
             inkop=4_800_000.0,
         )
-        delta_rk = _get_post(df, "Delta rorelsekapital")
+        delta_rk = _get_post(df, "Delta rörelsekapital")
         assert delta_rk == pytest.approx(0.0)
 
 
@@ -243,25 +243,25 @@ class TestBalansbudget:
     @pytest.fixture
     def full_budget(self):
         """Build a complete budget set for balance sheet testing."""
-        revenues = {"Forsaljning": 10_000_000.0}
+        revenues = {"Försäljning": 10_000_000.0}
         costs = {
-            "Rorliga kostnader": 4_000_000.0,
+            "Rörliga kostnader": 4_000_000.0,
             "Personalkostnader": 2_500_000.0,
             "Lokalkostnader": 500_000.0,
             "Avskrivningar": 400_000.0,
-            "Ovriga kostnader": 300_000.0,
+            "Övriga kostnader": 300_000.0,
             "Finansiella kostnader": 100_000.0,
         }
         resultat_df = build_resultatbudget(revenues, costs)
 
         opening_balance = {
-            "Anlaggningstillgangar": 3_000_000.0,
+            "Anläggningstillgångar": 3_000_000.0,
             "Lager": 800_000.0,
             "Kundfordringar": 600_000.0,
             "Likvida medel": 500_000.0,
             "Eget kapital": 3_000_000.0,
-            "Langsiktiga skulder": 1_500_000.0,
-            "Leverantorsskulder": 400_000.0,
+            "Långsiktiga skulder": 1_500_000.0,
+            "Leverantörsskulder": 400_000.0,
         }
 
         likviditet_df = build_likviditetsbudget(
@@ -298,13 +298,13 @@ class TestBalansbudget:
     def test_section_headers_present(self, full_budget):
         balans_df = full_budget[0]
         posts = balans_df["Post"].tolist()
-        assert "TILLGANGAR" in posts
+        assert "TILLGÅNGAR" in posts
         assert "SKULDER OCH EGET KAPITAL" in posts
 
     def test_anlaggningstillgangar_update(self, full_budget):
-        """Anlaggningstillgangar = IB + nyanskaffning - avskrivningar."""
+        """Anläggningstillgångar = IB + nyanskaffning - avskrivningar."""
         balans_df = full_budget[0]
-        row = balans_df.loc[balans_df["Post"] == "Anlaggningstillgangar"]
+        row = balans_df.loc[balans_df["Post"] == "Anläggningstillgångar"]
         ib = row["Ingaende"].values[0]
         ub = row["Utgaende"].values[0]
         # 3M + 500k - 400k = 3.1M
@@ -312,10 +312,10 @@ class TestBalansbudget:
         assert ub == pytest.approx(3_100_000.0)
 
     def test_eget_kapital_increase_by_arets_resultat(self, full_budget):
-        """Eget kapital UB = IB + Arets resultat."""
+        """Eget kapital UB = IB + Årets resultat."""
         balans_df, resultat_df, _, opening_balance, _ = full_budget
         arets_resultat = resultat_df.loc[
-            resultat_df["Post"] == "Arets resultat", "Belopp"
+            resultat_df["Post"] == "Årets resultat", "Belopp"
         ].values[0]
         ek_row = balans_df.loc[balans_df["Post"] == "Eget kapital"]
         ub_ek = ek_row["Utgaende"].values[0]
@@ -327,9 +327,9 @@ class TestBalansbudget:
         """validate_budget_balance should detect a forced imbalance."""
         # Create a deliberately unbalanced DataFrame
         rows = [
-            {"Post": "TILLGANGAR", "Ingaende": None, "Utgaende": None},
-            {"Post": "Anlaggningstillgangar", "Ingaende": 1000.0, "Utgaende": 1000.0},
-            {"Post": "Summa tillgangar", "Ingaende": 1000.0, "Utgaende": 1000.0},
+            {"Post": "TILLGÅNGAR", "Ingaende": None, "Utgaende": None},
+            {"Post": "Anläggningstillgångar", "Ingaende": 1000.0, "Utgaende": 1000.0},
+            {"Post": "Summa tillgångar", "Ingaende": 1000.0, "Utgaende": 1000.0},
             {"Post": "SKULDER OCH EGET KAPITAL", "Ingaende": None, "Utgaende": None},
             {"Post": "Eget kapital", "Ingaende": 500.0, "Utgaende": 500.0},
             {"Post": "Summa skulder och eget kapital", "Ingaende": 500.0, "Utgaende": 500.0},
@@ -345,7 +345,7 @@ class TestBalansbudget:
         opening_balance = full_budget[3]
 
         ib_tillgangar = balans_df.loc[
-            balans_df["Post"] == "Summa tillgangar", "Ingaende"
+            balans_df["Post"] == "Summa tillgångar", "Ingaende"
         ].values[0]
         ib_skulder = balans_df.loc[
             balans_df["Post"] == "Summa skulder och eget kapital", "Ingaende"
