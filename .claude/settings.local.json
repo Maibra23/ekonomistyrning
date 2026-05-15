@@ -19,7 +19,10 @@
       "mcp__plugin_playwright_playwright__browser_snapshot",
       "mcp__plugin_playwright_playwright__browser_console_messages",
       "mcp__plugin_playwright_playwright__browser_wait_for",
-      "mcp__plugin_playwright_playwright__browser_evaluate"
+      "mcp__plugin_playwright_playwright__browser_evaluate",
+      "Bash(grep -v \"def \\\\|\\\\.py:[0-9]*:.*=\\\\s*\\\\\"[a-z_]\\\\+\\\\\"$\\\\|key=\\\\\"\\\\|.py:[0-9]*: *#\")",
+      "Bash(pkill -f \"streamlit run streamlit_app\")",
+      "mcp__plugin_playwright_playwright__browser_close"
     ]
   }
 }
