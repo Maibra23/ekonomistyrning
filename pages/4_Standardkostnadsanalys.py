@@ -83,7 +83,7 @@ with tab1:
     col_std, col_verk = st.columns(2, gap="large")
 
     with col_std:
-        st.markdown("**Standardvarden**")
+        st.markdown("**Standardvärden**")
         std_volym = st.number_input(
             "Standard volym (styck)",
             min_value=0.0,
@@ -266,12 +266,12 @@ with tab1:
         # Reconciliation check
         if rorlig_result["reconciliation_ok"]:
             st.caption(
-                "Avstamning OK: Volymavvikelse + Prisavvikelse + Effektivitetsavvikelse "
+                "Avstämning OK: Volymavvikelse + Prisavvikelse + Effektivitetsavvikelse "
                 f"= {format_sek(rorlig_result['total'])} (total avvikelse). Kapitel 17.4."
             )
         else:
             st.warning(
-                "Avstamning: Komponenterna summerar inte exakt till totalavvikelsen. "
+                "Avstämning: Komponenterna summerar inte exakt till totalavvikelsen. "
                 "Kontrollera inmatade värden."
             )
 

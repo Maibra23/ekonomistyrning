@@ -22,7 +22,9 @@
       "mcp__plugin_playwright_playwright__browser_evaluate",
       "Bash(grep -v \"def \\\\|\\\\.py:[0-9]*:.*=\\\\s*\\\\\"[a-z_]\\\\+\\\\\"$\\\\|key=\\\\\"\\\\|.py:[0-9]*: *#\")",
       "Bash(pkill -f \"streamlit run streamlit_app\")",
-      "mcp__plugin_playwright_playwright__browser_close"
+      "mcp__plugin_playwright_playwright__browser_close",
+      "Bash(sed -i '' -e s/Investeringsbedomning/Investeringsbedömning/g -e 's/Tutor forklaring/Tutor förklaring/g' -e 's/Genererar forklaring/Genererar förklaring/g' -e 's/verifiera mot berakningen ovan/verifiera mot beräkningen ovan/g' -e s/grundforklaring/grundförklaring/g pages/2_Investering.py pages/1_Kalkyl.py utils/ui.py)",
+      "Bash(sed -i '' -e s/Standardvarden/Standardvärden/g -e 's/Avstamning OK/Avstämning OK/g' pages/4_Standardkostnadsanalys.py)"
     ]
   }
 }

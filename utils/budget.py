@@ -19,30 +19,30 @@ def build_resultatbudget(
     """Build a resultatbudget (income statement budget).
 
     Structure:
-        Forsaljning - Rorliga kostnader = Bruttoresultat
+        Försäljning - Rörliga kostnader = Bruttoresultat
         Bruttoresultat - Personalkostnader - Lokalkostnader - Avskrivningar
-            - Ovriga kostnader = Rorelseresultat
-        Rorelseresultat - Finansiella kostnader = Resultat fore skatt
-        Resultat fore skatt * (1 - skattesats) = Arets resultat
+            - Övriga kostnader = Rörelseresultat
+        Rörelseresultat - Finansiella kostnader = Resultat före skatt
+        Resultat före skatt * (1 - skattesats) = Årets resultat
 
     No tax on losses: if resultat_fore_skatt <= 0, skatt = 0.
 
     Args:
-        revenues: Dict with key "Forsaljning" -> revenue amount.
-        costs: Dict with keys: "Rorliga kostnader", "Personalkostnader",
-            "Lokalkostnader", "Avskrivningar", "Ovriga kostnader",
+        revenues: Dict with key "Försäljning" -> revenue amount.
+        costs: Dict with keys: "Rörliga kostnader", "Personalkostnader",
+            "Lokalkostnader", "Avskrivningar", "Övriga kostnader",
             "Finansiella kostnader".
         skattesats: Corporate tax rate as decimal (default 20.6%).
 
     Returns:
         DataFrame with columns ['Post', 'Belopp'].
     """
-    forsaljning = revenues.get("Forsaljning", 0.0)
-    rorliga = costs.get("Rorliga kostnader", 0.0)
+    forsaljning = revenues.get("Försäljning", 0.0)
+    rorliga = costs.get("Rörliga kostnader", 0.0)
     personal = costs.get("Personalkostnader", 0.0)
     lokal = costs.get("Lokalkostnader", 0.0)
     avskrivningar = costs.get("Avskrivningar", 0.0)
-    ovriga = costs.get("Ovriga kostnader", 0.0)
+    ovriga = costs.get("Övriga kostnader", 0.0)
     finansiella = costs.get("Finansiella kostnader", 0.0)
 
     bruttoresultat = forsaljning - rorliga
@@ -57,18 +57,18 @@ def build_resultatbudget(
     arets_resultat = resultat_fore_skatt - skatt
 
     rows = [
-        {"Post": "Forsaljning", "Belopp": forsaljning},
-        {"Post": "Rorliga kostnader", "Belopp": -rorliga},
+        {"Post": "Försäljning", "Belopp": forsaljning},
+        {"Post": "Rörliga kostnader", "Belopp": -rorliga},
         {"Post": "Bruttoresultat", "Belopp": bruttoresultat},
         {"Post": "Personalkostnader", "Belopp": -personal},
         {"Post": "Lokalkostnader", "Belopp": -lokal},
         {"Post": "Avskrivningar", "Belopp": -avskrivningar},
-        {"Post": "Ovriga kostnader", "Belopp": -ovriga},
-        {"Post": "Rorelseresultat", "Belopp": rorelseresultat},
+        {"Post": "Övriga kostnader", "Belopp": -ovriga},
+        {"Post": "Rörelseresultat", "Belopp": rorelseresultat},
         {"Post": "Finansiella kostnader", "Belopp": -finansiella},
-        {"Post": "Resultat fore skatt", "Belopp": resultat_fore_skatt},
-        {"Post": "Skatt", "Belopp": -skatt},
-        {"Post": "Arets resultat", "Belopp": arets_resultat},
+        {"Post": "Resultat före skatt", "Belopp": resultat_fore_skatt},
+        {"Post": "Skatt", "Belopp": -skatt if skatt else 0.0},
+        {"Post": "Årets resultat", "Belopp": arets_resultat},
     ]
 
     return pd.DataFrame(rows)
@@ -88,11 +88,11 @@ def build_likviditetsbudget(
     """Build a likviditetsbudget (cash flow budget).
 
     Converts accrual-based result to cash basis:
-        Arets resultat + Avskrivningar - Delta rorelsekapital
-        - Investeringar + Finansiering = Forandring likvida medel
+        Årets resultat + Avskrivningar - Delta rörelsekapital
+        - Investeringar + Finansiering = Förändring likvida medel
 
     Working capital change:
-        Delta RK = Forsaljning * kf_dagar/365
+        Delta RK = Försäljning * kf_dagar/365
                  + Inkop * lager_dagar/365
                  - Inkop * levsk_dagar/365
 
@@ -114,7 +114,7 @@ def build_likviditetsbudget(
     """
     # Extract arets resultat and avskrivningar from resultat_df
     arets_resultat = resultat_df.loc[
-        resultat_df["Post"] == "Arets resultat", "Belopp"
+        resultat_df["Post"] == "Årets resultat", "Belopp"
     ].values[0]
 
     avskrivningar_row = resultat_df.loc[
@@ -141,15 +141,15 @@ def build_likviditetsbudget(
     closing_cash = opening_cash + forandring
 
     rows = [
-        {"Post": "Arets resultat", "Belopp": arets_resultat},
-        {"Post": "Avskrivningar (aterforing)", "Belopp": avskrivningar},
+        {"Post": "Årets resultat", "Belopp": arets_resultat},
+        {"Post": "Avskrivningar (återföring)", "Belopp": avskrivningar},
         {"Post": "Delta kundfordringar", "Belopp": -delta_kundfordringar},
         {"Post": "Delta lager", "Belopp": -delta_lager},
-        {"Post": "Delta leverantorsskulder", "Belopp": delta_leverantorsskulder},
-        {"Post": "Delta rorelsekapital", "Belopp": -delta_rorelsekapital},
+        {"Post": "Delta leverantörsskulder", "Belopp": delta_leverantorsskulder},
+        {"Post": "Delta rörelsekapital", "Belopp": -delta_rorelsekapital},
         {"Post": "Investeringar", "Belopp": -investeringar},
         {"Post": "Finansiering", "Belopp": finansiering},
-        {"Post": "Forandring likvida medel", "Belopp": forandring},
+        {"Post": "Förändring likvida medel", "Belopp": forandring},
         {"Post": "Likvida medel IB", "Belopp": opening_cash},
         {"Post": "Likvida medel UB", "Belopp": closing_cash},
     ]
@@ -169,8 +169,8 @@ def build_balansbudget(
 
     Args:
         opening_balance: Dict with keys:
-            Anlaggningstillgangar, Lager, Kundfordringar, Likvida medel,
-            Eget kapital, Langsiktiga skulder, Leverantorsskulder.
+            Anläggningstillgångar, Lager, Kundfordringar, Likvida medel,
+            Eget kapital, Långsiktiga skulder, Leverantörsskulder.
         resultat_df: DataFrame from build_resultatbudget.
         likviditet_df: DataFrame from build_likviditetsbudget.
         investeringar: Dict with keys:
@@ -187,22 +187,22 @@ def build_balansbudget(
 
     delta_kundfordringar = abs(_get_likviditet("Delta kundfordringar"))
     delta_lager = abs(_get_likviditet("Delta lager"))
-    delta_leverantorsskulder = abs(_get_likviditet("Delta leverantorsskulder"))
+    delta_leverantorsskulder = abs(_get_likviditet("Delta leverantörsskulder"))
     closing_cash = _get_likviditet("Likvida medel UB")
 
     # Extract arets resultat
     arets_resultat = resultat_df.loc[
-        resultat_df["Post"] == "Arets resultat", "Belopp"
+        resultat_df["Post"] == "Årets resultat", "Belopp"
     ].values[0]
 
     # Opening values
-    ib_anlaggning = opening_balance.get("Anlaggningstillgangar", 0.0)
+    ib_anlaggning = opening_balance.get("Anläggningstillgångar", 0.0)
     ib_lager = opening_balance.get("Lager", 0.0)
     ib_kundfordringar = opening_balance.get("Kundfordringar", 0.0)
     ib_likvida = opening_balance.get("Likvida medel", 0.0)
     ib_eget_kapital = opening_balance.get("Eget kapital", 0.0)
-    ib_langsiktiga = opening_balance.get("Langsiktiga skulder", 0.0)
-    ib_leverantorsskulder = opening_balance.get("Leverantorsskulder", 0.0)
+    ib_langsiktiga = opening_balance.get("Långsiktiga skulder", 0.0)
+    ib_leverantorsskulder = opening_balance.get("Leverantörsskulder", 0.0)
 
     # Closing values - assets
     nyanskaffning = investeringar.get("nyanskaffning", 0.0)
@@ -229,16 +229,16 @@ def build_balansbudget(
     ub_skulder_ek = ub_eget_kapital + ub_langsiktiga + ub_leverantorsskulder
 
     rows = [
-        {"Post": "TILLGANGAR", "Ingaende": None, "Utgaende": None},
-        {"Post": "Anlaggningstillgangar", "Ingaende": ib_anlaggning, "Utgaende": ub_anlaggning},
+        {"Post": "TILLGÅNGAR", "Ingaende": None, "Utgaende": None},
+        {"Post": "Anläggningstillgångar", "Ingaende": ib_anlaggning, "Utgaende": ub_anlaggning},
         {"Post": "Lager", "Ingaende": ib_lager, "Utgaende": ub_lager},
         {"Post": "Kundfordringar", "Ingaende": ib_kundfordringar, "Utgaende": ub_kundfordringar},
         {"Post": "Likvida medel", "Ingaende": ib_likvida, "Utgaende": ub_likvida},
-        {"Post": "Summa tillgangar", "Ingaende": ib_tillgangar, "Utgaende": ub_tillgangar},
+        {"Post": "Summa tillgångar", "Ingaende": ib_tillgangar, "Utgaende": ub_tillgangar},
         {"Post": "SKULDER OCH EGET KAPITAL", "Ingaende": None, "Utgaende": None},
         {"Post": "Eget kapital", "Ingaende": ib_eget_kapital, "Utgaende": ub_eget_kapital},
-        {"Post": "Langsiktiga skulder", "Ingaende": ib_langsiktiga, "Utgaende": ub_langsiktiga},
-        {"Post": "Leverantorsskulder", "Ingaende": ib_leverantorsskulder, "Utgaende": ub_leverantorsskulder},
+        {"Post": "Långsiktiga skulder", "Ingaende": ib_langsiktiga, "Utgaende": ub_langsiktiga},
+        {"Post": "Leverantörsskulder", "Ingaende": ib_leverantorsskulder, "Utgaende": ub_leverantorsskulder},
         {"Post": "Summa skulder och eget kapital", "Ingaende": ib_skulder_ek, "Utgaende": ub_skulder_ek},
     ]
 
@@ -256,7 +256,7 @@ def validate_budget_balance(balansbudget_df: pd.DataFrame) -> tuple[bool, float]
         the difference is within 1 kr tolerance.
     """
     tillgangar_row = balansbudget_df.loc[
-        balansbudget_df["Post"] == "Summa tillgangar", "Utgaende"
+        balansbudget_df["Post"] == "Summa tillgångar", "Utgaende"
     ]
     skulder_row = balansbudget_df.loc[
         balansbudget_df["Post"] == "Summa skulder och eget kapital", "Utgaende"

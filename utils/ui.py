@@ -94,7 +94,7 @@ LABELS: dict[str, str] = {
     "llm_forklaring": "Förklaring",
     "llm_steg": "Steg-för-steg-guide",
     "llm_fraga": "Ställ en fråga...",
-    "llm_offline": "LLM offline, visar grundforklaring",
+    "llm_offline": "LLM offline, visar grundförklaring",
     "llm_cap_warn": (
         "Du har nått sessionsgränsen (50 LLM-anrop). "
         "Ladda om sidan för att fortsätta."
@@ -792,7 +792,7 @@ def render_sidebar(active_page: str) -> None:
         st.html(
             f'<div class="eks-sidebar-footer">'
             f"v0.2.0 | 2026-05-07<br>"
-            f"Qwen3-14B via HF Inference Providers<br>"
+            f"Qwen3-8B via HF Inference Providers<br>"
             f"LLM-anrop: {llm_calls} / 50<br>"
             f'<span style="font-size:9px;opacity:0.7;">'
             f"Prompts behandlas av Hugging Face"

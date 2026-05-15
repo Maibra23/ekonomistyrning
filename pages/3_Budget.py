@@ -58,23 +58,23 @@ render_sidebar("budget")
 # Constants — NordTech AB default scenario
 # ---------------------------------------------------------------------------
 
-_DEFAULT_REVENUES = {"Forsaljning": 12_000_000.0}
+_DEFAULT_REVENUES = {"Försäljning": 12_000_000.0}
 _DEFAULT_COSTS = {
-    "Rorliga kostnader": 4_800_000.0,
+    "Rörliga kostnader": 4_800_000.0,
     "Personalkostnader": 3_200_000.0,
     "Lokalkostnader": 800_000.0,
     "Avskrivningar": 600_000.0,
-    "Ovriga kostnader": 400_000.0,
+    "Övriga kostnader": 400_000.0,
     "Finansiella kostnader": 200_000.0,
 }
 _DEFAULT_OPENING_BALANCE = {
-    "Anlaggningstillgangar": 3_000_000.0,
+    "Anläggningstillgångar": 3_000_000.0,
     "Lager": 500_000.0,
     "Kundfordringar": 800_000.0,
     "Likvida medel": 500_000.0,
     "Eget kapital": 3_200_000.0,
-    "Langsiktiga skulder": 1_200_000.0,
-    "Leverantorsskulder": 400_000.0,
+    "Långsiktiga skulder": 1_200_000.0,
+    "Leverantörsskulder": 400_000.0,
 }
 _DEFAULT_SKATTESATS = 20.6
 _DEFAULT_OPENING_CASH = 500_000.0
@@ -89,12 +89,12 @@ _DEFAULT_AVSKRIVNINGAR_BALANS = 600_000.0
 
 def _load_defaults() -> None:
     """Load NordTech AB defaults into session state."""
-    st.session_state["bud_forsaljning"] = _DEFAULT_REVENUES["Forsaljning"]
-    st.session_state["bud_rorliga"] = _DEFAULT_COSTS["Rorliga kostnader"]
+    st.session_state["bud_forsaljning"] = _DEFAULT_REVENUES["Försäljning"]
+    st.session_state["bud_rorliga"] = _DEFAULT_COSTS["Rörliga kostnader"]
     st.session_state["bud_personal"] = _DEFAULT_COSTS["Personalkostnader"]
     st.session_state["bud_lokal"] = _DEFAULT_COSTS["Lokalkostnader"]
     st.session_state["bud_avskrivningar"] = _DEFAULT_COSTS["Avskrivningar"]
-    st.session_state["bud_ovriga"] = _DEFAULT_COSTS["Ovriga kostnader"]
+    st.session_state["bud_ovriga"] = _DEFAULT_COSTS["Övriga kostnader"]
     st.session_state["bud_finansiella"] = _DEFAULT_COSTS["Finansiella kostnader"]
     st.session_state["bud_skattesats"] = _DEFAULT_SKATTESATS
     st.session_state["bud_opening_cash"] = _DEFAULT_OPENING_CASH
@@ -103,13 +103,13 @@ def _load_defaults() -> None:
     st.session_state["bud_lager_dagar"] = _DEFAULT_LAGER_DAGAR
     st.session_state["bud_investeringar"] = _DEFAULT_INVESTERINGAR
     st.session_state["bud_finansiering"] = _DEFAULT_FINANSIERING
-    st.session_state["bud_ob_anlaggning"] = _DEFAULT_OPENING_BALANCE["Anlaggningstillgangar"]
+    st.session_state["bud_ob_anlaggning"] = _DEFAULT_OPENING_BALANCE["Anläggningstillgångar"]
     st.session_state["bud_ob_lager"] = _DEFAULT_OPENING_BALANCE["Lager"]
     st.session_state["bud_ob_kundfordringar"] = _DEFAULT_OPENING_BALANCE["Kundfordringar"]
     st.session_state["bud_ob_likvida"] = _DEFAULT_OPENING_BALANCE["Likvida medel"]
     st.session_state["bud_ob_eget_kapital"] = _DEFAULT_OPENING_BALANCE["Eget kapital"]
-    st.session_state["bud_ob_langsiktiga"] = _DEFAULT_OPENING_BALANCE["Langsiktiga skulder"]
-    st.session_state["bud_ob_leverantorsskulder"] = _DEFAULT_OPENING_BALANCE["Leverantorsskulder"]
+    st.session_state["bud_ob_langsiktiga"] = _DEFAULT_OPENING_BALANCE["Långsiktiga skulder"]
+    st.session_state["bud_ob_leverantorsskulder"] = _DEFAULT_OPENING_BALANCE["Leverantörsskulder"]
     st.session_state["bud_nyanskaffning"] = _DEFAULT_NYANSKAFFNING
     st.session_state["bud_avskrivningar_balans"] = _DEFAULT_AVSKRIVNINGAR_BALANS
 
@@ -250,26 +250,26 @@ with st.expander("Steg 1: Resultatbudget", expanded=True):
 
     with col_res1:
         # Build resultatbudget
-        revenues = {"Forsaljning": forsaljning}
+        revenues = {"Försäljning": forsaljning}
         costs = {
-            "Rorliga kostnader": rorliga,
+            "Rörliga kostnader": rorliga,
             "Personalkostnader": personal,
             "Lokalkostnader": lokal,
             "Avskrivningar": avskrivningar,
-            "Ovriga kostnader": ovriga,
+            "Övriga kostnader": ovriga,
             "Finansiella kostnader": finansiella,
         }
         resultat_df = build_resultatbudget(revenues, costs, skattesats=skattesats / 100.0)
 
         # Extract key metrics
         arets_resultat = resultat_df.loc[
-            resultat_df["Post"] == "Arets resultat", "Belopp"
+            resultat_df["Post"] == "Årets resultat", "Belopp"
         ].values[0]
         bruttoresultat = resultat_df.loc[
             resultat_df["Post"] == "Bruttoresultat", "Belopp"
         ].values[0]
         rorelseresultat = resultat_df.loc[
-            resultat_df["Post"] == "Rorelseresultat", "Belopp"
+            resultat_df["Post"] == "Rörelseresultat", "Belopp"
         ].values[0]
 
         # KPI row
@@ -308,7 +308,7 @@ with st.expander("Steg 1: Resultatbudget", expanded=True):
         # Build waterfall measures: absolute for first, relative for middle, total for summaries
         measures = []
         for post in waterfall_posts:
-            if post in ("Bruttoresultat", "Rorelseresultat", "Resultat fore skatt", "Arets resultat"):
+            if post in ("Bruttoresultat", "Rörelseresultat", "Resultat före skatt", "Årets resultat"):
                 measures.append("total")
             else:
                 measures.append("relative")
@@ -428,13 +428,13 @@ with st.expander("Steg 2: Likviditetsbudget", expanded=True):
 
         # Extract key metrics
         forandring = likviditet_df.loc[
-            likviditet_df["Post"] == "Forandring likvida medel", "Belopp"
+            likviditet_df["Post"] == "Förändring likvida medel", "Belopp"
         ].values[0]
         likvida_ub = likviditet_df.loc[
             likviditet_df["Post"] == "Likvida medel UB", "Belopp"
         ].values[0]
         delta_rk = likviditet_df.loc[
-            likviditet_df["Post"] == "Delta rorelsekapital", "Belopp"
+            likviditet_df["Post"] == "Delta rörelsekapital", "Belopp"
         ].values[0]
 
         render_kpi_row([
@@ -474,11 +474,11 @@ with st.expander("Steg 2: Likviditetsbudget", expanded=True):
         )
 
         # Plotly bar chart of cash flow components
-        # Show the main components: Arets resultat, Avskrivningar, Delta RK, Investeringar, Finansiering
+        # Show the main components: Årets resultat, Avskrivningar, Delta RK, Investeringar, Finansiering
         component_posts = [
-            "Arets resultat",
-            "Avskrivningar (aterforing)",
-            "Delta rorelsekapital",
+            "Årets resultat",
+            "Avskrivningar (återföring)",
+            "Delta rörelsekapital",
             "Investeringar",
             "Finansiering",
         ]
@@ -619,13 +619,13 @@ with st.expander("Steg 3: Balansbudget", expanded=True):
     with col_res3:
         # Build balansbudget
         opening_balance = {
-            "Anlaggningstillgangar": ob_anlaggning,
+            "Anläggningstillgångar": ob_anlaggning,
             "Lager": ob_lager,
             "Kundfordringar": ob_kundfordringar,
             "Likvida medel": ob_likvida,
             "Eget kapital": ob_eget_kapital,
-            "Langsiktiga skulder": ob_langsiktiga,
-            "Leverantorsskulder": ob_leverantorsskulder,
+            "Långsiktiga skulder": ob_langsiktiga,
+            "Leverantörsskulder": ob_leverantorsskulder,
         }
         investeringar_dict = {
             "nyanskaffning": nyanskaffning,
@@ -670,7 +670,7 @@ with st.expander("Steg 3: Balansbudget", expanded=True):
 
         # KPI cards for totals
         summa_tillgangar_ub = balans_df.loc[
-            balans_df["Post"] == "Summa tillgangar", "Utgaende"
+            balans_df["Post"] == "Summa tillgångar", "Utgaende"
         ].values[0]
         summa_skulder_ek_ub = balans_df.loc[
             balans_df["Post"] == "Summa skulder och eget kapital", "Utgaende"
@@ -696,13 +696,13 @@ with st.expander("Steg 3: Balansbudget", expanded=True):
 
         # Plotly grouped bar: opening vs closing for balance sheet items
         item_posts = [
-            "Anlaggningstillgangar",
+            "Anläggningstillgångar",
             "Lager",
             "Kundfordringar",
             "Likvida medel",
             "Eget kapital",
-            "Langsiktiga skulder",
-            "Leverantorsskulder",
+            "Långsiktiga skulder",
+            "Leverantörsskulder",
         ]
         ingaende_vals = []
         utgaende_vals = []

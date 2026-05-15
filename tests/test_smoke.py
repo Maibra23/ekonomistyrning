@@ -352,13 +352,13 @@ class TestBudgetSmoke:
     def _build_resultat(self):
         from utils.budget import build_resultatbudget
 
-        revenues = {"Forsaljning": 10_000_000}
+        revenues = {"Försäljning": 10_000_000}
         costs = {
-            "Rorliga kostnader": 4_000_000,
+            "Rörliga kostnader": 4_000_000,
             "Personalkostnader": 2_500_000,
             "Lokalkostnader": 800_000,
             "Avskrivningar": 500_000,
-            "Ovriga kostnader": 300_000,
+            "Övriga kostnader": 300_000,
             "Finansiella kostnader": 200_000,
         }
         return build_resultatbudget(revenues, costs)
@@ -372,13 +372,13 @@ class TestBudgetSmoke:
     def test_build_resultatbudget_loss(self):
         from utils.budget import build_resultatbudget
 
-        revenues = {"Forsaljning": 1_000_000}
+        revenues = {"Försäljning": 1_000_000}
         costs = {
-            "Rorliga kostnader": 500_000,
+            "Rörliga kostnader": 500_000,
             "Personalkostnader": 400_000,
             "Lokalkostnader": 200_000,
             "Avskrivningar": 100_000,
-            "Ovriga kostnader": 50_000,
+            "Övriga kostnader": 50_000,
             "Finansiella kostnader": 50_000,
         }
         df = build_resultatbudget(revenues, costs)
@@ -420,13 +420,13 @@ class TestBudgetSmoke:
             inkop=4_000_000,
         )
         opening = {
-            "Anlaggningstillgangar": 5_000_000,
+            "Anläggningstillgångar": 5_000_000,
             "Lager": 800_000,
             "Kundfordringar": 600_000,
             "Likvida medel": 500_000,
             "Eget kapital": 4_000_000,
-            "Langsiktiga skulder": 2_000_000,
-            "Leverantorsskulder": 900_000,
+            "Långsiktiga skulder": 2_000_000,
+            "Leverantörsskulder": 900_000,
         }
         df = build_balansbudget(
             opening_balance=opening,
@@ -456,13 +456,13 @@ class TestBudgetSmoke:
             inkop=4_000_000,
         )
         opening = {
-            "Anlaggningstillgangar": 5_000_000,
+            "Anläggningstillgångar": 5_000_000,
             "Lager": 800_000,
             "Kundfordringar": 600_000,
             "Likvida medel": 500_000,
             "Eget kapital": 4_000_000,
-            "Langsiktiga skulder": 2_000_000,
-            "Leverantorsskulder": 900_000,
+            "Långsiktiga skulder": 2_000_000,
+            "Leverantörsskulder": 900_000,
         }
         balans_df = build_balansbudget(
             opening_balance=opening,
