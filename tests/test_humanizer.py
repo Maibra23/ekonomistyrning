@@ -1,11 +1,14 @@
 """Tests for utils/humanizer.py - the Layer 2 regex post processor."""
 from __future__ import annotations
 
+import pytest
+
 from utils.humanizer import (
     NBSP,
     enforce_swedish_numbers,
     humanize,
     normalize_dashes,
+    normalize_swedish_terminology,
     strip_ai_tells,
     validate_structure,
 )
@@ -163,6 +166,91 @@ def test_humanize_with_structure_validation():
     )
     assert result.structure_valid is False
     assert "Källor och förbehåll" in result.missing_sections
+
+
+@pytest.mark.parametrize(
+    "phrase",
+    [
+        "i ett nötskal",
+        "med andra ord",
+        "för att sammanfatta",
+        "det bör betonas att",
+        "som tidigare nämnts",
+        "i grund och botten",
+        "i sammanhanget",
+        "i det stora hela",
+        "kort sagt",
+        "när allt kommer omkring",
+    ],
+)
+def test_strip_ai_tells_extended_swedish_patterns(phrase: str) -> None:
+    text = f"Resultatet är bra, {phrase}, och beräkningen följer kapitel 10.4."
+    cleaned, found = strip_ai_tells(text)
+    assert phrase not in cleaned.lower()
+    assert any(phrase in tell.lower() for tell in found)
+
+
+def test_normalize_swedish_terminology_safe_replacement() -> None:
+    """A clearly incorrect variant should be replaced with its canonical form."""
+    glossary = {
+        "kassaflöde": ("cash flow", "cashflow"),
+        "påslag": ("markup", None),
+    }
+    text = "Företagets cashflow är positivt."
+    cleaned, corrections = normalize_swedish_terminology(text, glossary)
+    assert "cashflow" not in cleaned
+    assert "kassaflöde" in cleaned
+    assert ("cashflow", "kassaflöde") in corrections
+
+
+def test_normalize_swedish_terminology_ambiguous_not_replaced() -> None:
+    """Ambiguous variants like 'påslag' must not be replaced outside cost context."""
+    glossary = {
+        "pålägg": ("overhead markup", "påslag"),
+    }
+    text = "Det blev ett trevligt påslag på lönen i år."
+    cleaned, corrections = normalize_swedish_terminology(text, glossary)
+    assert "påslag" in cleaned
+    assert corrections == []
+
+
+def test_normalize_swedish_terminology_ambiguous_replaced_with_cost_context() -> None:
+    """The same ambiguous variant should be replaced when cost context is nearby."""
+    glossary = {
+        "pålägg": ("overhead markup", "påslag"),
+    }
+    text = "Kalkylen visar ett påslag på de indirekta kostnaderna."
+    cleaned, corrections = normalize_swedish_terminology(text, glossary)
+    assert "pålägg" in cleaned
+    assert ("påslag", "pålägg") in corrections
+
+
+def test_normalize_swedish_terminology_skips_none_variant() -> None:
+    """Entries without an incorrect variant should never trigger a replacement."""
+    glossary = {
+        "inflation": ("inflation", None),
+    }
+    text = "Modellen tar hänsyn till inflation över tio år."
+    cleaned, corrections = normalize_swedish_terminology(text, glossary)
+    assert cleaned == text
+    assert corrections == []
+
+
+def test_humanize_with_glossary_populates_corrections() -> None:
+    glossary = {
+        "kassaflöde": ("cash flow", "cashflow"),
+    }
+    text = "Företagets cashflow är 1 234 kr."
+    result = humanize(text, glossary=glossary)
+    assert ("cashflow", "kassaflöde") in result.terminology_corrections
+    assert "cashflow" not in result.text
+    assert "normalize_swedish_terminology" in result.transformations_applied
+
+
+def test_humanize_without_glossary_has_empty_corrections() -> None:
+    """Backwards compatibility: existing callers omit glossary entirely."""
+    result = humanize("NPV är 12 345 kr.")
+    assert result.terminology_corrections == []
 
 
 def test_humanize_clean_swedish_text_unchanged():

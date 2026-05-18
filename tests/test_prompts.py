@@ -10,6 +10,7 @@ import json
 from utils.prompts import (
     FALLBACK_TEMPLATES,
     SYSTEM_PROMPT_BASE,
+    TERMINOLOGY_GLOSSARY,
     build_budget_consistency_prompt,
     build_investering_explanation_prompt,
     build_kalkyl_explanation_prompt,
@@ -234,6 +235,49 @@ def test_fallback_templates_dict():
     assert "standardkost" in FALLBACK_TEMPLATES
     for key in FALLBACK_TEMPLATES:
         assert callable(FALLBACK_TEMPLATES[key])
+
+
+def test_system_prompt_base_contains_ordlista_heading():
+    """The injected glossary heading must be present in the base prompt."""
+    assert "ORDLISTA" in SYSTEM_PROMPT_BASE
+
+
+def test_system_prompt_base_includes_ordlista_entry_examples():
+    """A few canonical terms should reach the system prompt via ORDLISTA."""
+    assert "kassaflöde" in SYSTEM_PROMPT_BASE
+    assert "bidragskalkyl" in SYSTEM_PROMPT_BASE
+    assert "standardkostnadsanalys" in SYSTEM_PROMPT_BASE
+
+
+def test_system_prompt_base_has_ordlista_absolute_rule():
+    """The new absolute rule pointing at ORDLISTA must be present."""
+    assert "ORDLISTA strikt" in SYSTEM_PROMPT_BASE
+    assert "Anderssons bok" in SYSTEM_PROMPT_BASE
+
+
+def test_terminology_glossary_minimum_size():
+    assert len(TERMINOLOGY_GLOSSARY) >= 35
+
+
+def test_terminology_glossary_entry_structure():
+    """Each entry must be a (english: str, incorrect_variant: str | None) tuple."""
+    for canonical, value in TERMINOLOGY_GLOSSARY.items():
+        assert isinstance(canonical, str) and canonical
+        assert isinstance(value, tuple) and len(value) == 2
+        english, variant = value
+        assert isinstance(english, str) and english
+        assert variant is None or isinstance(variant, str)
+
+
+def test_terminology_glossary_covers_all_five_modules():
+    """Spot check that each module domain contributes at least one entry."""
+    keys = set(TERMINOLOGY_GLOSSARY.keys())
+    # Kalkyl, investering, budget, standardkost, plus a misc bucket.
+    assert "självkostnadskalkyl" in keys
+    assert "nuvärdesmetoden" in keys
+    assert "resultatbudget" in keys
+    assert "standardkostnadsanalys" in keys
+    assert "internprissättning" in keys
 
 
 def test_no_dashes_in_system_prompt():
