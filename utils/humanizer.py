@@ -42,6 +42,17 @@ AI_TELLS_SV: list[str] = [
     r"\bhör\s+av\s+dig\s+om\b",
     r"\bi\s+dagens\s+snabbrörliga\s+värld\b",
     r"\bhoppas\s+det(ta)?\s+hjälper\b",
+    # Day 10.2: extended Swedish AI artifacts
+    r"\bi\s+ett\s+nötskal\b",
+    r"\bmed\s+andra\s+ord\b",
+    r"\bför\s+att\s+sammanfatta\b",
+    r"\bdet\s+bör\s+betonas\s+att\b",
+    r"\bsom\s+tidigare\s+nämnts\b",
+    r"\bi\s+grund\s+och\s+botten\b",
+    r"\bi\s+sammanhanget\b",
+    r"\bi\s+det\s+stora\s+hela\b",
+    r"\bkort\s+sagt\b",
+    r"\bnär\s+allt\s+kommer\s+omkring\b",
 ]
 
 ALL_AI_TELLS = AI_TELLS_EN + AI_TELLS_SV
@@ -72,6 +83,40 @@ class HumanizeResult:
     structure_valid: bool
     missing_sections: list[str]
     transformations_applied: list[str]
+    terminology_corrections: list[tuple[str, str]] = None  # type: ignore[assignment]
+
+    def __post_init__(self) -> None:
+        # Default to an empty list when omitted to keep API backwards compatible.
+        if self.terminology_corrections is None:
+            self.terminology_corrections = []
+
+
+# Cost related context words used by normalize_swedish_terminology to decide
+# whether ambiguous variants like "påslag" are referring to a cost concept.
+_COST_CONTEXT_WORDS = frozenset(
+    {
+        "kostnad",
+        "kostnader",
+        "kostnaden",
+        "pålägg",
+        "pålägget",
+        "påläggsmetoden",
+        "omkostnad",
+        "omkostnader",
+        "självkostnad",
+        "självkostnaden",
+        "kalkyl",
+        "kalkylen",
+    }
+)
+
+
+def _has_cost_context(text: str, match_start: int, match_end: int, window: int = 5) -> bool:
+    """Return True when a cost related word appears within `window` tokens of the match."""
+    before = text[:match_start].split()[-window:]
+    after = text[match_end:].split()[:window]
+    surrounding = [token.lower().strip(".,;:!?()\"'") for token in before + after]
+    return any(token in _COST_CONTEXT_WORDS for token in surrounding)
 
 
 def strip_ai_tells(text: str) -> tuple[str, list[str]]:
@@ -162,7 +207,63 @@ def validate_structure(
     return len(missing) == 0, missing
 
 
-def humanize(text: str, required_sections: list[str] | None = None) -> HumanizeResult:
+# Variants that must only be replaced when adjacent to cost related words.
+# Keep this list narrow; broad lookups risk false positives in non cost text.
+_AMBIGUOUS_VARIANTS = frozenset({"påslag", "pålägg"})
+
+
+def normalize_swedish_terminology(
+    text: str, glossary: dict[str, tuple[str, str | None]]
+) -> tuple[str, list[tuple[str, str]]]:
+    """Replace known incorrect Swedish variants with their canonical terms.
+
+    Iterates over glossary entries that supply a non-None incorrect variant
+    and substitutes occurrences using a word boundary regex. For variants
+    flagged as ambiguous, only replace when a cost related context word
+    appears within five tokens; otherwise skip to avoid false positives.
+
+    Returns the cleaned text and the list of (incorrect, correct) pairs
+    actually applied.
+    """
+    cleaned = text
+    corrections: list[tuple[str, str]] = []
+
+    for canonical, (_english, variant) in glossary.items():
+        if not variant:
+            continue
+
+        pattern = re.compile(rf"\b{re.escape(variant)}\b", flags=re.IGNORECASE)
+        if variant.lower() in _AMBIGUOUS_VARIANTS:
+            # Walk matches manually so each one can be context checked.
+            new_parts: list[str] = []
+            cursor = 0
+            applied = False
+            for match in pattern.finditer(cleaned):
+                new_parts.append(cleaned[cursor : match.start()])
+                if _has_cost_context(cleaned, match.start(), match.end()):
+                    new_parts.append(canonical)
+                    applied = True
+                else:
+                    new_parts.append(match.group(0))
+                cursor = match.end()
+            new_parts.append(cleaned[cursor:])
+            updated = "".join(new_parts)
+            if applied:
+                corrections.append((variant, canonical))
+                cleaned = updated
+        else:
+            if pattern.search(cleaned):
+                corrections.append((variant, canonical))
+                cleaned = pattern.sub(canonical, cleaned)
+
+    return cleaned, corrections
+
+
+def humanize(
+    text: str,
+    required_sections: list[str] | None = None,
+    glossary: dict[str, tuple[str, str | None]] | None = None,
+) -> HumanizeResult:
     """Run the full humanizer pipeline.
 
     Order: strip AI tells, normalize dashes, enforce Swedish numbers,
@@ -173,6 +274,12 @@ def humanize(text: str, required_sections: list[str] | None = None) -> HumanizeR
     cleaned, tells = strip_ai_tells(text)
     if tells:
         transformations.append("strip_ai_tells")
+
+    terminology_corrections: list[tuple[str, str]] = []
+    if glossary is not None:
+        cleaned, terminology_corrections = normalize_swedish_terminology(cleaned, glossary)
+        if terminology_corrections:
+            transformations.append("normalize_swedish_terminology")
 
     cleaned_no_dash = normalize_dashes(cleaned)
     if cleaned_no_dash != cleaned:
@@ -192,4 +299,5 @@ def humanize(text: str, required_sections: list[str] | None = None) -> HumanizeR
         structure_valid=is_valid,
         missing_sections=missing,
         transformations_applied=transformations,
+        terminology_corrections=terminology_corrections,
     )

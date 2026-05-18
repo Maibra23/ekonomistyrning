@@ -11,6 +11,77 @@ from typing import Any
 
 NBSP = "\u00a0"
 
+
+# Terminology glossary. Maps the canonical Swedish ekonomistyrning term to a
+# tuple of (english_equivalent, incorrect_variant_or_None). The incorrect
+# variant is a commonly observed AI mistake or English loan that the Layer 2
+# humanizer can correct. Variants must be unambiguous; ambiguous terms set
+# the variant to None and rely on the system prompt instead.
+TERMINOLOGY_GLOSSARY: dict[str, tuple[str, str | None]] = {
+    # Investeringsbedomning (kapitel 10)
+    "kassafl\u00f6de": ("cash flow", "cashflow"),
+    "diskonteringsr\u00e4nta": ("discount rate", "diskonteringsfaktor r\u00e4nta"),
+    "kalkylr\u00e4nta": ("required rate of return", "kalkylationsr\u00e4nta"),
+    "nuv\u00e4rdesmetoden": ("net present value method", "NPV-metoden"),
+    "internr\u00e4ntemetoden": ("internal rate of return method", "IRR-metoden"),
+    "\u00e5terbetalningsmetoden": ("payback method", "payback-metoden"),
+    "annuitetsmetoden": ("annuity method", "annuitetsformeln"),
+    "k\u00e4nslighetsanalys": ("sensitivity analysis", "sensitivitetsanalys"),
+    "nettokassafl\u00f6de": ("net cash flow", "netto kassafl\u00f6de"),
+    "grundinvestering": ("initial investment", "initialinvestering"),
+    "restv\u00e4rde": ("residual value", "slutv\u00e4rde restv\u00e4rde"),
+    "Monte Carlo simulering": ("Monte Carlo simulation", "Monte-Carlo-simulering"),
+    "sannolikhetsf\u00f6rdelning": ("probability distribution", "sannolikhetsdistribution"),
+    "normalf\u00f6rdelning": ("normal distribution", "normaldistribution"),
+    "inflation": ("inflation", None),
+    "skatteeffekt": ("tax effect", "skatteeffekten"),
+    # Produktkalkylering (kapitel 4 till 8)
+    "sj\u00e4lvkostnadskalkyl": ("absorption costing", "fullkostnadskalkyl"),
+    "p\u00e5l\u00e4ggsmetoden": ("overhead allocation method", "p\u00e5l\u00e4gsmetoden"),
+    "bidragskalkyl": ("contribution costing", "t\u00e4ckningsbidragskalkyl"),
+    "t\u00e4ckningsbidrag": ("contribution margin", "bidragsmarginal"),
+    "s\u00e4kerhetsmarginal": ("margin of safety", "s\u00e4kerhetsintervall"),
+    "stegkalkyl": ("step costing", "stegvis kalkyl"),
+    "aktivitetsbaserad kalkylering": ("activity based costing", "ABC-kalkyl"),
+    "kostnadsdrivare": ("cost driver", "kostnadsdriver"),
+    "fasta omkostnader": ("fixed overhead", "fixerade omkostnader"),
+    "r\u00f6rliga kostnader": ("variable costs", "variabla kostnader"),
+    "direkta kostnader": ("direct costs", "direktkostnader"),
+    "indirekta kostnader": ("indirect costs", "indirekta kostnaderna"),
+    "p\u00e5slag": ("markup", None),
+    # Budget (kapitel 13 till 15)
+    "resultatbudget": ("income statement budget", "resultatr\u00e4kningsbudget"),
+    "likviditetsbudget": ("cash flow budget", "likviditetsplan"),
+    "balansbudget": ("balance sheet budget", "balansr\u00e4kningsbudget"),
+    "r\u00f6relsekapital": ("working capital", "operativt kapital"),
+    "bruttoresultat": ("gross profit", "brutto resultat"),
+    "r\u00f6relseresultat": ("operating profit", "r\u00f6relse resultat"),
+    "avskrivningar": ("depreciation", "amorteringar"),
+    # Standardkostnadsanalys (kapitel 17)
+    "standardkostnadsanalys": ("standard cost analysis", "standardkostnadsavst\u00e4mning"),
+    "volymavvikelse": ("volume variance", "volyms avvikelse"),
+    "prisavvikelse": ("price variance", "pris avvikelse"),
+    "effektivitetsavvikelse": ("efficiency variance", "effektivitets avvikelse"),
+    # Ovrigt
+    "avgiftsstruktur": ("fee structure", "avgift struktur"),
+    "internpriss\u00e4ttning": ("transfer pricing", "intern priss\u00e4ttning"),
+}
+
+
+def _build_ordlista_block(glossary: dict[str, tuple[str, str | None]]) -> str:
+    """Render the glossary as a bulleted Swedish block for the system prompt."""
+    lines = ["ORDLISTA"]
+    for canonical, (english, variant) in glossary.items():
+        if variant:
+            lines.append(f"- {canonical} ({english}, undvik: {variant})")
+        else:
+            lines.append(f"- {canonical} ({english})")
+    return "\n".join(lines)
+
+
+_ORDLISTA_BLOCK = _build_ordlista_block(TERMINOLOGY_GLOSSARY)
+
+
 # The base system prompt establishes voice, register, and structural rules
 # for every LLM call in the app. It is appended with module specific rules
 # in each builder function.
@@ -33,6 +104,7 @@ STRUKTUR (föredragen, men avvik om frågan kräver det)
 4. Källor och förbehåll, kapitelreferens och en begränsning
 
 ABSOLUTA REGLER
+- Vid tveksamhet om svensk term, välj den variant som matchar Anderssons bok. Om du är osäker, använd terminologin i ORDLISTA strikt.
 - Använd endast siffror som är givna i användarens input. Hitta inte på tal.
 - Använd aldrig em streck eller en streck. Använd kommatecken eller meningsuppdelning istället.
 - Skriv "kr" med liten bokstav, decimaler med komma, tusental separerade med icke brytande mellanslag (1 234 567 kr).
@@ -45,7 +117,7 @@ ABSOLUTA REGLER
 
 LÄNGD
 200 till 600 ord för kompletta förklaringar. Kortare för Q&A svar. Studenten värdesätter att du säger det viktiga och slutar.
-"""
+""" + "\n" + _ORDLISTA_BLOCK + "\n"
 
 
 def _format_inputs_block(inputs: dict[str, Any]) -> str:
