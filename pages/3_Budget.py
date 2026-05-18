@@ -18,6 +18,7 @@ from utils.budget import (
 from utils.charts import COLORS, apply_layout
 from utils.export import export_to_excel
 from utils.formatting import format_sek
+from utils.grounding_ui import show_grounding_warning
 from utils.llm import (
     LLMUnavailableError,
     cached_chat,
@@ -781,9 +782,10 @@ else:
 
         # Grounding
         expected_nums = {
-            "forsaljning": forsaljning,
             "arets_resultat": arets_resultat,
-            "likvida_medel_ub": likvida_ub,
+            "forandring_likvida_medel": forandring,
+            "summa_tillgangar": summa_tillgangar_ub,
+            "balansavvikelse": difference,
         }
         grounding = verify_grounding(result.text, expected_nums)
         if grounding["missing"]:
@@ -792,6 +794,7 @@ else:
                 "OBS: Tutorn kan ha refererat fel siffra, verifiera mot beräkningen ovan."
                 "</div>"
             )
+        show_grounding_warning(grounding)
     except LLMUnavailableError:
         st.html('<div class="eks-offline-badge">LLM offline, visar grundförklaring</div>')
         budget_inputs = {

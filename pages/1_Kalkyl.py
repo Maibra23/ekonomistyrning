@@ -17,6 +17,7 @@ from utils.export import export_to_excel
 from utils.formatting import format_percent, format_sek
 from utils.humanizer import humanize
 from utils.kalkyl import abc_calc, contribution_calc, self_cost_palagg
+from utils.grounding_ui import show_grounding_warning
 from utils.llm import (
     LLMClient,
     LLMUnavailableError,
@@ -110,6 +111,7 @@ def _render_llm_section(
                     "OBS: Tutorn kan ha refererat fel siffra, verifiera mot beräkningen ovan."
                     "</div>"
                 )
+            show_grounding_warning(grounding)
 
         # Store for Excel export
         st.session_state[f"{tab_key}_llm_text"] = result.text
@@ -187,6 +189,7 @@ def _render_llm_section(
                             "verifiera mot beräkningen ovan."
                             "</div>"
                         )
+                    show_grounding_warning(grounding)
             st.session_state[chat_key].append(("assistant", result.text))
         except LLMUnavailableError:
             fallback_msg = "LLM ej tillgänglig. Försöket misslyckades."
