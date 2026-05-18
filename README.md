@@ -58,6 +58,21 @@ streamlit run streamlit_app.py
 
 Appen öppnas på `http://localhost:8501`.
 
+### Setup för keep alive-workflow (Setup for keep alive workflow)
+
+Streamlit Community Cloud försätter appar i viloläge efter en stunds inaktivitet. För att hålla den deployade appen varm finns en GitHub Actions-workflow (`.github/workflows/keep_alive.yml`) som pingar appen var tionde minut på vardagar mellan 06:00 och 18:00 UTC.
+
+För att aktivera workflowen behöver du lägga in URL:en till din deployade app som en repository secret:
+
+1. Gå till GitHub-repots inställningar (Settings)
+2. Välj Secrets and variables, sedan Actions
+3. Klicka på New repository secret
+4. Ange namnet `APP_URL`
+5. Sätt värdet till den fullständiga Streamlit Cloud-URL:en till den deployade appen (t.ex. `https://din-app.streamlit.app`)
+6. Spara
+
+**Kostnad:** Workflowen förbrukar en mycket liten mängd GitHub Actions-minuter (cirka 78 korta körningar per vardag), vilket ligger väl inom gratisnivån för publika repon.
+
 ## Hugging Face Token
 
 För att använda LLM-tutorn behöver du en Hugging Face-token:

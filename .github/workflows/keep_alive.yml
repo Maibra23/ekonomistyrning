@@ -1,0 +1,42 @@
+# Keep app warm
+#
+# Purpose:
+#   Streamlit Community Cloud puts apps to sleep after a period of inactivity.
+#   The first user that hits a cold app has to wait for the container to spin
+#   back up, which is a poor experience during a demo or classroom session.
+#
+# What it does:
+#   This workflow pings the deployed app URL every 10 minutes during typical
+#   working hours on weekdays (06:00 to 18:00 UTC, Monday to Friday). A simple
+#   curl request is enough to keep the app warm.
+#
+# Why continue-on-error:
+#   A single failed ping (transient network issue, brief redeploy, etc.) should
+#   not turn the workflow red. We only care about keeping the app warm, not
+#   about uptime monitoring.
+#
+# Cost:
+#   Roughly 78 runs per weekday, each lasting a few seconds. This stays well
+#   within the GitHub Actions free tier for public repositories.
+#
+# Setup:
+#   Add a repository secret named APP_URL containing the full Streamlit Cloud
+#   URL of the deployed app (see README for instructions).
+
+name: Keep app warm
+
+on:
+  schedule:
+    - cron: "*/10 6-18 * * 1-5"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping deployed app
+        continue-on-error: true
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+        run: |
+          curl --max-time 30 "$APP_URL"
