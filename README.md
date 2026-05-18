@@ -1,5 +1,9 @@
 # Ekonomistyrning Sandbox
 
+![CI](https://github.com/YOUR_USERNAME/ekonomistyrning-sandbox/actions/workflows/ci.yml/badge.svg)
+
+<!-- Byt ut YOUR_USERNAME mot ditt faktiska GitHub-användarnamn efter första pushen för att badgen ska visa korrekt status. -->
+
 **En interaktiv övningsmiljö för svenska studenter som läser *Ekonomistyrning: beslut och handling* av Göran Andersson.**
 
 An interactive practice environment for Swedish accounting management students. Built with Streamlit, Plotly, and Qwen3-8B via Hugging Face Inference Providers.
