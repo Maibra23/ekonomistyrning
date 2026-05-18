@@ -12,6 +12,7 @@ import streamlit as st
 from utils.charts import COLORS, apply_layout
 from utils.export import export_to_excel
 from utils.formatting import format_sek
+from utils.grounding_ui import show_grounding_warning
 from utils.llm import (
     LLMUnavailableError,
     cached_chat,
@@ -297,6 +298,7 @@ with tab1:
                 st.markdown(result.text)
 
                 expected = {
+                    "total_avvikelse": rorlig_result["total"],
                     "volymavvikelse": rorlig_result["volymavvikelse"],
                     "prisavvikelse": rorlig_result["prisavvikelse"],
                     "effektivitetsavvikelse": rorlig_result["effektivitetsavvikelse"],
@@ -308,6 +310,7 @@ with tab1:
                         "OBS: Tutorn kan ha refererat fel siffra."
                         "</div>"
                     )
+                show_grounding_warning(grounding)
             except LLMUnavailableError:
                 st.html('<div class="eks-offline-badge">LLM offline, visar grundförklaring</div>')
                 sk_inputs = {"standard_volym": std_volym, "verklig_volym": verk_volym}
@@ -430,6 +433,12 @@ with tab2:
                 increment_session_calls()
             result = humanize(raw)
             st.markdown(result.text)
+
+            expected = {
+                "total_avvikelse": fast_result["avvikelse"],
+            }
+            grounding = verify_grounding(result.text, expected)
+            show_grounding_warning(grounding)
         except LLMUnavailableError:
             st.html('<div class="eks-offline-badge">LLM offline, visar grundförklaring</div>')
             st.markdown(FALLBACK_TEMPLATES["standardkost"](
@@ -598,6 +607,14 @@ with tab3:
                 increment_session_calls()
             result = humanize(raw)
             st.markdown(result.text)
+
+            expected = {"total_avvikelse": total_all}
+            if rorlig_res:
+                expected["volymavvikelse"] = rorlig_res["volymavvikelse"]
+                expected["prisavvikelse"] = rorlig_res["prisavvikelse"]
+                expected["effektivitetsavvikelse"] = rorlig_res["effektivitetsavvikelse"]
+            grounding = verify_grounding(result.text, expected)
+            show_grounding_warning(grounding)
         except LLMUnavailableError:
             st.html('<div class="eks-offline-badge">LLM offline, visar grundförklaring</div>')
             st.markdown(FALLBACK_TEMPLATES["standardkost"](

@@ -22,6 +22,7 @@ from utils.investering import (
     payback,
     sensitivity_analysis,
 )
+from utils.grounding_ui import show_grounding_warning
 from utils.llm import (
     LLMUnavailableError,
     cached_chat,
@@ -151,6 +152,7 @@ def _render_investering_llm(
                     "OBS: Tutorn kan ha refererat fel siffra, verifiera mot beräkningen ovan."
                     "</div>"
                 )
+            show_grounding_warning(grounding)
     except LLMUnavailableError:
         st.html('<div class="eks-offline-badge">LLM offline, visar grundförklaring</div>')
         fallback = FALLBACK_TEMPLATES["investering"](method, inputs, outputs)
@@ -192,6 +194,7 @@ def _render_investering_llm(
                             "OBS: Tutorn kan ha refererat fel siffra, verifiera mot beräkningen ovan."
                             "</div>"
                         )
+                    show_grounding_warning(grounding)
             st.session_state[chat_key].append(("assistant", result.text))
         except LLMUnavailableError:
             msg = "LLM ej tillganglig."

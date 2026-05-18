@@ -25,7 +25,11 @@
       "mcp__plugin_playwright_playwright__browser_close",
       "Bash(sed -i '' -e s/Investeringsbedomning/Investeringsbedömning/g -e 's/Tutor forklaring/Tutor förklaring/g' -e 's/Genererar forklaring/Genererar förklaring/g' -e 's/verifiera mot berakningen ovan/verifiera mot beräkningen ovan/g' -e s/grundforklaring/grundförklaring/g pages/2_Investering.py pages/1_Kalkyl.py utils/ui.py)",
       "Bash(sed -i '' -e s/Standardvarden/Standardvärden/g -e 's/Avstamning OK/Avstämning OK/g' pages/4_Standardkostnadsanalys.py)",
-      "Bash(python3 *)"
+      "Bash(python3 *)",
+      "Bash(sed -n '415,430p' /Users/Brook/Downloads/ekonomistyrning-sandbox/pages/2_Investering.py)",
+      "Bash(sed -n '550,565p' /Users/Brook/Downloads/ekonomistyrning-sandbox/pages/2_Investering.py)",
+      "Bash(sed -n '710,724p' /Users/Brook/Downloads/ekonomistyrning-sandbox/pages/2_Investering.py)",
+      "Bash(sed -n '925,945p' /Users/Brook/Downloads/ekonomistyrning-sandbox/pages/2_Investering.py)"
     ]
   }
 }
