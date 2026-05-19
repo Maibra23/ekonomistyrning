@@ -631,9 +631,26 @@ with tab3:
 
         export_df = pd.DataFrame(summary_rows)
 
+        # Bar chart of the avvikelse components (Task 10.9)
+        _n_rows = len(export_df)
+        sk_charts = {
+            "Sammanställning": [
+                {
+                    "type": "bar",
+                    "title": "Avvikelser per komponent",
+                    "categories": f"A2:A{1 + _n_rows}",
+                    "values": f"B2:B{1 + _n_rows}",
+                    "position": "E2",
+                    "x_axis_title": "Belopp (kr)",
+                }
+            ]
+        }
         st.download_button(
             "Exportera till Excel",
-            data=export_to_excel({"Sammanställning": export_df}),
+            data=export_to_excel(
+                {"Sammanställning": export_df},
+                charts=sk_charts,
+            ),
             file_name="standardkostnadsanalys.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
