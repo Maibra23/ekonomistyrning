@@ -508,11 +508,27 @@ with tab1:
     })
     inv_export_info = st.session_state.get("inv_scenario_info")
     inv_export_header = _scenario_header_lines(inv_export_info)
+    # Line chart of cash flows per year (Task 10.9)
+    _cf_rows = len(cf_df)
+    inv_charts = {
+        "Kassaflöden": [
+            {
+                "type": "line",
+                "title": "Årliga kassaflöden",
+                "categories": f"A2:A{1 + _cf_rows}",
+                "values": f"B2:B{1 + _cf_rows}",
+                "position": "D2",
+                "x_axis_title": "År",
+                "y_axis_title": "Kassaflöde (kr)",
+            }
+        ]
+    }
     st.download_button(
         "Exportera till Excel",
         data=export_to_excel(
             {"Resultat": export_rows, "Kassaflöden": cf_df},
             header_lines={"Resultat": inv_export_header} if inv_export_header else None,
+            charts=inv_charts,
         ),
         file_name="investering_grundlaggande.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

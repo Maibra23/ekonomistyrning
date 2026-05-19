@@ -29,6 +29,7 @@ def _safe_sheet_name(name: str) -> str:
 def export_to_excel(
     sheets: Mapping[str, pd.DataFrame],
     header_lines: Sequence[str] | Mapping[str, Iterable[str]] | None = None,
+    charts: Mapping[str, Sequence[Mapping[str, str]]] | None = None,
 ) -> bytes:
     """Export multiple DataFrames to an in-memory xlsx file.
 
@@ -38,6 +39,11 @@ def export_to_excel(
             header. Pass a sequence of strings to apply the same lines to
             every sheet, or a mapping from sheet name to a sequence to
             target specific sheets. Each line occupies one row.
+        charts: Optional mapping from sheet name to a list of chart spec
+            dicts. Each spec has keys "type" (column|line|pie|bar),
+            "title" (Swedish), "categories" (cell range like "A2:A6"),
+            "values" (cell range), "position" (top-left cell like "E2"),
+            optional "x_axis_title" and "y_axis_title".
 
     Returns:
         Bytes of the generated xlsx file.
@@ -84,7 +90,64 @@ def export_to_excel(
                 )
                 worksheet.set_column(col_idx, col_idx, min(max_width + 2, 50))
 
+            # Charts (Task 10.9). Skip silently if no specs target this sheet.
+            sheet_charts = (charts or {}).get(sheet_name)
+            if not sheet_charts:
+                sheet_charts = (charts or {}).get(safe_name)
+            if sheet_charts:
+                for spec in sheet_charts:
+                    _add_chart(workbook, worksheet, safe_name, spec)
+
     return buffer.getvalue()
+
+
+def _add_chart(
+    workbook,
+    worksheet,
+    sheet_name: str,
+    spec: Mapping[str, str],
+) -> None:
+    """Create one xlsxwriter chart from a spec and insert it on the sheet.
+
+    Ranges in spec ("categories", "values") are treated as plain Excel
+    ranges relative to the sheet; the function prepends the sheet name
+    so xlsxwriter can resolve them.
+    """
+    chart_type = str(spec.get("type", "column")).lower()
+    valid_types = {"column", "line", "pie", "bar"}
+    if chart_type not in valid_types:
+        chart_type = "column"
+
+    chart = workbook.add_chart({"type": chart_type})
+
+    def _qualify(range_ref: str) -> str:
+        ref = str(range_ref)
+        if "!" in ref:
+            return ref
+        return f"='{sheet_name}'!{ref}"
+
+    series: dict = {
+        "name": str(spec.get("title", "")),
+        "categories": _qualify(spec.get("categories", "A1:A2")),
+        "values": _qualify(spec.get("values", "B1:B2")),
+    }
+    chart.add_series(series)
+
+    title = spec.get("title")
+    if title:
+        chart.set_title({"name": str(title)})
+    x_axis_title = spec.get("x_axis_title")
+    if x_axis_title:
+        chart.set_x_axis({"name": str(x_axis_title)})
+    y_axis_title = spec.get("y_axis_title")
+    if y_axis_title:
+        chart.set_y_axis({"name": str(y_axis_title)})
+
+    chart.set_style(11)
+    chart.set_size({"width": 480, "height": 320})
+
+    position = str(spec.get("position", "E2"))
+    worksheet.insert_chart(position, chart)
 
 
 def _resolve_header_lines(

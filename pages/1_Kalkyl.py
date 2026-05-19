@@ -497,9 +497,29 @@ with tab_sj:
         sj_export_sheets["Tutor förklaring"] = llm_df
     sj_info_export = st.session_state.get("sj_scenario_info")
     sj_header_lines = _scenario_header_lines(sj_info_export)
+    # Column chart of the four primary cost components (Task 10.9).
+    # Data layout: header at row offset+1, then 9 data rows. The first
+    # four data rows are DM, MO, DL, TO. Excel rows are 1-indexed.
+    _sj_offset = len(sj_header_lines)
+    _sj_first_data_row = _sj_offset + 2
+    _sj_chart_pos_row = _sj_offset + 2  # place chart next to the table
+    sj_charts = {
+        "Sjalvkostnad": [
+            {
+                "type": "column",
+                "title": "Kostnadskomponenter",
+                "categories": f"A{_sj_first_data_row}:A{_sj_first_data_row + 3}",
+                "values": f"B{_sj_first_data_row}:B{_sj_first_data_row + 3}",
+                "position": f"D{_sj_chart_pos_row}",
+                "x_axis_title": "Kostnadspost",
+                "y_axis_title": "Belopp (kr)",
+            }
+        ]
+    }
     xlsx_sj = export_to_excel(
         sj_export_sheets,
         header_lines={"Sjalvkostnad": sj_header_lines} if sj_header_lines else None,
+        charts=sj_charts,
     )
     st.download_button(
         label="Exportera till Excel",
@@ -934,9 +954,28 @@ with tab_abc:
             abc_export_df = abc_result.reset_index().rename(columns={"index": "Produkt"})
             abc_info_export = st.session_state.get("abc_scenario_info")
             abc_header_lines = _scenario_header_lines(abc_info_export)
+            # Column chart of total kostnad per produkt (Task 10.9)
+            _abc_offset = len(abc_header_lines)
+            _abc_first_data_row = _abc_offset + 2
+            _abc_last_data_row = _abc_first_data_row + len(abc_export_df) - 1
+            _abc_total_col_idx = list(abc_export_df.columns).index("total_kostnad") if "total_kostnad" in abc_export_df.columns else 1
+            _abc_total_col_letter = chr(ord("A") + _abc_total_col_idx)
+            abc_charts = {
+                "ABC-kalkyl": [
+                    {
+                        "type": "column",
+                        "title": "Total kostnad per produkt",
+                        "categories": f"A{_abc_first_data_row}:A{_abc_last_data_row}",
+                        "values": f"{_abc_total_col_letter}{_abc_first_data_row}:{_abc_total_col_letter}{_abc_last_data_row}",
+                        "position": f"H{_abc_first_data_row}",
+                        "y_axis_title": "Belopp (kr)",
+                    }
+                ]
+            }
             xlsx_abc = export_to_excel(
                 {"ABC-kalkyl": abc_export_df},
                 header_lines={"ABC-kalkyl": abc_header_lines} if abc_header_lines else None,
+                charts=abc_charts,
             )
             st.download_button(
                 label="Exportera till Excel",

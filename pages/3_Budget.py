@@ -931,15 +931,55 @@ if user_q:
 
 st.divider()
 
+# Charts per sheet (Task 10.9): one chart for each budget DataFrame
+_res_rows = len(resultat_df)
+_liq_rows = len(likviditet_df)
+_bal_rows = len(balans_df)
+budget_charts = {
+    "Resultatbudget": [
+        {
+            "type": "column",
+            "title": "Resultatbudget per post",
+            "categories": f"A2:A{1 + _res_rows}",
+            "values": f"B2:B{1 + _res_rows}",
+            "position": "D2",
+            "y_axis_title": "Belopp (kr)",
+        }
+    ],
+    "Likviditetsbudget": [
+        {
+            "type": "column",
+            "title": "Likviditetsflöden",
+            "categories": f"A2:A{1 + _liq_rows}",
+            "values": f"B2:B{1 + _liq_rows}",
+            "position": "D2",
+            "y_axis_title": "Belopp (kr)",
+        }
+    ],
+    "Balansbudget": [
+        {
+            "type": "bar",
+            "title": "Balansposter",
+            "categories": f"A2:A{1 + _bal_rows}",
+            "values": f"B2:B{1 + _bal_rows}",
+            "position": "F2",
+            "x_axis_title": "Belopp (kr)",
+        }
+    ],
+}
+
 # Excel export with all three budgets
 st.download_button(
     "Exportera alla tre till Excel",
-    data=export_to_excel({
-        "Resultatbudget": resultat_df,
-        "Likviditetsbudget": likviditet_df,
-        "Balansbudget": balans_df,
-    }),
-    file_name="budget_nordtech.xlsx",
+    data=export_to_excel(
+        {
+            "Resultatbudget": resultat_df,
+            "Likviditetsbudget": likviditet_df,
+            "Balansbudget": balans_df,
+        },
+        charts=budget_charts,
+    ),
+    file_name="budget_helhetsplan.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 )
 
