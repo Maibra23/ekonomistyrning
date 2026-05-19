@@ -24,6 +24,7 @@ from utils.investering import (
 )
 from utils.grounding_ui import show_grounding_warning
 from utils.llm import (
+    LLMSessionCapError,
     LLMUnavailableError,
     cached_chat,
     get_session_calls_remaining,
@@ -38,7 +39,7 @@ from utils.prompts import (
 )
 from utils.scenarios import generate_scenario
 from utils.state_save import clear_state, load_state, save_state
-from utils.ui import footer_note, inject_css, kpi_card, page_title, render_kpi_row, render_sidebar
+from utils.ui import footer_note, inject_css, kpi_card, page_title, render_kpi_row, render_session_cap_card, render_sidebar
 
 
 # Difficulty label to API code mapping used by the LLM scenario generator
@@ -146,13 +147,6 @@ def _render_investering_llm(
     """Render LLM explanation and Q&A for an investering tab."""
     st.markdown("### Tutor förklaring")
 
-    remaining = get_session_calls_remaining()
-    if remaining <= 0:
-        st.warning("Du har nått sessionsgränsen (50 LLM-anrop). Ladda om sidan för att fortsätta.")
-        fallback = FALLBACK_TEMPLATES["investering"](method, inputs, outputs)
-        st.markdown(fallback)
-        return
-
     try:
         if not is_llm_available():
             raise LLMUnavailableError("Ingen token")
@@ -174,6 +168,9 @@ def _render_investering_llm(
                     "</div>"
                 )
             show_grounding_warning(grounding)
+    except LLMSessionCapError:
+        render_session_cap_card()
+        return
     except LLMUnavailableError:
         st.html('<div class="eks-offline-badge">LLM offline, visar grundförklaring</div>')
         fallback = FALLBACK_TEMPLATES["investering"](method, inputs, outputs)

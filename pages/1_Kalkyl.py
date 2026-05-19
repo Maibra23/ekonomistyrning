@@ -18,6 +18,7 @@ from utils.kalkyl import abc_calc, contribution_calc, self_cost_palagg
 from utils.grounding_ui import show_grounding_warning
 from utils.llm import (
     LLMClient,
+    LLMSessionCapError,
     LLMUnavailableError,
     cached_chat,
     get_llm_config,
@@ -40,6 +41,7 @@ from utils.ui import (
     kpi_card,
     page_title,
     render_kpi_row,
+    render_session_cap_card,
     render_sidebar,
 )
 
@@ -78,16 +80,6 @@ def _render_llm_section(
     # --- Auto explanation ---
     st.markdown("### Tutor förklaring")
 
-    remaining = get_session_calls_remaining()
-    if remaining <= 0:
-        st.warning(
-            "Du har nått sessionsgränsen (50 LLM-anrop). "
-            "Ladda om sidan för att fortsätta."
-        )
-        fallback = FALLBACK_TEMPLATES["kalkyl"](calc_type, inputs, outputs)
-        st.markdown(fallback)
-        return
-
     try:
         if not is_llm_available():
             raise LLMUnavailableError("Ingen token")
@@ -125,6 +117,9 @@ def _render_llm_section(
         # Store for Excel export
         st.session_state[f"{tab_key}_llm_text"] = result.text
 
+    except LLMSessionCapError:
+        render_session_cap_card()
+        return
     except LLMUnavailableError:
         st.html(
             '<div class="eks-offline-badge">LLM offline, visar grundförklaring</div>'

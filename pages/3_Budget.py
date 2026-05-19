@@ -20,6 +20,7 @@ from utils.export import export_to_excel
 from utils.formatting import format_sek
 from utils.grounding_ui import show_grounding_warning
 from utils.llm import (
+    LLMSessionCapError,
     LLMUnavailableError,
     cached_chat,
     get_session_calls_remaining,
@@ -41,6 +42,7 @@ from utils.ui import (
     page_title,
     pipeline_steps,
     render_kpi_row,
+    render_session_cap_card,
     render_sidebar,
 )
 
@@ -821,10 +823,7 @@ with st.expander("Steg 3: Balansbudget", expanded=True):
 
 st.markdown("### Sammanfattande analys")
 
-remaining = get_session_calls_remaining()
-if remaining <= 0:
-    st.warning("Du har nått sessionsgränsen (50 LLM-anrop). Ladda om sidan för att fortsätta.")
-else:
+if True:
     # Build summary dicts from the computed DataFrames
     resultat_summary = {
         "forsaljning": forsaljning,
@@ -875,6 +874,8 @@ else:
                 "</div>"
             )
         show_grounding_warning(grounding)
+    except LLMSessionCapError:
+        render_session_cap_card()
     except LLMUnavailableError:
         st.html('<div class="eks-offline-badge">LLM offline, visar grundförklaring</div>')
         budget_inputs = {

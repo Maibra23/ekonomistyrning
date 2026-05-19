@@ -799,3 +799,24 @@ def render_sidebar(active_page: str) -> None:
             f"</span>"
             f"</div>"
         )
+
+
+def render_session_cap_card() -> None:
+    """Render the friendly Swedish info card for the 50 call session cap.
+
+    Used by every module page when an LLM call raises LLMSessionCapError.
+    Combined with autosave (Task 10.5), refresh restores inputs so the
+    user does not lose work.
+    """
+    import streamlit as st
+
+    from utils.llm import SESSION_CAP_MESSAGE
+
+    st.info(SESSION_CAP_MESSAGE)
+    if st.button("Uppdatera sidan", key=f"session_cap_refresh_{id(st)}"):
+        # Clear the counter so the next session starts fresh; autosave
+        # state survives because it lives under different keys.
+        if "llm_calls_used" in st.session_state:
+            del st.session_state["llm_calls_used"]
+        st.rerun()
+    st.caption("Beräkningar och diagram fungerar normalt utan tutor.")
