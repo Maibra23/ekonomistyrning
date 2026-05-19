@@ -165,6 +165,46 @@ ekonomistyrning/
 
 Läs PRD.md och METHODOLOGY.md innan du börjar utveckla en ny modul.
 
+## Begränsningar (Limitations)
+
+Detta är ett portföljprojekt med seriös pedagogisk ambition, inte en
+färdig kommersiell produkt. Kända begränsningar:
+
+### LLM och AI
+- Hugging Face Inference Providers kan ha 10 till 30 sekunders latens
+  vid kalla anrop. Streaming används men en ovan användare kan uppleva
+  väntetid. En GitHub Actions workflow pingar appen var tionde minut
+  under arbetstid för att mildra detta.
+- Qwen3-14B är inte tränad primärt på svensk ekonomistyrningslitteratur.
+  Räkna med enstaka klumpiga formuleringar. En ordlista i systempromten
+  och en utökad humanizer mildrar detta.
+- LLM kan göra logiska feltolkningar även när siffrorna är korrekta.
+  Verifiera alltid mot beräkningarna ovan. Appen flaggar när tutorn
+  citerar siffror som inte matchar kalkylen.
+- 50 anrop per session. Uppdatera sidan för att fortsätta utan att
+  förlora inmatningar (autospar är aktivt).
+
+### Omfång
+- 5 moduler täcker cirka 40 procent av Anderssons bok (kapitel 4, 6, 7,
+  8, 10, 13, 14, 15, 17). Kapitel 11, 12, 16, 18 till 22 är inte
+  implementerade.
+- Monte Carlo antar normalfördelning och oberoende mellan parametrar.
+
+### Teknik
+- Streamlit Community Cloud free tier har 1 GB RAM och kallstart efter
+  inaktivitet.
+- Sessionstillstånd förloras vid sidladdning utanför moduler med
+  autospar (kalkyl och investering).
+- Excel-export är begränsad till en huvudchart per modulblad.
+
+### Pedagogik
+- Författaren är ekonom, inte didaktiker. Designval bygger på
+  beprövad erfarenhet snarare än evidensbaserad forskning på lärande.
+- Ingen användartestning med studenter före lansering.
+
+Se [docs/LIMITATIONS.md](docs/LIMITATIONS.md) för fullständig inventering
+och [docs/ROADMAP.md](docs/ROADMAP.md) för planerade v2 förbättringar.
+
 ## Tester
 
 ```bash
