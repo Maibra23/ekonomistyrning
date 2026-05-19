@@ -628,9 +628,9 @@ class TestPromptsSmoke:
             "sjalvkostnad",
             {"direct_material": 850},
             {"sjalvkostnad_per_styck": 1500},
-            scenario_name="CykelTech AB",
+            scenario_name="Exempelföretag AB",
         )
-        assert "CykelTech" in up
+        assert "Exempelföretag" in up
 
     def test_build_kalkyl_step_guide_prompt(self):
         from utils.prompts import build_kalkyl_step_guide_prompt
@@ -767,7 +767,7 @@ class TestPromptsSmoke:
     def test_build_scenario_generation_prompt(self):
         from utils.prompts import build_scenario_generation_prompt
 
-        sp, up = build_scenario_generation_prompt("kalkyl", "sjalvkostnad")
+        sp, up = build_scenario_generation_prompt("kalkyl_sjalvkostnad", "medel")
         assert "JSON" in up
 
     def test_format_inputs_block(self):
@@ -863,54 +863,58 @@ class TestHumanizerSmoke:
 
 
 class TestScenariosSmoke:
-    """Exercise utils.scenarios -- run every preset through its calc function."""
+    """Exercise utils.scenarios after the Day 10 LLM migration.
 
-    def test_scenarios_dict_structure(self):
-        from utils.scenarios import SCENARIOS
+    Static SCENARIOS dict has been removed. We instead drive the fallback
+    payload of generate_scenario through each calculator to confirm the
+    fallback shape stays compatible with the rest of the app.
+    """
 
-        assert len(SCENARIOS) >= 3
-        for name, (desc, inputs, calc_type) in SCENARIOS.items():
-            assert isinstance(name, str)
-            assert isinstance(desc, str)
-            assert isinstance(inputs, dict)
-            assert calc_type in ("sjalvkostnad", "bidrag", "abc")
+    def test_list_modules_returns_six(self):
+        from utils.scenarios import list_modules_for_scenarios
 
-    def test_cykeltech_sjalvkostnad(self):
+        modules = list_modules_for_scenarios()
+        assert len(modules) == 6
+        assert "kalkyl_sjalvkostnad" in modules
+        assert "investering" in modules
+
+    def test_fallback_sjalvkostnad_runs_through_calc(self):
         from utils.kalkyl import self_cost_palagg
-        from utils.scenarios import SCENARIOS
+        from utils.scenarios import _fallback_for
 
-        for name, (desc, inputs, calc_type) in SCENARIOS.items():
-            if calc_type == "sjalvkostnad":
-                result = self_cost_palagg(**inputs)
-                assert result["sjalvkostnad_per_styck"] > 0
+        s = _fallback_for("kalkyl_sjalvkostnad")
+        result = self_cost_palagg(
+            direct_material=s["direkt_material"],
+            direct_labor=s["direkt_lon"],
+            mo_pct=s["mo_pct"],
+            to_pct=s["to_pct"],
+            ao_pct=s["ao_pct"],
+            fo_pct=s["fo_pct"],
+            units=s["volym"],
+        )
+        assert result["sjalvkostnad_per_styck"] > 0
 
-    def test_sporthandel_bidrag(self):
+    def test_fallback_bidrag_runs_through_calc(self):
         from utils.kalkyl import contribution_calc
-        from utils.scenarios import SCENARIOS
+        from utils.scenarios import _fallback_for
 
-        for name, (desc, inputs, calc_type) in SCENARIOS.items():
-            if calc_type == "bidrag":
-                result = contribution_calc(**inputs)
-                assert result["tackningsbidrag_per_styck"] > 0
+        s = _fallback_for("kalkyl_bidrag")
+        result = contribution_calc(
+            price_per_unit=s["pris_per_styck"],
+            variable_cost_per_unit=s["rorlig_kostnad_per_styck"],
+            fixed_costs=s["fasta_kostnader"],
+            units=s["volym"],
+        )
+        assert result["tackningsbidrag_per_styck"] > 0
 
-    def test_nordkonsult_abc(self):
+    def test_fallback_abc_runs_through_calc(self):
         from utils.kalkyl import abc_calc
-        from utils.scenarios import SCENARIOS
+        from utils.scenarios import _fallback_for
 
-        for name, (desc, inputs, calc_type) in SCENARIOS.items():
-            if calc_type == "abc":
-                df = abc_calc(**inputs)
-                assert not df.isnull().any().any()
-                assert (df["total_kostnad"] > 0).all()
-
-    def test_all_scenarios_validate(self):
-        """Run validate_generated_scenario on every preset."""
-        from utils.scenarios import SCENARIOS, validate_generated_scenario
-
-        for name, (desc, inputs, calc_type) in SCENARIOS.items():
-            assert validate_generated_scenario(inputs, calc_type), (
-                f"Scenario {name!r} failed validation"
-            )
+        s = _fallback_for("kalkyl_abc")
+        df = abc_calc(activities=s["activities"], products=s["products"])
+        assert not df.isnull().any().any()
+        assert (df["total_kostnad"] > 0).all()
 
 
 # ---------------------------------------------------------------------------

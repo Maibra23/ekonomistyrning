@@ -1,38 +1,322 @@
-"""Pre-loaded fictional Swedish company scenarios.
+"""LLM driven scenario generation for the five modules.
 
-Provides three static preset scenarios covering tillverkning, handel, and
-tjänst. These load into the module UI dropdowns so students can explore
-calculations immediately without entering their own data.
+From Day 10 (Task 10.13), scenarios are no longer hard coded fictional
+companies. Each call to ``generate_scenario`` builds a fresh prompt for
+``utils.prompts.build_scenario_generation_prompt`` and forwards it to
+``utils.llm.cached_chat``. The returned JSON is parsed and validated
+against the expected keys for the requested module.
 
-From Day 7 (Task 7.5), a companion LLM-generation function will add a
-"Generera nytt scenario" button that produces fresh companies on demand.
-validate_generated_scenario() is already present here so Day 7 can import it.
-
-All company names, figures, and descriptions are fictional.
-Numbers are calibrated to realistic Swedish industry levels but are not
-derived from any real company or textbook exercise.
+If the LLM is unavailable, the JSON cannot be parsed, or the response is
+missing required keys, a deterministic Swedish placeholder dict is
+returned so the calling page can always populate its inputs.
 """
 from __future__ import annotations
 
+import json
 from typing import Any
+
+from utils.llm import LLMUnavailableError, cached_chat
+from utils.prompts import (
+    SUPPORTED_SCENARIO_DIFFICULTIES,
+    SUPPORTED_SCENARIO_MODULES,
+    build_scenario_generation_prompt,
+)
 
 
 # ---------------------------------------------------------------------------
-# Internal validation helper (also used by Task 7.5 LLM scenario generation)
+# Per module key contracts (used by validation and fallback)
+# ---------------------------------------------------------------------------
+
+_REQUIRED_KEYS: dict[str, tuple[str, ...]] = {
+    "kalkyl_sjalvkostnad": (
+        "foretag_namn",
+        "bransch_beskrivning",
+        "direkt_material",
+        "direkt_lon",
+        "mo_pct",
+        "to_pct",
+        "ao_pct",
+        "fo_pct",
+        "volym",
+    ),
+    "kalkyl_bidrag": (
+        "foretag_namn",
+        "bransch_beskrivning",
+        "pris_per_styck",
+        "rorlig_kostnad_per_styck",
+        "fasta_kostnader",
+        "volym",
+    ),
+    "kalkyl_abc": (
+        "foretag_namn",
+        "bransch_beskrivning",
+        "activities",
+        "products",
+    ),
+    "investering": (
+        "foretag_namn",
+        "projekt_beskrivning",
+        "grundinvestering",
+        "arliga_kassaflon",
+        "kalkylranta",
+        "livslangd",
+    ),
+    "budget": (
+        "foretag_namn",
+        "bransch_beskrivning",
+        "intakter",
+        "kostnader",
+        "balansposter",
+    ),
+    "standardkost": (
+        "foretag_namn",
+        "bransch_beskrivning",
+        "kostnadsslag",
+        "standard_volym",
+        "standard_pris",
+        "standard_forbrukning",
+        "verklig_volym",
+        "verkligt_pris",
+        "verklig_forbrukning",
+    ),
+}
+
+
+# ---------------------------------------------------------------------------
+# Fallback templates (plausible Swedish placeholder data)
+# ---------------------------------------------------------------------------
+
+def _fallback_for(module: str) -> dict[str, Any]:
+    """Return a deterministic placeholder scenario for ``module``.
+
+    Used when the LLM is unavailable, returns invalid JSON, or returns
+    a JSON object missing required keys. Names are generic placeholders
+    so no static company names from the legacy set leak through.
+    """
+    if module == "kalkyl_sjalvkostnad":
+        return {
+            "foretag_namn": "Exempelföretag AB",
+            "bransch_beskrivning": (
+                "Mindre svenskt tillverkningsföretag som producerar "
+                "komponenter på beställning."
+            ),
+            "direkt_material": 750.0,
+            "direkt_lon": 300.0,
+            "mo_pct": 20.0,
+            "to_pct": 70.0,
+            "ao_pct": 10.0,
+            "fo_pct": 7.0,
+            "volym": 4_000.0,
+        }
+    if module == "kalkyl_bidrag":
+        return {
+            "foretag_namn": "Exempelföretag AB",
+            "bransch_beskrivning": (
+                "Svensk handelsverksamhet med en produktkategori och "
+                "rörliga inköps- och distributionskostnader."
+            ),
+            "pris_per_styck": 500.0,
+            "rorlig_kostnad_per_styck": 280.0,
+            "fasta_kostnader": 3_500_000.0,
+            "volym": 25_000.0,
+        }
+    if module == "kalkyl_abc":
+        return {
+            "foretag_namn": "Exempelföretag AB",
+            "bransch_beskrivning": (
+                "Svensk tjänsteleverantör med två tjänsteslag och tre "
+                "interna aktiviteter."
+            ),
+            "activities": [
+                {
+                    "name": "Förberedelse",
+                    "total_cost": 2_000_000.0,
+                    "cost_driver": "timmar",
+                    "total_driver_volume": 700.0,
+                },
+                {
+                    "name": "Utförande",
+                    "total_cost": 3_000_000.0,
+                    "cost_driver": "dagar",
+                    "total_driver_volume": 300.0,
+                },
+                {
+                    "name": "Avslut",
+                    "total_cost": 1_000_000.0,
+                    "cost_driver": "sidor",
+                    "total_driver_volume": 1_800.0,
+                },
+            ],
+            "products": [
+                {
+                    "name": "Standardtjänst",
+                    "direct_cost": 1_500_000.0,
+                    "driver_consumption": {
+                        "Förberedelse": 280.0,
+                        "Utförande": 100.0,
+                        "Avslut": 700.0,
+                    },
+                    "units": 12.0,
+                },
+                {
+                    "name": "Specialuppdrag",
+                    "direct_cost": 1_800_000.0,
+                    "driver_consumption": {
+                        "Förberedelse": 420.0,
+                        "Utförande": 200.0,
+                        "Avslut": 1_100.0,
+                    },
+                    "units": 4.0,
+                },
+            ],
+        }
+    if module == "investering":
+        return {
+            "foretag_namn": "Exempelföretag AB",
+            "projekt_beskrivning": (
+                "Investering i ny produktionsutrustning för effektivare "
+                "tillverkning."
+            ),
+            "grundinvestering": 1_000_000.0,
+            "arliga_kassaflon": [250_000.0, 280_000.0, 300_000.0, 320_000.0, 340_000.0],
+            "kalkylranta": 0.10,
+            "livslangd": 5,
+        }
+    if module == "budget":
+        return {
+            "foretag_namn": "Exempelföretag AB",
+            "bransch_beskrivning": (
+                "Mindre svenskt tjänsteföretag med stabil försäljning och "
+                "moderata kostnader."
+            ),
+            "intakter": {"Försäljning": 12_000_000.0},
+            "kostnader": {
+                "Rörliga kostnader": 4_800_000.0,
+                "Personalkostnader": 3_200_000.0,
+                "Lokalkostnader": 800_000.0,
+                "Avskrivningar": 600_000.0,
+                "Övriga kostnader": 400_000.0,
+                "Finansiella kostnader": 200_000.0,
+            },
+            "balansposter": {
+                "Anläggningstillgångar": 3_000_000.0,
+                "Lager": 500_000.0,
+                "Kundfordringar": 800_000.0,
+                "Likvida medel": 500_000.0,
+                "Eget kapital": 3_200_000.0,
+                "Långsiktiga skulder": 1_200_000.0,
+                "Leverantörsskulder": 400_000.0,
+            },
+        }
+    if module == "standardkost":
+        return {
+            "foretag_namn": "Exempelföretag AB",
+            "bransch_beskrivning": (
+                "Mindre svensk tillverkare som följer upp standardkostnad "
+                "för en central insatsvara."
+            ),
+            "kostnadsslag": "Direkt material",
+            "standard_volym": 1_000.0,
+            "standard_pris": 50.0,
+            "standard_forbrukning": 2.0,
+            "verklig_volym": 1_100.0,
+            "verkligt_pris": 55.0,
+            "verklig_forbrukning": 2.1,
+        }
+    # Unknown module: return an empty dict, callers should validate
+    return {}
+
+
+# ---------------------------------------------------------------------------
+# JSON extraction helper
+# ---------------------------------------------------------------------------
+
+def _extract_json_object(raw: str) -> dict[str, Any]:
+    """Parse a JSON object from ``raw`` text.
+
+    Tolerates leading or trailing markdown fencing by trimming to the
+    outermost braces before delegating to ``json.loads``. Raises
+    ``ValueError`` when no valid object can be parsed.
+    """
+    if not raw:
+        raise ValueError("Tom respons")
+    text = raw.strip()
+    # Strip ```json fences if present
+    if text.startswith("```"):
+        text = text.strip("`")
+        # remove optional 'json' tag at start
+        if text.lower().startswith("json"):
+            text = text[4:]
+    start = text.find("{")
+    end = text.rfind("}")
+    if start == -1 or end == -1 or end <= start:
+        raise ValueError("Ingen JSON-objekt hittad")
+    candidate = text[start : end + 1]
+    parsed = json.loads(candidate)
+    if not isinstance(parsed, dict):
+        raise ValueError("JSON-roten är inte ett objekt")
+    return parsed
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+def list_modules_for_scenarios() -> list[str]:
+    """Return the supported module identifiers for scenario generation."""
+    return list(SUPPORTED_SCENARIO_MODULES)
+
+
+def generate_scenario(module: str, difficulty: str = "medel") -> dict[str, Any]:
+    """Generate a fresh fiktivt svenskt företag scenario via the LLM.
+
+    Args:
+        module: One of the values returned by ``list_modules_for_scenarios``.
+        difficulty: One of "latt", "medel", "svar". Invalid difficulties
+            fall back to "medel".
+
+    Returns:
+        Dict with the keys required for ``module`` (see ``_REQUIRED_KEYS``).
+        On any failure (LLM unavailable, invalid JSON, missing keys), a
+        deterministic fallback dict is returned instead.
+    """
+    if module not in _REQUIRED_KEYS:
+        raise ValueError(f"Ogiltig modul: {module}")
+    if difficulty not in SUPPORTED_SCENARIO_DIFFICULTIES:
+        difficulty = "medel"
+
+    try:
+        system_prompt, user_prompt = build_scenario_generation_prompt(
+            module, difficulty
+        )
+        raw = cached_chat(system_prompt, user_prompt, temperature=0.7)
+        parsed = _extract_json_object(raw)
+    except LLMUnavailableError:
+        return _fallback_for(module)
+    except (ValueError, json.JSONDecodeError):
+        return _fallback_for(module)
+    except Exception:
+        # Defensive: never let a scenario generator failure crash a page
+        return _fallback_for(module)
+
+    required = _REQUIRED_KEYS[module]
+    if not all(key in parsed for key in required):
+        return _fallback_for(module)
+    return parsed
+
+
+# ---------------------------------------------------------------------------
+# Legacy validator kept for backward compatibility with tests that import
+# ``validate_generated_scenario`` from this module. New code should rely on
+# ``generate_scenario``'s built in validation instead.
 # ---------------------------------------------------------------------------
 
 def validate_generated_scenario(scenario_dict: dict, calc_type: str) -> bool:
-    """Validate that a scenario dict produces finite, sane output.
+    """Run a quick sanity check on a kalkyl scenario via the calculator.
 
-    Runs the relevant calculator function and checks that no value is NaN
-    and that the primary result (self cost, profit, total cost) is positive.
-
-    Args:
-        scenario_dict: Kwargs dict for the relevant calc function.
-        calc_type: One of "sjalvkostnad", "bidrag", "abc".
-
-    Returns:
-        True if the scenario is valid, False otherwise.
+    Kept for any callers that still depend on the Day 7 helper. Returns
+    True if the calculator produces finite, non zero output for the
+    supplied inputs.
     """
     try:
         from utils.kalkyl import abc_calc, contribution_calc, self_cost_palagg
@@ -40,121 +324,12 @@ def validate_generated_scenario(scenario_dict: dict, calc_type: str) -> bool:
         if calc_type == "sjalvkostnad":
             result = self_cost_palagg(**scenario_dict)
             return result["sjalvkostnad_per_styck"] > 0
-        elif calc_type == "bidrag":
+        if calc_type == "bidrag":
             result = contribution_calc(**scenario_dict)
             return result["tackningsbidrag_per_styck"] != 0
-        elif calc_type == "abc":
+        if calc_type == "abc":
             df = abc_calc(**scenario_dict)
             return not df.isnull().any().any() and (df["total_kostnad"] > 0).all()
         return False
     except Exception:
         return False
-
-
-# ---------------------------------------------------------------------------
-# Static scenario definitions
-# ---------------------------------------------------------------------------
-
-# CykelTech AB — tillverkning, självkostnadskalkyl via pålägg
-_CYKELTECH_INPUTS: dict[str, Any] = {
-    "direct_material": 850,
-    "direct_labor": 320,
-    "mo_pct": 25,
-    "to_pct": 80,
-    "ao_pct": 12,
-    "fo_pct": 8,
-    "units": 5_000,
-}
-
-# SportHandel Norden AB — handel, bidragskalkyl
-# variable_cost_per_unit = inköpspris (280) + rörliga försäljningskostnader (45)
-_SPORTHANDEL_INPUTS: dict[str, Any] = {
-    "price_per_unit": 599,
-    "variable_cost_per_unit": 325,
-    "fixed_costs": 4_200_000,
-    "units": 35_000,
-}
-
-# NordKonsult AB — tjänst, ABC-kalkyl
-# Three activities: Planering, Fältarbete, Rapportering
-# Two services: Standardrevision (15 uppdrag/år), Komplex revision (5 uppdrag/år)
-# Driver volumes are totals across all units for the year.
-# Cost rate verification:
-#   Planering   : 2_400_000 / 800 timmar  = 3_000 kr/timme
-#   Fältarbete  : 3_500_000 / 350 dagar   = 10_000 kr/dag
-#   Rapportering: 1_200_000 / 2_000 sidor = 600 kr/sida
-_NORDKONSULT_INPUTS: dict[str, Any] = {
-    "activities": [
-        {
-            "name": "Planering",
-            "total_cost": 2_400_000,
-            "cost_driver": "timmar",
-            "total_driver_volume": 800,
-        },
-        {
-            "name": "Fältarbete",
-            "total_cost": 3_500_000,
-            "cost_driver": "dagar",
-            "total_driver_volume": 350,
-        },
-        {
-            "name": "Rapportering",
-            "total_cost": 1_200_000,
-            "cost_driver": "sidor",
-            "total_driver_volume": 2_000,
-        },
-    ],
-    "products": [
-        {
-            "name": "Standardrevision",
-            "direct_cost": 1_800_000,
-            "driver_consumption": {
-                "Planering": 300,       # 20 timmar/uppdrag x 15
-                "Fältarbete": 120,      # 8 dagar/uppdrag x 15
-                "Rapportering": 750,    # 50 sidor/uppdrag x 15
-            },
-            "units": 15,
-        },
-        {
-            "name": "Komplex revision",
-            "direct_cost": 2_000_000,
-            "driver_consumption": {
-                "Planering": 500,       # 100 timmar/uppdrag x 5
-                "Fältarbete": 230,      # 46 dagar/uppdrag x 5
-                "Rapportering": 1_250,  # 250 sidor/uppdrag x 5
-            },
-            "units": 5,
-        },
-    ],
-}
-
-
-# ---------------------------------------------------------------------------
-# Public SCENARIOS dict
-# ---------------------------------------------------------------------------
-# Structure: { display_name: (description, scenario_dict, calc_type) }
-# calc_type is one of "sjalvkostnad", "bidrag", "abc"
-
-SCENARIOS: dict[str, tuple[str, dict, str]] = {
-    "CykelTech AB (tillverkning, självkostnad)": (
-        "Tillverkar elassisterade pendlarcyklar i Dalarna. "
-        "5 000 cyklar per år med fyra pålägg (MO, TO, AO, FO). "
-        "Använd för att öva självkostnadskalkyl via påläggsmetoden (kapitel 6).",
-        _CYKELTECH_INPUTS,
-        "sjalvkostnad",
-    ),
-    "SportHandel Norden AB (handel, bidragskalkyl)": (
-        "Detaljhandel med sportbeklädnad i Sverige och Norge. "
-        "Försäljningspris 599 kr, rörlig kostnad 325 kr (inköp + distribution). "
-        "Använd för att öva bidragskalkyl, täckningsbidrag och nollpunkt (kapitel 8).",
-        _SPORTHANDEL_INPUTS,
-        "bidrag",
-    ),
-    "NordKonsult AB (tjänst, ABC-kalkyl)": (
-        "Revisionsbolag i Stockholm med två tjänstekategorier: standardrevision och komplex revision. "
-        "Tre aktiviteter (planering, fältarbete, rapportering) driver kostnadsfördelningen. "
-        "Använd för att öva aktivitetsbaserad kalkylering (kapitel 7).",
-        _NORDKONSULT_INPUTS,
-        "abc",
-    ),
-}

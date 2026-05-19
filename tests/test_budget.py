@@ -32,14 +32,14 @@ def _get_post(df: pd.DataFrame, post: str, col: str = "Belopp") -> float:
 # ---------------------------------------------------------------------------
 
 class TestResultatbudget:
-    """Tests for build_resultatbudget using NordTech AB example."""
+    """Tests for build_resultatbudget using tillverkningsföretag example."""
 
     @pytest.fixture
-    def nordtech_revenues(self) -> dict[str, float]:
+    def sample_revenues(self) -> dict[str, float]:
         return {"Försäljning": 12_000_000.0}
 
     @pytest.fixture
-    def nordtech_costs(self) -> dict[str, float]:
+    def sample_costs(self) -> dict[str, float]:
         return {
             "Rörliga kostnader": 4_800_000.0,
             "Personalkostnader": 3_200_000.0,
@@ -49,28 +49,28 @@ class TestResultatbudget:
             "Finansiella kostnader": 200_000.0,
         }
 
-    def test_bruttoresultat(self, nordtech_revenues, nordtech_costs):
+    def test_bruttoresultat(self, sample_revenues, sample_costs):
         # 12M - 4.8M = 7.2M
-        df = build_resultatbudget(nordtech_revenues, nordtech_costs)
+        df = build_resultatbudget(sample_revenues, sample_costs)
         assert _get_post(df, "Bruttoresultat") == pytest.approx(7_200_000.0)
 
-    def test_rorelseresultat(self, nordtech_revenues, nordtech_costs):
+    def test_rorelseresultat(self, sample_revenues, sample_costs):
         # 7.2M - 3.2M - 0.8M - 0.6M - 0.4M = 2.2M
-        df = build_resultatbudget(nordtech_revenues, nordtech_costs)
+        df = build_resultatbudget(sample_revenues, sample_costs)
         assert _get_post(df, "Rörelseresultat") == pytest.approx(2_200_000.0)
 
-    def test_resultat_fore_skatt(self, nordtech_revenues, nordtech_costs):
+    def test_resultat_fore_skatt(self, sample_revenues, sample_costs):
         # 2.2M - 0.2M = 2.0M
-        df = build_resultatbudget(nordtech_revenues, nordtech_costs)
+        df = build_resultatbudget(sample_revenues, sample_costs)
         assert _get_post(df, "Resultat före skatt") == pytest.approx(2_000_000.0)
 
-    def test_arets_resultat(self, nordtech_revenues, nordtech_costs):
+    def test_arets_resultat(self, sample_revenues, sample_costs):
         # 2.0M * (1 - 0.206) = 2.0M * 0.794 = 1_588_000
-        df = build_resultatbudget(nordtech_revenues, nordtech_costs)
+        df = build_resultatbudget(sample_revenues, sample_costs)
         assert _get_post(df, "Årets resultat") == pytest.approx(1_588_000.0)
 
-    def test_output_columns(self, nordtech_revenues, nordtech_costs):
-        df = build_resultatbudget(nordtech_revenues, nordtech_costs)
+    def test_output_columns(self, sample_revenues, sample_costs):
+        df = build_resultatbudget(sample_revenues, sample_costs)
         assert list(df.columns) == ["Post", "Belopp"]
 
     def test_zero_revenue_negative_result_no_tax(self):
@@ -94,9 +94,9 @@ class TestResultatbudget:
         # No tax means arets resultat = resultat fore skatt
         assert arets_resultat == pytest.approx(resultat_fore_skatt)
 
-    def test_custom_tax_rate(self, nordtech_revenues, nordtech_costs):
+    def test_custom_tax_rate(self, sample_revenues, sample_costs):
         """Custom tax rate of 30% should yield different result."""
-        df = build_resultatbudget(nordtech_revenues, nordtech_costs, skattesats=0.30)
+        df = build_resultatbudget(sample_revenues, sample_costs, skattesats=0.30)
         # Resultat före skatt = 2M, skatt = 2M * 0.30 = 600k
         # Årets resultat = 2M - 600k = 1.4M
         assert _get_post(df, "Årets resultat") == pytest.approx(1_400_000.0)

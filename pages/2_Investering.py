@@ -36,8 +36,28 @@ from utils.prompts import (
     build_qa_prompt,
     FALLBACK_TEMPLATES,
 )
+from utils.scenarios import generate_scenario
 from utils.state_save import clear_state, load_state, save_state
 from utils.ui import footer_note, inject_css, kpi_card, page_title, render_kpi_row, render_sidebar
+
+
+# Difficulty label to API code mapping used by the LLM scenario generator
+_DIFFICULTY_OPTIONS = ("Lätt", "Medel", "Svår")
+_DIFFICULTY_MAP = {"Lätt": "latt", "Medel": "medel", "Svår": "svar"}
+
+
+def _scenario_header_lines(info: dict | None) -> list[str]:
+    """Build Excel header lines from a scenario info dict for export."""
+    if not info:
+        return []
+    name = str(info.get("foretag_namn", "")).strip()
+    desc = str(info.get("projekt_beskrivning", "")).strip()
+    lines: list[str] = []
+    if name:
+        lines.append(f"Företag: {name}")
+    if desc:
+        lines.append(f"Projekt: {desc}")
+    return lines
 
 # ---------------------------------------------------------------------------
 # Page config
@@ -247,6 +267,62 @@ with tab1:
             except (ValueError, TypeError):
                 pass
 
+    # LLM driven scenario generator (Task 10.13). Writes generated values
+    # directly into widget session_state keys before widgets render so the
+    # existing autosave block on the next rerun records them.
+    inv_gen_cols = st.columns([2, 1, 1])
+    with inv_gen_cols[0]:
+        inv_difficulty_label = st.selectbox(
+            "Svårighetsgrad",
+            _DIFFICULTY_OPTIONS,
+            index=1,
+            key="inv_scenario_difficulty",
+        )
+    with inv_gen_cols[1]:
+        st.write("")
+        st.write("")
+        inv_generate_clicked = st.button(
+            "Generera ett exempelföretag", key="inv_gen_scenario", use_container_width=True
+        )
+    if inv_generate_clicked:
+        with st.spinner("Genererar exempelföretag..."):
+            scenario = generate_scenario(
+                "investering", _DIFFICULTY_MAP[inv_difficulty_label]
+            )
+            if is_llm_available():
+                increment_session_calls()
+        try:
+            cash_flows_gen = list(scenario.get("arliga_kassaflon") or [])
+            livslangd_gen = int(scenario.get("livslangd") or len(cash_flows_gen) or _DEFAULT_YEARS)
+            if not cash_flows_gen:
+                cash_flows_gen = [float(_DEFAULT_CF)] * livslangd_gen
+            else:
+                cash_flows_gen = [float(v) for v in cash_flows_gen]
+            st.session_state["inv_years"] = livslangd_gen
+            st.session_state["inv_initial"] = float(scenario.get("grundinvestering", _DEFAULT_INVESTMENT))
+            # kalkylranta may come as 0.10 or 10; store as integer percent
+            rate_raw = scenario.get("kalkylranta", _DEFAULT_RATE / 100)
+            rate_pct = int(round(float(rate_raw) * 100)) if float(rate_raw) <= 1 else int(round(float(rate_raw)))
+            st.session_state["inv_rate"] = max(0, min(rate_pct, 30))
+            st.session_state["inv_cf_df"] = pd.DataFrame({
+                "År": list(range(1, livslangd_gen + 1)),
+                "Kassaflöde (kr)": cash_flows_gen[:livslangd_gen]
+                + [float(_DEFAULT_CF)] * max(0, livslangd_gen - len(cash_flows_gen)),
+            })
+        except (TypeError, ValueError):
+            pass
+        st.session_state["inv_scenario_info"] = {
+            "foretag_namn": scenario.get("foretag_namn", "Exempelföretag"),
+            "projekt_beskrivning": scenario.get("projekt_beskrivning", ""),
+        }
+        st.rerun()
+
+    inv_info = st.session_state.get("inv_scenario_info")
+    if inv_info:
+        st.info(
+            f"**{inv_info['foretag_namn']}**\n\n{inv_info['projekt_beskrivning']}"
+        )
+
     col_in, col_res = st.columns([1, 2], gap="large")
 
     with col_in:
@@ -431,9 +507,14 @@ with tab1:
             format_sek(annuitet_val),
         ],
     })
+    inv_export_info = st.session_state.get("inv_scenario_info")
+    inv_export_header = _scenario_header_lines(inv_export_info)
     st.download_button(
         "Exportera till Excel",
-        data=export_to_excel({"Resultat": export_rows, "Kassaflöden": cf_df}),
+        data=export_to_excel(
+            {"Resultat": export_rows, "Kassaflöden": cf_df},
+            header_lines={"Resultat": inv_export_header} if inv_export_header else None,
+        ),
         file_name="investering_grundlaggande.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )

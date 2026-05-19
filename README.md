@@ -28,8 +28,7 @@ An interactive practice environment for Swedish accounting management students. 
 
 Övriga funktioner:
 - Excel-export i alla moduler
-- Förinladdade exempelföretag (CykelTech AB, SportHandel Norden AB, NordKonsult AB)
-- LLM-genererade scenarion på begäran
+- Dynamiskt LLM-genererade exempelföretag per modul och svårighetsgrad (Lätt, Medel, Svår)
 - Steg-för-steg-guider och Q&A-chatt per modul
 - Grounding-verifiering av LLM-svar mot beräknade siffror
 

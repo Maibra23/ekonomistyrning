@@ -5,8 +5,6 @@ All UI strings in Swedish. LLM tutor integration wired in Day 7.
 """
 from __future__ import annotations
 
-import json
-
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -34,7 +32,7 @@ from utils.prompts import (
     build_kalkyl_step_guide_prompt,
     build_qa_prompt,
 )
-from utils.scenarios import SCENARIOS
+from utils.scenarios import generate_scenario
 from utils.state_save import clear_state, load_state, save_state
 from utils.ui import (
     footer_note,
@@ -45,13 +43,23 @@ from utils.ui import (
     render_sidebar,
 )
 
-# Try to import scenario generation prompt (may not exist yet)
-try:
-    from utils.prompts import build_scenario_generation_prompt
+# Difficulty label to API code mapping used by the LLM scenario generator
+_DIFFICULTY_OPTIONS = ("Lätt", "Medel", "Svår")
+_DIFFICULTY_MAP = {"Lätt": "latt", "Medel": "medel", "Svår": "svar"}
 
-    _HAS_SCENARIO_GEN = True
-except ImportError:
-    _HAS_SCENARIO_GEN = False
+
+def _scenario_header_lines(info: dict | None) -> list[str]:
+    """Build Excel header lines from a scenario info dict for export."""
+    if not info:
+        return []
+    name = str(info.get("foretag_namn", "")).strip()
+    desc = str(info.get("bransch_beskrivning", "")).strip()
+    lines: list[str] = []
+    if name:
+        lines.append(f"Företag: {name}")
+    if desc:
+        lines.append(f"Bransch: {desc}")
+    return lines
 
 # ---------------------------------------------------------------------------
 # LLM tutor helper - shared across all 3 tabs
@@ -312,56 +320,48 @@ with tab_sj:
             if _k in _sj_saved:
                 st.session_state[_k] = float(_sj_saved[_k])
 
-    sj_scenarios = {k: v for k, v in SCENARIOS.items() if v[2] == "sjalvkostnad"}
-
-    with st.expander("Ladda exempelföretag", expanded=False):
-        sj_sel = st.selectbox(
-            "Välj scenario",
-            ["- välj scenario -"] + list(sj_scenarios.keys()),
-            key="sj_scenario_sel",
+    # LLM driven scenario generator (Task 10.13). We write generated values
+    # directly into widget session_state keys before the widgets render so
+    # the existing autosave block picks them up on the next save cycle.
+    sj_gen_cols = st.columns([2, 1, 1])
+    with sj_gen_cols[0]:
+        sj_difficulty_label = st.selectbox(
+            "Svårighetsgrad",
+            _DIFFICULTY_OPTIONS,
+            index=1,
+            key="sj_scenario_difficulty",
         )
-        if sj_sel != "- välj scenario -":
-            _desc, _inputs, _ = sj_scenarios[sj_sel]
-            st.caption(_desc)
-            if st.button("Ladda värdena", key="sj_load"):
-                st.session_state.sj_dm = float(_inputs["direct_material"])
-                st.session_state.sj_dl = float(_inputs["direct_labor"])
-                st.session_state.sj_mo = float(_inputs["mo_pct"])
-                st.session_state.sj_to = float(_inputs["to_pct"])
-                st.session_state.sj_ao = float(_inputs["ao_pct"])
-                st.session_state.sj_fo = float(_inputs["fo_pct"])
-                st.session_state.sj_units = float(_inputs["units"])
-                st.rerun()
+    with sj_gen_cols[1]:
+        st.write("")
+        st.write("")
+        sj_generate_clicked = st.button(
+            "Generera ett exempelföretag", key="sj_gen_scenario", use_container_width=True
+        )
+    if sj_generate_clicked:
+        with st.spinner("Genererar exempelföretag..."):
+            scenario = generate_scenario(
+                "kalkyl_sjalvkostnad", _DIFFICULTY_MAP[sj_difficulty_label]
+            )
+            if is_llm_available():
+                increment_session_calls()
+        st.session_state.sj_dm = float(scenario.get("direkt_material", 0))
+        st.session_state.sj_dl = float(scenario.get("direkt_lon", 0))
+        st.session_state.sj_mo = float(scenario.get("mo_pct", 0))
+        st.session_state.sj_to = float(scenario.get("to_pct", 0))
+        st.session_state.sj_ao = float(scenario.get("ao_pct", 0))
+        st.session_state.sj_fo = float(scenario.get("fo_pct", 0))
+        st.session_state.sj_units = float(scenario.get("volym", 1))
+        st.session_state["sj_scenario_info"] = {
+            "foretag_namn": scenario.get("foretag_namn", "Exempelföretag"),
+            "bransch_beskrivning": scenario.get("bransch_beskrivning", ""),
+        }
+        st.rerun()
 
-        # AI scenario generation (Task 7.5)
-        if _HAS_SCENARIO_GEN:
-            st.divider()
-            if st.button("Generera nytt exempelföretag med AI", key="sj_gen_scenario"):
-                try:
-                    if not is_llm_available():
-                        raise LLMUnavailableError("Ingen token")
-                    sys_p, usr_p = build_scenario_generation_prompt(
-                        "kalkyl", "sjalvkostnad"
-                    )
-                    with st.spinner("Genererar nytt scenario..."):
-                        raw = cached_chat(sys_p, usr_p, temperature=0.7)
-                        increment_session_calls()
-                    parsed = json.loads(raw)
-                    st.session_state.sj_dm = float(parsed.get("direct_material", 850))
-                    st.session_state.sj_dl = float(parsed.get("direct_labor", 320))
-                    st.session_state.sj_mo = float(parsed.get("mo_pct", 25))
-                    st.session_state.sj_to = float(parsed.get("to_pct", 80))
-                    st.session_state.sj_ao = float(parsed.get("ao_pct", 12))
-                    st.session_state.sj_fo = float(parsed.get("fo_pct", 8))
-                    st.session_state.sj_units = float(parsed.get("units", 5000))
-                    st.caption(
-                        f"{parsed.get('company_name', 'AI-genererat')} (AI)"
-                    )
-                    st.rerun()
-                except (LLMUnavailableError, json.JSONDecodeError, Exception):
-                    st.info(
-                        "LLM ej tillgänglig. Ladda ett statiskt scenario istället."
-                    )
+    sj_info = st.session_state.get("sj_scenario_info")
+    if sj_info:
+        st.info(
+            f"**{sj_info['foretag_namn']}**\n\n{sj_info['bransch_beskrivning']}"
+        )
 
     c1, c2 = st.columns(2)
     with c1:
@@ -486,12 +486,13 @@ with tab_sj:
         "tillverkningskostnad": sj["tillverkningskostnad"],
         "sjalvkostnad_totalt": sj["sjalvkostnad_totalt"],
     }
+    _sj_info_for_llm = st.session_state.get("sj_scenario_info")
     _render_llm_section(
         "sjalvkostnad",
         sj_inputs,
         sj_outputs,
         "sj",
-        scenario_name=sj_sel if sj_sel != "\u2014 v\u00e4lj scenario \u2014" else None,
+        scenario_name=_sj_info_for_llm["foretag_namn"] if _sj_info_for_llm else None,
     )
 
     # Build export sheets
@@ -499,7 +500,12 @@ with tab_sj:
     if "sj_llm_text" in st.session_state:
         llm_df = pd.DataFrame({"Tutor förklaring": [st.session_state["sj_llm_text"]]})
         sj_export_sheets["Tutor förklaring"] = llm_df
-    xlsx_sj = export_to_excel(sj_export_sheets)
+    sj_info_export = st.session_state.get("sj_scenario_info")
+    sj_header_lines = _scenario_header_lines(sj_info_export)
+    xlsx_sj = export_to_excel(
+        sj_export_sheets,
+        header_lines={"Sjalvkostnad": sj_header_lines} if sj_header_lines else None,
+    )
     st.download_button(
         label="Exportera till Excel",
         data=xlsx_sj,
@@ -530,56 +536,42 @@ with tab_bid:
             if _k in _bid_saved:
                 st.session_state[_k] = float(_bid_saved[_k])
 
-    bid_scenarios = {k: v for k, v in SCENARIOS.items() if v[2] == "bidrag"}
-
-    with st.expander("Ladda exempelföretag", expanded=False):
-        bid_sel = st.selectbox(
-            "Välj scenario",
-            ["- välj scenario -"] + list(bid_scenarios.keys()),
-            key="bid_scenario_sel",
+    bid_gen_cols = st.columns([2, 1, 1])
+    with bid_gen_cols[0]:
+        bid_difficulty_label = st.selectbox(
+            "Svårighetsgrad",
+            _DIFFICULTY_OPTIONS,
+            index=1,
+            key="bid_scenario_difficulty",
         )
-        if bid_sel != "- välj scenario -":
-            _desc, _inputs, _ = bid_scenarios[bid_sel]
-            st.caption(_desc)
-            if st.button("Ladda värdena", key="bid_load"):
-                st.session_state.bid_pris = float(_inputs["price_per_unit"])
-                st.session_state.bid_rorlig = float(_inputs["variable_cost_per_unit"])
-                st.session_state.bid_fasta = float(_inputs["fixed_costs"])
-                st.session_state.bid_units = float(_inputs["units"])
-                st.rerun()
+    with bid_gen_cols[1]:
+        st.write("")
+        st.write("")
+        bid_generate_clicked = st.button(
+            "Generera ett exempelföretag", key="bid_gen_scenario", use_container_width=True
+        )
+    if bid_generate_clicked:
+        with st.spinner("Genererar exempelföretag..."):
+            scenario = generate_scenario(
+                "kalkyl_bidrag", _DIFFICULTY_MAP[bid_difficulty_label]
+            )
+            if is_llm_available():
+                increment_session_calls()
+        st.session_state.bid_pris = float(scenario.get("pris_per_styck", 0))
+        st.session_state.bid_rorlig = float(scenario.get("rorlig_kostnad_per_styck", 0))
+        st.session_state.bid_fasta = float(scenario.get("fasta_kostnader", 0))
+        st.session_state.bid_units = float(scenario.get("volym", 1))
+        st.session_state["bid_scenario_info"] = {
+            "foretag_namn": scenario.get("foretag_namn", "Exempelföretag"),
+            "bransch_beskrivning": scenario.get("bransch_beskrivning", ""),
+        }
+        st.rerun()
 
-        # AI scenario generation (Task 7.5)
-        if _HAS_SCENARIO_GEN:
-            st.divider()
-            if st.button("Generera nytt exempelföretag med AI", key="bid_gen_scenario"):
-                try:
-                    if not is_llm_available():
-                        raise LLMUnavailableError("Ingen token")
-                    sys_p, usr_p = build_scenario_generation_prompt(
-                        "kalkyl", "bidrag"
-                    )
-                    with st.spinner("Genererar nytt scenario..."):
-                        raw = cached_chat(sys_p, usr_p, temperature=0.7)
-                        increment_session_calls()
-                    parsed = json.loads(raw)
-                    st.session_state.bid_pris = float(
-                        parsed.get("price_per_unit", 599)
-                    )
-                    st.session_state.bid_rorlig = float(
-                        parsed.get("variable_cost_per_unit", 325)
-                    )
-                    st.session_state.bid_fasta = float(
-                        parsed.get("fixed_costs", 4_200_000)
-                    )
-                    st.session_state.bid_units = float(parsed.get("units", 35_000))
-                    st.caption(
-                        f"{parsed.get('company_name', 'AI-genererat')} (AI)"
-                    )
-                    st.rerun()
-                except (LLMUnavailableError, json.JSONDecodeError, Exception):
-                    st.info(
-                        "LLM ej tillgänglig. Ladda ett statiskt scenario istället."
-                    )
+    bid_info = st.session_state.get("bid_scenario_info")
+    if bid_info:
+        st.info(
+            f"**{bid_info['foretag_namn']}**\n\n{bid_info['bransch_beskrivning']}"
+        )
 
     c1, c2 = st.columns(2)
     with c1:
@@ -710,7 +702,7 @@ with tab_bid:
         bid_inputs,
         bid_outputs,
         "bid",
-        scenario_name=bid_sel if bid_sel != "\u2014 v\u00e4lj scenario \u2014" else None,
+        scenario_name=st.session_state.get("bid_scenario_info", {}).get("foretag_namn"),
     )
 
     bid_df = pd.DataFrame({
@@ -737,7 +729,12 @@ with tab_bid:
             format_percent(bid["sakerhetsmarginal_pct"]) if bid["sakerhetsmarginal_pct"] else "-",
         ],
     })
-    xlsx_bid = export_to_excel({"Bidragskalkyl": bid_df})
+    bid_info_export = st.session_state.get("bid_scenario_info")
+    bid_header_lines = _scenario_header_lines(bid_info_export)
+    xlsx_bid = export_to_excel(
+        {"Bidragskalkyl": bid_df},
+        header_lines={"Bidragskalkyl": bid_header_lines} if bid_header_lines else None,
+    )
     st.download_button(
         label="Exportera till Excel",
         data=xlsx_bid,
@@ -772,52 +769,45 @@ with tab_abc:
         except (ValueError, TypeError):
             pass
 
-    abc_scenarios = {k: v for k, v in SCENARIOS.items() if v[2] == "abc"}
-
-    with st.expander("Ladda exempelföretag", expanded=False):
-        abc_sel = st.selectbox(
-            "Välj scenario",
-            ["- välj scenario -"] + list(abc_scenarios.keys()),
-            key="abc_scenario_sel",
+    abc_gen_cols = st.columns([2, 1, 1])
+    with abc_gen_cols[0]:
+        abc_difficulty_label = st.selectbox(
+            "Svårighetsgrad",
+            _DIFFICULTY_OPTIONS,
+            index=1,
+            key="abc_scenario_difficulty",
         )
-        if abc_sel != "- välj scenario -":
-            _desc, _inputs, _ = abc_scenarios[abc_sel]
-            st.caption(_desc)
-            if st.button("Ladda värdena", key="abc_load"):
-                st.session_state.abc_act_df = _activities_to_df(_inputs["activities"])
-                st.session_state.abc_prod_df = _products_to_df(
-                    _inputs["products"], _inputs["activities"]
-                )
-                st.rerun()
+    with abc_gen_cols[1]:
+        st.write("")
+        st.write("")
+        abc_generate_clicked = st.button(
+            "Generera ett exempelföretag", key="abc_gen_scenario", use_container_width=True
+        )
+    if abc_generate_clicked:
+        with st.spinner("Genererar exempelföretag..."):
+            scenario = generate_scenario(
+                "kalkyl_abc", _DIFFICULTY_MAP[abc_difficulty_label]
+            )
+            if is_llm_available():
+                increment_session_calls()
+        try:
+            activities = scenario.get("activities", [])
+            products = scenario.get("products", [])
+            st.session_state.abc_act_df = _activities_to_df(activities)
+            st.session_state.abc_prod_df = _products_to_df(products, activities)
+        except (KeyError, TypeError, ValueError):
+            pass
+        st.session_state["abc_scenario_info"] = {
+            "foretag_namn": scenario.get("foretag_namn", "Exempelföretag"),
+            "bransch_beskrivning": scenario.get("bransch_beskrivning", ""),
+        }
+        st.rerun()
 
-        # AI scenario generation (Task 7.5)
-        if _HAS_SCENARIO_GEN:
-            st.divider()
-            if st.button("Generera nytt exempelföretag med AI", key="abc_gen_scenario"):
-                try:
-                    if not is_llm_available():
-                        raise LLMUnavailableError("Ingen token")
-                    sys_p, usr_p = build_scenario_generation_prompt("kalkyl", "abc")
-                    with st.spinner("Genererar nytt scenario..."):
-                        raw = cached_chat(sys_p, usr_p, temperature=0.7)
-                        increment_session_calls()
-                    parsed = json.loads(raw)
-                    # Expect activities and products lists in the response
-                    if "activities" in parsed and "products" in parsed:
-                        st.session_state.abc_act_df = _activities_to_df(
-                            parsed["activities"]
-                        )
-                        st.session_state.abc_prod_df = _products_to_df(
-                            parsed["products"], parsed["activities"]
-                        )
-                    st.caption(
-                        f"{parsed.get('company_name', 'AI-genererat')} (AI)"
-                    )
-                    st.rerun()
-                except (LLMUnavailableError, json.JSONDecodeError, Exception):
-                    st.info(
-                        "LLM ej tillgänglig. Ladda ett statiskt scenario istället."
-                    )
+    abc_info = st.session_state.get("abc_scenario_info")
+    if abc_info:
+        st.info(
+            f"**{abc_info['foretag_namn']}**\n\n{abc_info['bransch_beskrivning']}"
+        )
 
     col_a, col_b = st.columns(2)
 
@@ -943,11 +933,16 @@ with tab_abc:
                 abc_inputs_llm,
                 abc_outputs_llm,
                 "abc",
-                scenario_name=abc_sel if abc_sel != "\u2014 v\u00e4lj scenario \u2014" else None,
+                scenario_name=st.session_state.get("abc_scenario_info", {}).get("foretag_namn"),
             )
 
             abc_export_df = abc_result.reset_index().rename(columns={"index": "Produkt"})
-            xlsx_abc = export_to_excel({"ABC-kalkyl": abc_export_df})
+            abc_info_export = st.session_state.get("abc_scenario_info")
+            abc_header_lines = _scenario_header_lines(abc_info_export)
+            xlsx_abc = export_to_excel(
+                {"ABC-kalkyl": abc_export_df},
+                header_lines={"ABC-kalkyl": abc_header_lines} if abc_header_lines else None,
+            )
             st.download_button(
                 label="Exportera till Excel",
                 data=xlsx_abc,

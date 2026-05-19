@@ -33,6 +33,7 @@ from utils.prompts import (
     build_qa_prompt,
     FALLBACK_TEMPLATES,
 )
+from utils.scenarios import generate_scenario
 from utils.ui import (
     footer_note,
     inject_css,
@@ -56,7 +57,7 @@ inject_css()
 render_sidebar("budget")
 
 # ---------------------------------------------------------------------------
-# Constants — NordTech AB default scenario
+# Constants — default budget scenario (generic Swedish small company)
 # ---------------------------------------------------------------------------
 
 _DEFAULT_REVENUES = {"Försäljning": 12_000_000.0}
@@ -89,7 +90,7 @@ _DEFAULT_AVSKRIVNINGAR_BALANS = 600_000.0
 
 
 def _load_defaults() -> None:
-    """Load NordTech AB defaults into session state."""
+    """Load deterministic exempelföretag defaults into session state."""
     st.session_state["bud_forsaljning"] = _DEFAULT_REVENUES["Försäljning"]
     st.session_state["bud_rorliga"] = _DEFAULT_COSTS["Rörliga kostnader"]
     st.session_state["bud_personal"] = _DEFAULT_COSTS["Personalkostnader"]
@@ -132,7 +133,7 @@ st.html(
         title="Budget och budgetering",
         subtitle=(
             "Bygg resultatbudget, likviditetsbudget och balansbudget steg för steg. "
-            "Exempelföretag NordTech AB med 12 MSEK i försäljning."
+            "Generera ett fiktivt exempelföretag eller fyll i egna siffror."
         ),
     )
 )
@@ -143,12 +144,91 @@ st.html(
 )
 
 # ---------------------------------------------------------------------------
-# Load preset button at top
+# Scenario controls at top: LLM driven exempelföretag plus deterministic preset
 # ---------------------------------------------------------------------------
 
-if st.button("Ladda standardexempel (NordTech AB)", type="secondary"):
+# Difficulty label to API code mapping used by the LLM scenario generator
+_DIFFICULTY_OPTIONS = ("Lätt", "Medel", "Svår")
+_DIFFICULTY_MAP = {"Lätt": "latt", "Medel": "medel", "Svår": "svar"}
+
+
+def _scenario_header_lines(info: dict | None) -> list[str]:
+    """Build Excel header lines from a scenario info dict for export."""
+    if not info:
+        return []
+    name = str(info.get("foretag_namn", "")).strip()
+    desc = str(info.get("bransch_beskrivning", "")).strip()
+    lines: list[str] = []
+    if name:
+        lines.append(f"Företag: {name}")
+    if desc:
+        lines.append(f"Bransch: {desc}")
+    return lines
+
+
+# Writes generated values directly into the bud_* session_state keys before
+# widgets render so the existing default initialization picks them up.
+bud_gen_cols = st.columns([2, 1, 1])
+with bud_gen_cols[0]:
+    bud_difficulty_label = st.selectbox(
+        "Svårighetsgrad",
+        _DIFFICULTY_OPTIONS,
+        index=1,
+        key="bud_scenario_difficulty",
+    )
+with bud_gen_cols[1]:
+    st.write("")
+    st.write("")
+    bud_generate_clicked = st.button(
+        "Generera ett exempelföretag", key="bud_gen_scenario", use_container_width=True
+    )
+with bud_gen_cols[2]:
+    st.write("")
+    st.write("")
+    bud_reset_clicked = st.button(
+        "Återställ standardvärden", key="bud_reset_defaults", use_container_width=True
+    )
+
+if bud_reset_clicked:
     _load_defaults()
+    st.session_state.pop("bud_scenario_info", None)
     st.rerun()
+
+if bud_generate_clicked:
+    with st.spinner("Genererar exempelföretag..."):
+        scenario = generate_scenario(
+            "budget", _DIFFICULTY_MAP[bud_difficulty_label]
+        )
+        if is_llm_available():
+            increment_session_calls()
+    intakter = scenario.get("intakter") or {}
+    kostnader = scenario.get("kostnader") or {}
+    balansposter = scenario.get("balansposter") or {}
+    st.session_state["bud_forsaljning"] = float(intakter.get("Försäljning", _DEFAULT_REVENUES["Försäljning"]))
+    st.session_state["bud_rorliga"] = float(kostnader.get("Rörliga kostnader", _DEFAULT_COSTS["Rörliga kostnader"]))
+    st.session_state["bud_personal"] = float(kostnader.get("Personalkostnader", _DEFAULT_COSTS["Personalkostnader"]))
+    st.session_state["bud_lokal"] = float(kostnader.get("Lokalkostnader", _DEFAULT_COSTS["Lokalkostnader"]))
+    st.session_state["bud_avskrivningar"] = float(kostnader.get("Avskrivningar", _DEFAULT_COSTS["Avskrivningar"]))
+    st.session_state["bud_ovriga"] = float(kostnader.get("Övriga kostnader", _DEFAULT_COSTS["Övriga kostnader"]))
+    st.session_state["bud_finansiella"] = float(kostnader.get("Finansiella kostnader", _DEFAULT_COSTS["Finansiella kostnader"]))
+    st.session_state["bud_ob_anlaggning"] = float(balansposter.get("Anläggningstillgångar", _DEFAULT_OPENING_BALANCE["Anläggningstillgångar"]))
+    st.session_state["bud_ob_lager"] = float(balansposter.get("Lager", _DEFAULT_OPENING_BALANCE["Lager"]))
+    st.session_state["bud_ob_kundfordringar"] = float(balansposter.get("Kundfordringar", _DEFAULT_OPENING_BALANCE["Kundfordringar"]))
+    st.session_state["bud_ob_likvida"] = float(balansposter.get("Likvida medel", _DEFAULT_OPENING_BALANCE["Likvida medel"]))
+    st.session_state["bud_ob_eget_kapital"] = float(balansposter.get("Eget kapital", _DEFAULT_OPENING_BALANCE["Eget kapital"]))
+    st.session_state["bud_ob_langsiktiga"] = float(balansposter.get("Långsiktiga skulder", _DEFAULT_OPENING_BALANCE["Långsiktiga skulder"]))
+    st.session_state["bud_ob_leverantorsskulder"] = float(balansposter.get("Leverantörsskulder", _DEFAULT_OPENING_BALANCE["Leverantörsskulder"]))
+    st.session_state["bud_scenario_info"] = {
+        "foretag_namn": scenario.get("foretag_namn", "Exempelföretag"),
+        "bransch_beskrivning": scenario.get("bransch_beskrivning", ""),
+    }
+    st.rerun()
+
+bud_info = st.session_state.get("bud_scenario_info")
+if bud_info:
+    st.info(
+        f"**{bud_info['foretag_namn']}**\n\n{bud_info['bransch_beskrivning']}"
+    )
 
 # ===========================================================================
 # STEG 1 — RESULTATBUDGET
