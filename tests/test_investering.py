@@ -55,26 +55,51 @@ class TestNpv:
 class TestIrr:
     def test_simple_one_year(self):
         # [-100, 110]: IRR = 10% exactly
-        result = irr([-100.0, 110.0])
+        result, msg = irr([-100.0, 110.0])
         assert result is not None
         assert abs(result - 0.10) < 0.001
+        assert msg is None
 
     def test_multi_year(self):
         # [-1000, 300, 400, 400, 300]: IRR approx 14-15%
-        result = irr([-1000.0, 300.0, 400.0, 400.0, 300.0])
+        result, msg = irr([-1000.0, 300.0, 400.0, 400.0, 300.0])
         assert result is not None
         assert 0.13 < result < 0.16
+        assert msg is None
 
-    def test_no_sign_change_returns_none(self):
-        # All positive cash flows: NPV always > 0, no IRR solution
-        result = irr([100.0, 200.0, 300.0])
+    def test_positive_initial_flow_returns_none_with_message(self):
+        # All positive cash flows are flagged before the no-investment guard.
+        # We need a strictly positive first element to hit the new logic.
+        result, msg = irr([100.0, 200.0, 300.0])
         assert result is None
+        assert msg is not None
+        assert "grundinvestering" in msg.lower() or "positiv" in msg.lower()
 
     def test_negative_irr(self):
         # Investment that returns less than put in: [-100, 90] -> IRR = -10%
-        result = irr([-100.0, 90.0])
+        result, msg = irr([-100.0, 90.0])
         assert result is not None
         assert abs(result - (-0.10)) < 0.001
+        assert msg is None
+
+    def test_multi_sign_change_returns_message(self):
+        # Classic multi-root example: outflow, inflow, outflow, inflow
+        result, msg = irr([-1000.0, 5000.0, -6000.0, 2500.0])
+        assert msg is not None
+        assert "flertydig" in msg.lower()
+
+    def test_all_zero_cash_flows(self):
+        result, msg = irr([0.0, 0.0, 0.0])
+        assert result is None
+        assert msg is not None
+        assert "odefinierad" in msg.lower()
+
+    def test_sum_near_zero(self):
+        # [-100, 100] has IRR exactly 0 but sum is essentially zero
+        result, msg = irr([-100.0, 100.0])
+        assert result is None
+        assert msg is not None
+        assert "noll" in msg.lower() or "meningsfull" in msg.lower()
 
 
 # ---------------------------------------------------------------------------

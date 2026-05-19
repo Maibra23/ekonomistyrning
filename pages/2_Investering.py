@@ -395,7 +395,9 @@ with tab1:
 
         # Core calculations
         npv_val = npv(cash_flows, rate, grundinvestering)
-        irr_val = irr([-grundinvestering] + cash_flows)
+        irr_val, irr_message = irr([-grundinvestering] + cash_flows)
+        if irr_message:
+            st.warning(irr_message)
         payback_val = payback(cash_flows, grundinvestering)
         payback_disc_val = payback(
             cash_flows, grundinvestering, discounted=True, discount_rate=rate

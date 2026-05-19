@@ -40,38 +40,24 @@ def npv(
     return pv_sum
 
 
-def irr(cash_flows: list[float]) -> float | None:
-    """Compute Internal Rate of Return (kapitel 10.5).
+def _bisect_irr(cash_flows: list[float]) -> float | None:
+    """Search for an IRR via bisection on [-0.99, 10.0].
 
-    Tries numpy_financial.irr first; falls back to bisection on [-0.99, 10.0]
-    when numpy_financial fails or returns NaN.
-
-    Args:
-        cash_flows: Full cash-flow series including t=0 (usually negative).
-
-    Returns:
-        IRR as a decimal, or None if no solution is found.
+    Returns the rate when a sign change is detected, or None otherwise.
     """
-    if npf is not None:
-        try:
-            result = npf.irr(cash_flows)
-            if result is not None and not np.isnan(result):
-                return float(result)
-        except Exception:
-            pass
 
-    def _npv_bisect(rate: float) -> float:
+    def _npv_at(rate: float) -> float:
         return sum(cf / (1 + rate) ** t for t, cf in enumerate(cash_flows))
 
     low, high = -0.99, 10.0
-    npv_low = _npv_bisect(low)
-    npv_high = _npv_bisect(high)
+    npv_low = _npv_at(low)
+    npv_high = _npv_at(high)
     if npv_low * npv_high > 0:
         return None
 
     for _ in range(200):
         mid = (low + high) / 2
-        val = _npv_bisect(mid)
+        val = _npv_at(mid)
         if abs(val) < 1e-6:
             return mid
         if npv_low * val < 0:
@@ -82,7 +68,99 @@ def irr(cash_flows: list[float]) -> float | None:
             npv_low = val
 
     mid = (low + high) / 2
-    return mid if abs(_npv_bisect(mid)) < 1e-3 else None
+    return mid if abs(_npv_at(mid)) < 1e-3 else None
+
+
+def irr(cash_flows: list[float]) -> tuple[float | None, str | None]:
+    """Compute Internal Rate of Return with explanatory edge case messages.
+
+    Task 10.6 changes the signature to return a tuple so that opaque
+    failures of numpy_financial.irr can be replaced with a Swedish
+    explanation. Successful normal calls return (value, None).
+
+    Args:
+        cash_flows: Full cash-flow series including t=0 (usually negative).
+
+    Returns:
+        Tuple (irr_value_or_none, swedish_message_or_none). The message
+        is set when the result needs caveats (multi sign change, all
+        zero, near zero sum, positive initial flow) or when no value
+        could be computed at all.
+    """
+    flows = list(cash_flows)
+    if not flows:
+        return None, "Inga kassaflöden angivna. Internräntan är odefinierad."
+
+    # All-zero series: nothing to discount, IRR is undefined.
+    if all(cf == 0 for cf in flows):
+        return None, "Alla kassaflöden är noll. Internräntan är odefinierad."
+
+    # Sum approximately zero means IRR collapses toward 0 % but is not
+    # really meaningful since the project barely breaks even nominally.
+    max_abs = max(abs(cf) for cf in flows)
+    if max_abs > 0 and abs(sum(flows)) < 0.01 * max_abs:
+        return (
+            None,
+            "Summan av kassaflödena är ungefär noll. Internräntan blir då 0 procent "
+            "men är inte meningsfull.",
+        )
+
+    # An investment must start with a negative outflow.
+    if flows[0] > 0:
+        return (
+            None,
+            "Det första kassaflödet är positivt. En investering förutsätter att "
+            "grundinvesteringen är negativ.",
+        )
+
+    # Count sign changes among non-zero entries to detect multi root case.
+    sign_changes = 0
+    last_sign = 0
+    for cf in flows:
+        if cf == 0:
+            continue
+        current = 1 if cf > 0 else -1
+        if last_sign != 0 and current != last_sign:
+            sign_changes += 1
+        last_sign = current
+
+    multi_message = (
+        "Flera teckenbyten upptäckta i kassaflödet. Internräntan kan vara "
+        "flertydig och bör tolkas med försiktighet. Granska kassaflödet och "
+        "överväg att använda NPV som beslutskriterium istället."
+    )
+
+    if sign_changes > 1:
+        # Try bisection first (more stable than numpy on multi-root cases).
+        bisect_val = _bisect_irr(flows)
+        if bisect_val is not None:
+            return float(bisect_val), multi_message
+        if npf is not None:
+            try:
+                nf_val = npf.irr(flows)
+                if nf_val is not None and not np.isnan(nf_val):
+                    return float(nf_val), multi_message
+            except Exception:
+                pass
+        return (
+            None,
+            "Kassaflödet har flera teckenbyten och internräntan kunde inte "
+            "konvergera. Använd NPV vid kalkylräntan istället.",
+        )
+
+    # Normal single sign change path.
+    if npf is not None:
+        try:
+            result = npf.irr(flows)
+            if result is not None and not np.isnan(result):
+                return float(result), None
+        except Exception:
+            pass
+
+    bisect_val = _bisect_irr(flows)
+    if bisect_val is not None:
+        return float(bisect_val), None
+    return None, "Internräntan kunde inte beräknas inom intervallet -99 till 1000 procent."
 
 
 def payback(
