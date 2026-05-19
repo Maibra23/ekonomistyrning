@@ -306,3 +306,47 @@ def test_no_dashes_in_any_builder_output():
         assert "\u2014" not in up, f"{builder.__name__} user prompt has em dash"
         assert "\u2013" not in sp, f"{builder.__name__} system prompt has en dash"
         assert "\u2013" not in up, f"{builder.__name__} user prompt has en dash"
+
+
+# ---------------------------------------------------------------------------
+# Task 10.7: quiz quality check prompt
+# ---------------------------------------------------------------------------
+
+def test_quiz_quality_check_returns_valid_tuple():
+    from utils.prompts import build_quiz_quality_check_prompt
+
+    sp, up = build_quiz_quality_check_prompt(
+        {"fraga": "Vad är NPV?", "ratt_svar": 0, "alternativ": ["A", "B"]}
+    )
+    assert isinstance(sp, str) and len(sp) > 50
+    assert isinstance(up, str) and len(up) > 50
+
+
+def test_quiz_quality_check_prompt_asks_three_dimensions():
+    from utils.prompts import build_quiz_quality_check_prompt
+
+    sp, up = build_quiz_quality_check_prompt({"fraga": "Test"})
+    combined = (sp + up).lower()
+    assert "pedagogisk" in combined
+    assert "tydlighet" in combined
+    assert "realism" in combined
+
+
+def test_quiz_quality_check_schema_in_prompt():
+    from utils.prompts import build_quiz_quality_check_prompt
+
+    sp, _ = build_quiz_quality_check_prompt({"fraga": "Test"})
+    assert "pedagogiskt_varde" in sp
+    assert "tydlighet" in sp
+    assert "realism" in sp
+    assert "total" in sp
+    assert "motivering" in sp
+
+
+def test_quiz_quality_check_embeds_question_payload():
+    from utils.prompts import build_quiz_quality_check_prompt
+
+    _, up = build_quiz_quality_check_prompt(
+        {"fraga": "Specifik testfraga", "ratt_svar": 42}
+    )
+    assert "Specifik testfraga" in up

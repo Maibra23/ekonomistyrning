@@ -21,7 +21,16 @@ from utils.llm import (
     increment_session_calls,
     is_llm_available,
 )
-from utils.prompts import build_qa_prompt, build_quiz_generation_prompt
+from utils.prompts import (
+    build_qa_prompt,
+    build_quiz_generation_prompt,
+    build_quiz_quality_check_prompt,
+)
+
+# Minimum acceptable total score (sum of 3 dimensions, each 1-5) for the
+# quiz quality check loop introduced in Task 10.7.
+_QUIZ_QUALITY_MIN_TOTAL = 12
+_QUIZ_QUALITY_MAX_RETRIES = 2
 from utils.ui import footer_note, inject_css, kpi_card, page_title, render_kpi_row, render_sidebar
 
 # Page config
@@ -134,13 +143,61 @@ def _get_fallback_question(kluster: str, diff: str, qtype: str) -> dict | None:
     return random.choice(matches) if matches else None
 
 
+def _evaluate_quiz_quality(question: dict) -> dict | None:
+    """Ask the LLM to rate the pedagogical quality of ``question``.
+
+    Returns a dict with keys pedagogiskt_varde, tydlighet, realism, total,
+    motivering on success, or None if the call or parsing fails.
+    """
+    if not is_llm_available() or get_session_calls_remaining() <= 0:
+        return None
+    try:
+        sys_p, usr_p = build_quiz_quality_check_prompt(question)
+        raw = cached_chat(sys_p, usr_p, temperature=0.2)
+        increment_session_calls()
+        clean = raw.strip()
+        if clean.startswith("```"):
+            clean = clean.split("\n", 1)[1] if "\n" in clean else clean[3:]
+            if clean.endswith("```"):
+                clean = clean[:-3]
+            clean = clean.strip()
+        data = json.loads(clean)
+        if not all(
+            key in data
+            for key in ("pedagogiskt_varde", "tydlighet", "realism")
+        ):
+            return None
+        # Coerce ints and clamp to 1-5
+        for key in ("pedagogiskt_varde", "tydlighet", "realism"):
+            data[key] = max(1, min(5, int(data[key])))
+        data["total"] = (
+            data["pedagogiskt_varde"]
+            + data["tydlighet"]
+            + data["realism"]
+        )
+        data["motivering"] = str(data.get("motivering", ""))
+        return data
+    except (json.JSONDecodeError, LLMUnavailableError, KeyError, ValueError, TypeError):
+        return None
+
+
 def _generate_question(kluster: str, diff: str, qtype: str) -> dict | None:
-    """Generate a question via LLM with verification, fallback to static bank."""
+    """Generate a question via LLM with verification, fallback to static bank.
+
+    Task 10.7 adds a pedagogical quality self-check loop after numeric
+    verification succeeds. If the LLM rates the question below the
+    accepted threshold we regenerate, up to a small retry budget.
+    """
     if not is_llm_available() or get_session_calls_remaining() <= 0:
         return _get_fallback_question(kluster, diff, qtype)
 
     max_attempts = 3
-    for attempt in range(max_attempts):
+    # Persistent log of quality scores so users can inspect later.
+    quality_log = st.session_state.setdefault("quiz_quality_log", [])
+    last_question: dict | None = None
+    last_quality: dict | None = None
+
+    for attempt in range(max_attempts + _QUIZ_QUALITY_MAX_RETRIES):
         try:
             sys_p, usr_p = build_quiz_generation_prompt(kluster, diff, qtype)
             raw = cached_chat(sys_p, usr_p, temperature=0.7)
@@ -166,14 +223,40 @@ def _generate_question(kluster: str, diff: str, qtype: str) -> dict | None:
                 if not _verify_numeric_answer(question):
                     continue
 
-            # Add metadata
+            # Quality check (Task 10.7)
+            quality = _evaluate_quiz_quality(question)
+            last_question = question
+            last_quality = quality
+            if quality is not None and quality["total"] < _QUIZ_QUALITY_MIN_TOTAL:
+                quality_log.append(
+                    {"accepted": False, "kluster": kluster, "diff": diff, **quality}
+                )
+                # Keep retrying until budget is exhausted
+                continue
+
+            # Accept this question
             question["kapitelkluster"] = kluster
             question["difficulty"] = diff
             question["question_type"] = qtype
+            if quality is not None:
+                question["quality"] = quality
+                quality_log.append(
+                    {"accepted": True, "kluster": kluster, "diff": diff, **quality}
+                )
             return question
 
         except (json.JSONDecodeError, LLMUnavailableError, KeyError):
             continue
+
+    # Quality retries exhausted: accept the last valid candidate rather
+    # than blocking the user indefinitely.
+    if last_question is not None:
+        last_question["kapitelkluster"] = kluster
+        last_question["difficulty"] = diff
+        last_question["question_type"] = qtype
+        if last_quality is not None:
+            last_question["quality"] = last_quality
+        return last_question
 
     # All attempts failed, use fallback
     return _get_fallback_question(kluster, diff, qtype)
@@ -261,6 +344,19 @@ if q:
 
         if q.get("kapitel_referens"):
             st.caption(f"Referens: {q['kapitel_referens']}")
+
+        # Quality scores (Task 10.7) -- transparency expander
+        quality = q.get("quality")
+        if quality:
+            with st.expander("Frågekvalitet (självvärdering)"):
+                st.markdown(
+                    f"- **Pedagogiskt värde:** {quality['pedagogiskt_varde']} / 5\n"
+                    f"- **Tydlighet:** {quality['tydlighet']} / 5\n"
+                    f"- **Realism:** {quality['realism']} / 5\n"
+                    f"- **Totalt:** {quality['total']} / 15"
+                )
+                if quality.get("motivering"):
+                    st.caption(quality["motivering"])
 
     # Action buttons after answering
     if st.session_state["quiz_answered"]:

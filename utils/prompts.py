@@ -7,6 +7,7 @@ See docs/METHODOLOGY.md sections 6.3 to 6.7 for the design rationale.
 """
 from __future__ import annotations
 
+import json
 from typing import Any
 
 NBSP = "\u00a0"
@@ -640,6 +641,54 @@ def build_scenario_generation_prompt(
         "Variera bransch och storlek mellan olika anrop. "
         "Siffrorna ska producera meningsfulla beräkningar utan att vara "
         "triviala. Svara ENDAST med JSON, ingen text före eller efter."
+    )
+    return system_prompt, user_prompt
+
+
+def build_quiz_quality_check_prompt(question_json: dict) -> tuple[str, str]:
+    """Build prompt that asks the LLM to self-evaluate a generated quiz item.
+
+    Task 10.7: numerically correct questions can still be pedagogically
+    flat. We ask the model to rate three dimensions on a 1 to 5 scale
+    and return JSON only.
+
+    Args:
+        question_json: The full question dict that was just generated.
+
+    Returns:
+        Tuple (system_prompt, user_prompt) ready for cached_chat.
+    """
+    system_prompt = (
+        "Du är en erfaren lärare i ekonomistyrning som granskar tentamensfrågor "
+        "för pedagogisk kvalitet. Du svarar ENDAST med giltig JSON enligt det "
+        "schema som anges, ingen omgivande prosa, ingen markdown och inga "
+        "förklaringar utanför JSON.\n\n"
+        "Schema:\n"
+        "{\n"
+        '  "pedagogiskt_varde": <heltal 1-5>,\n'
+        '  "tydlighet": <heltal 1-5>,\n'
+        '  "realism": <heltal 1-5>,\n'
+        '  "total": <summan av de tre>,\n'
+        '  "motivering": "<en kort mening på svenska>"\n'
+        "}"
+    )
+
+    # Trim the question content so we do not blow the context window
+    safe_payload = json.dumps(question_json, ensure_ascii=False)[:2500]
+
+    user_prompt = (
+        "Granska följande tentamensfråga i ekonomistyrning och bedöm den på "
+        "tre dimensioner.\n\n"
+        "1. Pedagogiskt värde (1-5): Lär frågan studenten något användbart? "
+        "Belyser den ett centralt begrepp eller bara triviala räkningar?\n"
+        "2. Tydlighet (1-5): Är frågan otvetydigt formulerad? Vet studenten "
+        "exakt vad som efterfrågas?\n"
+        "3. Realism (1-5): Är scenariot trovärdigt för svensk industri- "
+        "eller tjänstekontext?\n\n"
+        f"Fråga som JSON:\n{safe_payload}\n\n"
+        "Returnera GILTIG JSON enligt schemat i systemprompten. Fältet "
+        "total ska vara summan av de tre delpoängen. Motiveringen ska "
+        "vara EN mening på svenska som förklarar din bedömning."
     )
     return system_prompt, user_prompt
 
