@@ -63,6 +63,22 @@ class LLMUnavailableError(RuntimeError):
     """
 
 
+class LLMSessionCapError(LLMUnavailableError):
+    """Raised when the 50 call per session cap has been reached.
+
+    Subclasses LLMUnavailableError so existing catch sites still handle it,
+    but pages that want the friendly Swedish info card can catch this type
+    first and route to render_session_cap_card instead of the generic
+    offline fallback.
+    """
+
+
+SESSION_CAP_MESSAGE = (
+    "Du har använt dina 50 tutor anrop denna session. Uppdatera sidan för "
+    "att fortsätta utan att förlora dina inmatningar (autosave är aktiv)."
+)
+
+
 @dataclass
 class LLMConfig:
     """LLM runtime configuration loaded from secrets or env."""
@@ -240,8 +256,13 @@ def cached_chat(
     """Cached single shot chat. Use within Streamlit pages.
 
     Cache is keyed on prompt content so identical inputs hit the cache.
-    Caching is only active when streamlit is importable.
+    Caching is only active when streamlit is importable. Raises
+    LLMSessionCapError when the 50 call session cap is reached, so
+    callers can render a friendly Swedish info card instead of the
+    generic offline fallback.
     """
+    if get_session_calls_remaining() <= 0:
+        raise LLMSessionCapError(SESSION_CAP_MESSAGE)
     try:
         import streamlit as st
 

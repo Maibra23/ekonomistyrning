@@ -15,6 +15,7 @@ from utils.charts import COLORS, apply_layout
 from utils.export import export_to_excel
 from utils.humanizer import humanize
 from utils.llm import (
+    LLMSessionCapError,
     LLMUnavailableError,
     cached_chat,
     get_session_calls_remaining,
@@ -31,7 +32,7 @@ from utils.prompts import (
 # quiz quality check loop introduced in Task 10.7.
 _QUIZ_QUALITY_MIN_TOTAL = 12
 _QUIZ_QUALITY_MAX_RETRIES = 2
-from utils.ui import footer_note, inject_css, kpi_card, page_title, render_kpi_row, render_sidebar
+from utils.ui import footer_note, inject_css, kpi_card, page_title, render_kpi_row, render_session_cap_card, render_sidebar
 
 # Page config
 st.set_page_config(

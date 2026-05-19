@@ -14,6 +14,7 @@ from utils.export import export_to_excel
 from utils.formatting import format_sek
 from utils.grounding_ui import show_grounding_warning
 from utils.llm import (
+    LLMSessionCapError,
     LLMUnavailableError,
     cached_chat,
     get_session_calls_remaining,
@@ -32,7 +33,7 @@ from utils.standardkost import (
     variance_decomposition_rorlig,
     variance_fixed_overhead,
 )
-from utils.ui import footer_note, inject_css, kpi_card, page_title, render_kpi_row, render_sidebar
+from utils.ui import footer_note, inject_css, kpi_card, page_title, render_kpi_row, render_session_cap_card, render_sidebar
 
 # Difficulty label mapping for the scenario generator dropdown
 _DIFFICULTY_OPTIONS = ("Lätt", "Medel", "Svår")
@@ -364,6 +365,8 @@ with tab1:
                         "</div>"
                     )
                 show_grounding_warning(grounding)
+            except LLMSessionCapError:
+                render_session_cap_card()
             except LLMUnavailableError:
                 st.html('<div class="eks-offline-badge">LLM offline, visar grundförklaring</div>')
                 sk_inputs = {"standard_volym": std_volym, "verklig_volym": verk_volym}

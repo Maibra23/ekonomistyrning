@@ -140,3 +140,41 @@ def test_llm_unavailable_error_is_exception():
 
 def test_session_call_cap_constant():
     assert SESSION_CALL_CAP == 50
+
+
+# ---------------------------------------------------------------------------
+# Task 10.8: session cap exception
+# ---------------------------------------------------------------------------
+
+def test_llm_session_cap_error_is_subclass_of_unavailable():
+    from utils.llm import LLMSessionCapError, LLMUnavailableError
+
+    assert issubclass(LLMSessionCapError, LLMUnavailableError)
+
+
+def test_llm_session_cap_error_caught_as_unavailable():
+    from utils.llm import LLMSessionCapError, LLMUnavailableError
+
+    try:
+        raise LLMSessionCapError("test")
+    except LLMUnavailableError as exc:
+        assert isinstance(exc, LLMSessionCapError)
+
+
+def test_session_cap_message_mentions_50_and_uppdatera():
+    from utils.llm import SESSION_CAP_MESSAGE
+
+    assert "50" in SESSION_CAP_MESSAGE
+    assert "tutor anrop" in SESSION_CAP_MESSAGE
+    assert "Uppdatera" in SESSION_CAP_MESSAGE
+
+
+def test_cached_chat_raises_session_cap_when_used_up(monkeypatch):
+    from utils import llm as llm_mod
+    from utils.llm import LLMSessionCapError, cached_chat
+
+    monkeypatch.setattr(llm_mod, "get_session_calls_remaining", lambda: 0)
+    import pytest
+
+    with pytest.raises(LLMSessionCapError):
+        cached_chat("sys", "user")
