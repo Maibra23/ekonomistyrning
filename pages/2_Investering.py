@@ -36,6 +36,7 @@ from utils.prompts import (
     build_qa_prompt,
     FALLBACK_TEMPLATES,
 )
+from utils.state_save import clear_state, load_state, save_state
 from utils.ui import footer_note, inject_css, kpi_card, page_title, render_kpi_row, render_sidebar
 
 # ---------------------------------------------------------------------------
@@ -231,6 +232,21 @@ tab1, tab2, tab3, tab4 = st.tabs([
 # ===========================================================================
 
 with tab1:
+    # Autosave: restore saved input values before widgets render
+    _tab1_saved = load_state("investering_basic")
+    if _tab1_saved is not None:
+        if "inv_years" in _tab1_saved:
+            st.session_state["inv_years"] = int(_tab1_saved["inv_years"])
+        if "inv_initial" in _tab1_saved:
+            st.session_state["inv_initial"] = float(_tab1_saved["inv_initial"])
+        if "inv_rate" in _tab1_saved:
+            st.session_state["inv_rate"] = int(_tab1_saved["inv_rate"])
+        if "inv_cf_records" in _tab1_saved:
+            try:
+                st.session_state["inv_cf_df"] = pd.DataFrame(_tab1_saved["inv_cf_records"])
+            except (ValueError, TypeError):
+                pass
+
     col_in, col_res = st.columns([1, 2], gap="large")
 
     with col_in:
@@ -285,6 +301,17 @@ with tab1:
             },
         )
         st.session_state["inv_cf_df"] = cf_df
+
+        # Autosave Tab 1 inputs
+        save_state(
+            "investering_basic",
+            {
+                "inv_years": antal_ar,
+                "inv_initial": grundinvestering,
+                "inv_rate": kalkylranta,
+                "inv_cf_records": cf_df.to_dict(orient="records"),
+            },
+        )
 
     with col_res:
         cash_flows = cf_df["Kassaflöde (kr)"].tolist()
@@ -426,6 +453,14 @@ with tab1:
     }
     _render_investering_llm("npv", tab1_inputs, tab1_outputs, "inv_tab1")
 
+    if st.button("Återställ till standardvärden", key="inv_basic_reset_autosave"):
+        clear_state("investering_basic")
+        st.session_state["inv_years"] = _DEFAULT_YEARS
+        st.session_state["inv_initial"] = _DEFAULT_INVESTMENT
+        st.session_state["inv_rate"] = _DEFAULT_RATE
+        st.session_state["inv_cf_df"] = _init_cf_df(_DEFAULT_YEARS)
+        st.rerun()
+
     st.html(footer_note(updated="2026-05-06"))
 
 # ===========================================================================
@@ -438,6 +473,22 @@ with tab2:
         "Identifiera kritisk variation och investeringens robusthet. Kapitel 10.9."
     )
 
+    # Autosave defaults for sensitivity tab
+    _SA_DEFAULTS = {"sa_param": "cash_flows", "sa_min": -30, "sa_max": 30}
+    for _k, _v in _SA_DEFAULTS.items():
+        if _k not in st.session_state:
+            st.session_state[_k] = _v
+
+    # Restore saved sensitivity inputs
+    _sa_saved = load_state("investering_sensitivity")
+    if _sa_saved is not None:
+        if "sa_param" in _sa_saved:
+            st.session_state["sa_param"] = str(_sa_saved["sa_param"])
+        if "sa_min" in _sa_saved:
+            st.session_state["sa_min"] = int(_sa_saved["sa_min"])
+        if "sa_max" in _sa_saved:
+            st.session_state["sa_max"] = int(_sa_saved["sa_max"])
+
     base_cfs = st.session_state["inv_cf_df"]["Kassaflöde (kr)"].tolist()
     base_rate = st.session_state["inv_rate"] / 100.0
     base_inv = float(st.session_state["inv_initial"])
@@ -445,30 +496,38 @@ with tab2:
     col_sa_in, col_sa_res = st.columns([1, 3], gap="large")
 
     with col_sa_in:
+        _sa_param_opts = ["cash_flows", "discount_rate", "initial_investment"]
         sa_param = st.selectbox(
             "Parameter att variera",
-            options=["cash_flows", "discount_rate", "initial_investment"],
+            options=_sa_param_opts,
             format_func=lambda x: {
                 "cash_flows": "Kassaflöden",
                 "discount_rate": "Kalkylränta",
                 "initial_investment": "Grundinvestering",
             }[x],
             help="Välj vilken parameter som skall varieras med alla andra fasta",
+            key="sa_param",
         )
 
         sa_min = st.slider(
             "Lägsta variation (%)",
             min_value=-50,
             max_value=0,
-            value=-30,
             help="Nedre gräns för parametervariation",
+            key="sa_min",
         )
         sa_max = st.slider(
             "Högsta variation (%)",
             min_value=0,
             max_value=100,
-            value=30,
             help="Övre gräns för parametervariation",
+            key="sa_max",
+        )
+
+        # Autosave sensitivity inputs
+        save_state(
+            "investering_sensitivity",
+            {"sa_param": sa_param, "sa_min": sa_min, "sa_max": sa_max},
         )
 
     # Initialize variables for LLM scope
@@ -562,6 +621,12 @@ with tab2:
         sa_outputs["kritisk_variation"] = critical_var
     _render_investering_llm("sensitivity", sa_inputs, sa_outputs, "inv_tab2")
 
+    if st.button("Återställ till standardvärden", key="inv_sens_reset_autosave"):
+        clear_state("investering_sensitivity")
+        for _k, _v in _SA_DEFAULTS.items():
+            st.session_state[_k] = _v
+        st.rerun()
+
     st.html(footer_note(updated="2026-05-06"))
 
 # ===========================================================================
@@ -573,6 +638,25 @@ with tab3:
         "Beräkna investeringsvärdet med hänsyn till inflation och bolagsskatt. "
         "Den nominella kalkylräntan härleds via Fishers ekvation. Kapitel 10.11."
     )
+
+    # Autosave defaults for inflation tab
+    _IT_DEFAULTS = {
+        "it_real_rate_pct": float(st.session_state["inv_rate"]),
+        "it_inflation_pct": 3.0,
+        "it_tax_pct": 20.6,
+        "it_depreciation": float(st.session_state["inv_initial"])
+        / max(st.session_state["inv_years"], 1),
+    }
+    for _k, _v in _IT_DEFAULTS.items():
+        if _k not in st.session_state:
+            st.session_state[_k] = _v
+
+    # Restore saved inflation inputs
+    _it_saved = load_state("investering_inflation")
+    if _it_saved is not None:
+        for _k in ("it_real_rate_pct", "it_inflation_pct", "it_tax_pct", "it_depreciation"):
+            if _k in _it_saved:
+                st.session_state[_k] = float(_it_saved[_k])
 
     col_it_in, col_it_res = st.columns([1, 2], gap="large")
 
@@ -596,38 +680,47 @@ with tab3:
             "Real kalkylränta (%)",
             min_value=0.0,
             max_value=50.0,
-            value=float(st.session_state["inv_rate"]),
             step=0.5,
             format="%.1f",
             help="Avkastningskrav exklusive inflation (real kalkylränta, kapitel 10.11)",
+            key="it_real_rate_pct",
         )
         inflation_pct = st.number_input(
             "Inflationstakt (%)",
             min_value=0.0,
             max_value=30.0,
-            value=3.0,
             step=0.5,
             format="%.1f",
             help="Förväntad genomsnittlig KPI-inflation per år",
+            key="it_inflation_pct",
         )
         tax_pct = st.number_input(
             "Bolagsskattesats (%)",
             min_value=0.0,
             max_value=50.0,
-            value=20.6,
             step=0.1,
             format="%.1f",
             help="Aktuell svensk bolagsskattesats (20,6 %)",
+            key="it_tax_pct",
         )
         depreciation = st.number_input(
             "Skattemässig avskrivning per ar (kr)",
             min_value=0.0,
-            value=float(st.session_state["inv_initial"]) / max(
-                st.session_state["inv_years"], 1
-            ),
             step=10_000.0,
             format="%.0f",
             help="Avskrivning som dras av frånskattepliktig inkomst (rak avskrivning)",
+            key="it_depreciation",
+        )
+
+        # Autosave inflation tab inputs (parameter values only)
+        save_state(
+            "investering_inflation",
+            {
+                "it_real_rate_pct": real_rate_pct,
+                "it_inflation_pct": inflation_pct,
+                "it_tax_pct": tax_pct,
+                "it_depreciation": depreciation,
+            },
         )
 
     with col_it_res:
@@ -721,6 +814,12 @@ with tab3:
         }
         _render_investering_llm("inflation_skatt", it_inputs_llm, it_outputs_llm, "inv_tab3")
 
+    if st.button("Återställ till standardvärden", key="inv_inflation_reset_autosave"):
+        clear_state("investering_inflation")
+        for _k, _v in _IT_DEFAULTS.items():
+            st.session_state[_k] = _v
+        st.rerun()
+
     st.html(footer_note(updated="2026-05-06"))
 
 # ===========================================================================
@@ -735,6 +834,32 @@ with tab4:
         "Kapitel 10.9."
     )
 
+    # Autosave defaults for Monte Carlo tab (parameters only, not results)
+    _MC_DEFAULTS = {
+        "mc_inv_mean": float(st.session_state["inv_initial"]),
+        "mc_inv_std": float(st.session_state["inv_initial"]) * 0.10,
+        "mc_rate_mean": float(st.session_state["inv_rate"]),
+        "mc_rate_std": 2.0,
+        "mc_n_sims": 10_000,
+    }
+    for _k, _v in _MC_DEFAULTS.items():
+        if _k not in st.session_state:
+            st.session_state[_k] = _v
+
+    # Restore saved Monte Carlo input parameters (not result arrays)
+    _mc_saved = load_state("investering_monte_carlo")
+    if _mc_saved is not None:
+        for _k in ("mc_inv_mean", "mc_inv_std", "mc_rate_mean", "mc_rate_std"):
+            if _k in _mc_saved:
+                st.session_state[_k] = float(_mc_saved[_k])
+        if "mc_n_sims" in _mc_saved:
+            st.session_state["mc_n_sims"] = int(_mc_saved["mc_n_sims"])
+        if "mc_cf_records" in _mc_saved:
+            try:
+                st.session_state["mc_cf_df"] = pd.DataFrame(_mc_saved["mc_cf_records"])
+            except (ValueError, TypeError):
+                pass
+
     col_mc_in, col_mc_res = st.columns([1, 2], gap="large")
 
     with col_mc_in:
@@ -742,18 +867,18 @@ with tab4:
         mc_inv_mean = st.number_input(
             "Förväntat grundinvesteringsbelopp (kr)",
             min_value=0.0,
-            value=float(st.session_state["inv_initial"]),
             step=10_000.0,
             format="%.0f",
             help="Medelvärde för grundinvesteringen",
+            key="mc_inv_mean",
         )
         mc_inv_std = st.number_input(
             "Standardavvikelse grundinvestering (kr)",
             min_value=0.0,
-            value=float(st.session_state["inv_initial"]) * 0.10,
             step=5_000.0,
             format="%.0f",
             help="Osäkerhet (1 standardavvikelse) kring grundinvesteringens storlek",
+            key="mc_inv_std",
         )
 
         st.markdown("**Kalkylränta**")
@@ -761,28 +886,28 @@ with tab4:
             "Förväntad kalkylränta (%)",
             min_value=0.0,
             max_value=50.0,
-            value=float(st.session_state["inv_rate"]),
             step=0.5,
             format="%.1f",
             help="Medelvärde för kalkylräntan",
+            key="mc_rate_mean",
         )
         mc_rate_std = st.number_input(
             "Standardavvikelse kalkylränta (%)",
             min_value=0.0,
             max_value=20.0,
-            value=2.0,
             step=0.5,
             format="%.1f",
             help="Osäkerhet (1 standardavvikelse) kring kalkylräntan",
+            key="mc_rate_std",
         )
 
         n_sims = st.slider(
             "Antal simuleringar",
             min_value=1_000,
             max_value=50_000,
-            value=10_000,
             step=1_000,
             help="Fler simuleringar ger precisare resultat men tar längre tid",
+            key="mc_n_sims",
         )
 
         st.markdown("**Kassaflöden per ar (medelvärde och standardavvikelse)**")
@@ -804,6 +929,19 @@ with tab4:
             },
         )
         st.session_state[mc_cf_key] = mc_cf_df
+
+        # Autosave Monte Carlo input parameters only (not simulation result arrays)
+        save_state(
+            "investering_monte_carlo",
+            {
+                "mc_inv_mean": mc_inv_mean,
+                "mc_inv_std": mc_inv_std,
+                "mc_rate_mean": mc_rate_mean,
+                "mc_rate_std": mc_rate_std,
+                "mc_n_sims": n_sims,
+                "mc_cf_records": mc_cf_df.to_dict(orient="records"),
+            },
+        )
 
         run_sim = st.button("Kör simulering", type="primary", use_container_width=True)
 
@@ -939,5 +1077,15 @@ with tab4:
             "sannolikhet_positiv_npv": mc_result["prob_positive_npv"],
         }
         _render_investering_llm("monte_carlo", mc_inputs_llm, mc_outputs_llm, "inv_tab4")
+
+    if st.button("Återställ till standardvärden", key="inv_mc_reset_autosave"):
+        clear_state("investering_monte_carlo")
+        for _k, _v in _MC_DEFAULTS.items():
+            st.session_state[_k] = _v
+        # Drop cached mc data so it rebuilds from defaults
+        for _drop_k in ("mc_cf_df", "mc_last_result"):
+            if _drop_k in st.session_state:
+                del st.session_state[_drop_k]
+        st.rerun()
 
     st.html(footer_note(updated="2026-05-06"))
