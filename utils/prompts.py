@@ -474,89 +474,172 @@ def fallback_standardkost_template(
     )
 
 
-def build_scenario_generation_prompt(
-    module: str, calc_type: str
-) -> tuple[str, str]:
-    """Build prompt for LLM-generated fictional company scenarios.
+SUPPORTED_SCENARIO_MODULES = (
+    "kalkyl_sjalvkostnad",
+    "kalkyl_bidrag",
+    "kalkyl_abc",
+    "investering",
+    "budget",
+    "standardkost",
+)
 
-    module in {"kalkyl", "investering", "budget"}.
-    calc_type specifies the sub-type within the module.
+SUPPORTED_SCENARIO_DIFFICULTIES = ("latt", "medel", "svar")
+
+
+_DIFFICULTY_HINTS = {
+    "latt": (
+        "Svårighetsgrad: LÄTT. Använd runda tal (jämna tusental eller hundratal) "
+        "och få kostnadsposter eller aktiviteter. Välj en välkänd bransch som "
+        "är lätt att förstå (bageri, frisör, enkel butik) och små eller "
+        "medelstora belopp."
+    ),
+    "medel": (
+        "Svårighetsgrad: MEDEL. Använd realistiska svenska industrinivåer med "
+        "moderat komplexitet. Variera bransch (tillverkning, handel, tjänst, "
+        "konsult, bygg, IT) och välj storlek som speglar små eller "
+        "medelstora svenska företag (omsättning 5 till 100 MSEK)."
+    ),
+    "svar": (
+        "Svårighetsgrad: SVÅR. Introducera kantfall och ovanliga "
+        "kostnadsstrukturer: negativa kassaflöden under något år, mycket "
+        "höga indirekta påslag, snäva marginaler, stora balansposter eller "
+        "många aktiviteter med olika kostnadsdrivare. Tillåt att resultatet "
+        "blir negativt eller nära noll så att studenten får tolka risk."
+    ),
+}
+
+
+_MODULE_SCHEMAS = {
+    "kalkyl_sjalvkostnad": (
+        '{\n'
+        '  "foretag_namn": "Företagsnamn AB",\n'
+        '  "bransch_beskrivning": "Kort branschbeskrivning, en eller två meningar",\n'
+        '  "direkt_material": 0,\n'
+        '  "direkt_lon": 0,\n'
+        '  "mo_pct": 0,\n'
+        '  "to_pct": 0,\n'
+        '  "ao_pct": 0,\n'
+        '  "fo_pct": 0,\n'
+        '  "volym": 0\n'
+        '}'
+    ),
+    "kalkyl_bidrag": (
+        '{\n'
+        '  "foretag_namn": "Företagsnamn AB",\n'
+        '  "bransch_beskrivning": "Kort branschbeskrivning, en eller två meningar",\n'
+        '  "pris_per_styck": 0,\n'
+        '  "rorlig_kostnad_per_styck": 0,\n'
+        '  "fasta_kostnader": 0,\n'
+        '  "volym": 0\n'
+        '}'
+    ),
+    "kalkyl_abc": (
+        '{\n'
+        '  "foretag_namn": "Företagsnamn AB",\n'
+        '  "bransch_beskrivning": "Kort branschbeskrivning, en eller två meningar",\n'
+        '  "activities": [\n'
+        '    {"name": "Aktivitet1", "total_cost": 0, "cost_driver": "timmar", "total_driver_volume": 0}\n'
+        '  ],\n'
+        '  "products": [\n'
+        '    {"name": "Produkt1", "direct_cost": 0, "driver_consumption": {"Aktivitet1": 0}, "units": 0}\n'
+        '  ]\n'
+        '}'
+    ),
+    "investering": (
+        '{\n'
+        '  "foretag_namn": "Företagsnamn AB",\n'
+        '  "projekt_beskrivning": "Beskrivning av investeringsprojektet, en eller två meningar",\n'
+        '  "grundinvestering": 0,\n'
+        '  "arliga_kassaflon": [0, 0, 0, 0, 0],\n'
+        '  "kalkylranta": 0.10,\n'
+        '  "livslangd": 5\n'
+        '}'
+    ),
+    "budget": (
+        '{\n'
+        '  "foretag_namn": "Företagsnamn AB",\n'
+        '  "bransch_beskrivning": "Kort branschbeskrivning, en eller två meningar",\n'
+        '  "intakter": {"Försäljning": 0},\n'
+        '  "kostnader": {\n'
+        '    "Rörliga kostnader": 0,\n'
+        '    "Personalkostnader": 0,\n'
+        '    "Lokalkostnader": 0,\n'
+        '    "Avskrivningar": 0,\n'
+        '    "Övriga kostnader": 0,\n'
+        '    "Finansiella kostnader": 0\n'
+        '  },\n'
+        '  "balansposter": {\n'
+        '    "Anläggningstillgångar": 0,\n'
+        '    "Lager": 0,\n'
+        '    "Kundfordringar": 0,\n'
+        '    "Likvida medel": 0,\n'
+        '    "Eget kapital": 0,\n'
+        '    "Långsiktiga skulder": 0,\n'
+        '    "Leverantörsskulder": 0\n'
+        '  }\n'
+        '}'
+    ),
+    "standardkost": (
+        '{\n'
+        '  "foretag_namn": "Företagsnamn AB",\n'
+        '  "bransch_beskrivning": "Kort branschbeskrivning, en eller två meningar",\n'
+        '  "kostnadsslag": "Direkt material",\n'
+        '  "standard_volym": 0,\n'
+        '  "standard_pris": 0,\n'
+        '  "standard_forbrukning": 0,\n'
+        '  "verklig_volym": 0,\n'
+        '  "verkligt_pris": 0,\n'
+        '  "verklig_forbrukning": 0\n'
+        '}'
+    ),
+}
+
+
+def build_scenario_generation_prompt(
+    module: str, difficulty: str = "medel"
+) -> tuple[str, str]:
+    """Build prompt for LLM generated fiktivt svenskt företag scenarios.
+
+    Args:
+        module: One of SUPPORTED_SCENARIO_MODULES. Determines the JSON
+            schema that the LLM must respect.
+        difficulty: One of "latt", "medel", "svar". Controls realism
+            and complexity: latt yields round numbers and few cost
+            items, medel yields realistic Swedish industry numbers,
+            svar introduces edge cases like negative cash flows.
+
+    Returns:
+        Tuple (system_prompt, user_prompt) ready for cached_chat.
     """
+    if module not in _MODULE_SCHEMAS:
+        raise ValueError(f"Ogiltig modul: {module}")
+    if difficulty not in _DIFFICULTY_HINTS:
+        difficulty = "medel"
+
     system_prompt = (
-        "Du genererar realistiska fiktiva svenska foretagsscenarier for utbildningssyfte. "
-        "Svara ENDAST med giltig JSON. Inga forklaringar utanfor JSON-blocket."
+        "Du genererar realistiska fiktiva svenska företagsscenarier för "
+        "utbildning i ekonomistyrning. Företagen ska kännas trovärdiga för "
+        "en svensk student: rimliga branschnamn, rimliga storlekar och "
+        "rimliga kostnadsnivåer. Siffrorna måste vara plausibla för "
+        "svenska industri- eller tjänstekontexter (ingen SEK 50 i pris "
+        "för industriell maskin, ingen femårig ROI på enkla tjänster, "
+        "inga miljardomsättningar för ett mikroföretag). "
+        "Företagsnamnet ska vara påhittat och får INTE vara ett känt "
+        "svenskt företag. Output måste vara GILTIG JSON och INGENTING "
+        "annat, ingen omgivande prosa, ingen markdown och inga förklaringar."
     )
 
-    schemas = {
-        "sjalvkostnad": (
-            '{\n'
-            '  "company_name": "Foretagsnamn AB",\n'
-            '  "description": "Kort beskrivning av foretaget",\n'
-            '  "direct_material": 0,\n'
-            '  "direct_labor": 0,\n'
-            '  "mo_pct": 0,\n'
-            '  "to_pct": 0,\n'
-            '  "ao_pct": 0,\n'
-            '  "fo_pct": 0,\n'
-            '  "units": 0\n'
-            '}'
-        ),
-        "bidrag": (
-            '{\n'
-            '  "company_name": "Foretagsnamn AB",\n'
-            '  "description": "Kort beskrivning av foretaget",\n'
-            '  "price_per_unit": 0,\n'
-            '  "variable_cost_per_unit": 0,\n'
-            '  "fixed_costs": 0,\n'
-            '  "units": 0\n'
-            '}'
-        ),
-        "abc": (
-            '{\n'
-            '  "company_name": "Foretagsnamn AB",\n'
-            '  "description": "Kort beskrivning av foretaget",\n'
-            '  "activities": [\n'
-            '    {"name": "Aktivitet1", "total_cost": 0, "cost_driver": "timmar", "total_driver_volume": 0}\n'
-            '  ],\n'
-            '  "products": [\n'
-            '    {"name": "Produkt1", "direct_cost": 0, "driver_consumption": {"Aktivitet1": 0}, "units": 0}\n'
-            '  ]\n'
-            '}'
-        ),
-        "investering": (
-            '{\n'
-            '  "company_name": "Foretagsnamn AB",\n'
-            '  "description": "Kort beskrivning",\n'
-            '  "initial_investment": 0,\n'
-            '  "cash_flows": [0, 0, 0, 0, 0],\n'
-            '  "discount_rate": 0.10,\n'
-            '  "n_years": 5\n'
-            '}'
-        ),
-        "budget": (
-            '{\n'
-            '  "company_name": "Foretagsnamn AB",\n'
-            '  "description": "Kort beskrivning",\n'
-            '  "forsaljning": 0,\n'
-            '  "rorliga_kostnader": 0,\n'
-            '  "personalkostnader": 0,\n'
-            '  "lokalkostnader": 0,\n'
-            '  "avskrivningar": 0,\n'
-            '  "ovriga_kostnader": 0,\n'
-            '  "finansiella_kostnader": 0\n'
-            '}'
-        ),
-    }
-
-    schema = schemas.get(calc_type, schemas.get(module, '{}'))
+    schema = _MODULE_SCHEMAS[module]
+    difficulty_hint = _DIFFICULTY_HINTS[difficulty]
 
     user_prompt = (
-        f"Generera ett realistiskt fiktivt svenskt foretag for modulen {module}, "
-        f"berakningstyp: {calc_type}.\n\n"
-        f"JSON-schema:\n{schema}\n\n"
-        "Variera bransch och storlek. Siffrorna ska producera rimliga positiva resultat. "
-        "Ge aldrig samma foretag som CykelTech AB, SportHandel Norden AB eller NordKonsult AB. "
-        "Svara ENDAST med JSON."
+        f"Generera ett fiktivt svenskt företag för modulen {module}.\n\n"
+        f"{difficulty_hint}\n\n"
+        f"Returnera GILTIG JSON som exakt följer detta schema (samma "
+        f"nycklar, samma typer):\n{schema}\n\n"
+        "Variera bransch och storlek mellan olika anrop. "
+        "Siffrorna ska producera meningsfulla beräkningar utan att vara "
+        "triviala. Svara ENDAST med JSON, ingen text före eller efter."
     )
     return system_prompt, user_prompt
 

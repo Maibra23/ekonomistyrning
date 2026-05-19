@@ -51,8 +51,8 @@ def test_self_cost_palagg_multiple_units():
     assert ten["sjalvkostnad_per_styck"] == pytest.approx(one["sjalvkostnad_per_styck"])
 
 
-def test_self_cost_palagg_cykeltech_scenario():
-    """CykelTech AB: DM=850, DL=320, MO=25%, TO=80%, AO=12%, FO=8%, units=5000.
+def test_self_cost_palagg_tillverkning_scenario():
+    """Tillverkningsexempel: DM=850, DL=320, MO=25%, TO=80%, AO=12%, FO=8%, units=5000.
 
     DM_total=4_250_000, MO=1_062_500, DL_total=1_600_000, TO=1_280_000
     TK=8_192_500, AO=983_100, FO=655_400
@@ -94,7 +94,7 @@ def test_self_cost_palagg_all_keys_present():
 
 
 def test_contribution_calc_basic():
-    """SportHandel: price=599, vc=325, fixed=4_200_000, units=35_000.
+    """Handelsexempel: price=599, vc=325, fixed=4_200_000, units=35_000.
 
     TB/styck=274, Total TB=9_590_000, Resultat=5_390_000
     Breakeven=4_200_000/274=15_328.47 styck

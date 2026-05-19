@@ -27,11 +27,16 @@ from utils.prompts import (
     build_qa_prompt,
     FALLBACK_TEMPLATES,
 )
+from utils.scenarios import generate_scenario
 from utils.standardkost import (
     variance_decomposition_rorlig,
     variance_fixed_overhead,
 )
 from utils.ui import footer_note, inject_css, kpi_card, page_title, render_kpi_row, render_sidebar
+
+# Difficulty label mapping for the scenario generator dropdown
+_DIFFICULTY_OPTIONS = ("Lätt", "Medel", "Svår")
+_DIFFICULTY_MAP = {"Lätt": "latt", "Medel": "medel", "Svår": "svar"}
 
 # ---------------------------------------------------------------------------
 # Page config
@@ -80,6 +85,54 @@ with tab1:
         "Ange standardvärden och verkligt utfall för en rörlig kostnadspost. "
         "Avvikelsen bryts ner i tre komponenter: volym, pris och effektivitet. Kapitel 17.2-17.4."
     )
+
+    # LLM driven scenario generator (Task 10.13)
+    sk_gen_cols = st.columns([2, 1, 1])
+    with sk_gen_cols[0]:
+        sk_difficulty_label = st.selectbox(
+            "Svårighetsgrad",
+            _DIFFICULTY_OPTIONS,
+            index=1,
+            key="sk_scenario_difficulty",
+        )
+    with sk_gen_cols[1]:
+        st.write("")
+        st.write("")
+        sk_generate_clicked = st.button(
+            "Generera ett exempelföretag",
+            key="sk_gen_scenario",
+            use_container_width=True,
+        )
+    if sk_generate_clicked:
+        with st.spinner("Genererar exempelföretag..."):
+            scenario = generate_scenario(
+                "standardkost", _DIFFICULTY_MAP[sk_difficulty_label]
+            )
+            if is_llm_available():
+                increment_session_calls()
+        st.session_state["std_volym"] = float(scenario.get("standard_volym", 1000.0))
+        st.session_state["std_pris"] = float(scenario.get("standard_pris", 50.0))
+        st.session_state["std_forbrukning"] = float(
+            scenario.get("standard_forbrukning", 2.0)
+        )
+        st.session_state["verk_volym"] = float(scenario.get("verklig_volym", 1100.0))
+        st.session_state["verk_pris"] = float(scenario.get("verkligt_pris", 55.0))
+        st.session_state["verk_forbrukning"] = float(
+            scenario.get("verklig_forbrukning", 2.1)
+        )
+        st.session_state["sk_scenario_info"] = {
+            "foretag_namn": scenario.get("foretag_namn", "Exempelföretag"),
+            "bransch_beskrivning": scenario.get("bransch_beskrivning", ""),
+            "kostnadsslag": scenario.get("kostnadsslag", "Direkt material"),
+        }
+        st.rerun()
+
+    sk_info = st.session_state.get("sk_scenario_info")
+    if sk_info:
+        st.info(
+            f"**{sk_info['foretag_namn']}** ({sk_info.get('kostnadsslag', '')})\n\n"
+            f"{sk_info['bransch_beskrivning']}"
+        )
 
     col_std, col_verk = st.columns(2, gap="large")
 

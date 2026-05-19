@@ -14,7 +14,7 @@
 
 ### 0:10 till 0:25, Kalkylmodul
 - Klicka pa Kalkyl-modulen
-- Ladda exempelforetaget CykelTech AB
+- Klicka pa "Generera ett exempelforetag" och valj svarighetsgrad Medel
 - Visa sjalvkostnadskalkyl med waterfall-diagram
 - Scrolla ner till LLM-tutorns forklaring, visa att den refererar exakt till inmatade siffror
 

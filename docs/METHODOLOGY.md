@@ -427,7 +427,7 @@ The combination of four mechanisms makes every LLM output specific to the user's
 3. **Hybrid register with humanizer principles** removes generic AI voice
 4. **Quiz verification** ensures dynamism without sacrificing correctness
 
-A user who calculates NPV for "CykelTech AB" with diskonteringsränta 8 % and 10 års kassaflöde gets an explanation that names CykelTech, cites 8 %, walks through years 1 to 10 with their actual values, and references kapitel 10.4. A different user with different inputs gets a different explanation. This is structurally generic AI output cannot achieve, by design.
+A user who calculates NPV for an LLM-generated svensk exempelfirma with diskonteringsränta 8 % and 10 års kassaflöde gets an explanation that names the firm, cites 8 %, walks through years 1 to 10 with their actual values, and references kapitel 10.4. A different user with different inputs gets a different explanation. This is structurally generic AI output cannot achieve, by design.
 
 ---
 
@@ -446,9 +446,7 @@ Waterfall charts för självkostnad och inflations skattepåverkan visar hur vä
 
 ### 7.3 Princip: realistiska men fiktiva scenarier
 
-Tre statiska scenarier täcker tillverkning (CykelTech AB), handel (SportHandel Norden AB) och tjänst (NordKonsult AB). Detta speglar den indelning Andersson använder i kapitel 6 (kostnadsfördelning per företagstyp). Siffrorna är avstämda mot rimliga svenska branschnivåer men medvetet fiktiva.
-
-Från Day 7 (Task 7.5) kompletteras de statiska förvalen med LLM-genererade scenarier på begäran. En "Generera nytt exempelföretag med AI"-knapp anropar Qwen3-14B med ett JSON-schema som specificerar exakt vilka fält som krävs för den aktuella kalkylfunktionen. Modellen instrueras att variera bransch och storlek varje gång och aldrig återge de tre fasta scenarierna. Det genererade scenariot valideras mot kalkylfunktionen innan det visas; misslyckas valideringen efter två försök används ett statiskt förval som fallback. Humanizern tillämpas inte här eftersom det är inputdata, inte LLM-förklaring, som genereras. Kombinationen av statiska förval (alltid tillgängliga, offline-robusta) och dynamisk generation (variation vid upprepat övande) uppfyller målet att appen aldrig ska kännas som ett statiskt läroboksexempel.
+Från Day 10 (Task 10.13) genereras alla scenarier dynamiskt vid runtime via LLM, en per modul och svårighetsgrad (Lätt, Medel, Svår). Modellen anropas med ett JSON-schema som specificerar exakt vilka fält som krävs för den aktuella kalkylfunktionen och instrueras att producera plausibla siffror för svensk industri- eller tjänstekontext. Företagsnamnen är påhittade och varierar mellan anrop. Det genererade scenariot valideras mot förväntade nycklar innan det visas; misslyckas valideringen, eller är LLM otillgänglig, används en deterministisk fallback-dict med Swedish placeholder-värden i samma form. Humanizern tillämpas inte här eftersom det är inputdata, inte LLM-förklaring, som genereras. Resultatet är att appen aldrig känns som ett statiskt läroboksexempel: varje session presenterar nya företag med nya siffror som speglar de tre traditionella branschtyperna (tillverkning, handel, tjänst) som Andersson använder i kapitel 6.
 
 ### 7.4 Princip: LLM som komplement, inte ersättning
 

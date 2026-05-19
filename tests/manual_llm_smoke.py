@@ -81,7 +81,7 @@ def main() -> None:
     }
 
     system_prompt, user_prompt = build_kalkyl_explanation_prompt(
-        "sjalvkostnad", inputs, outputs, scenario_name="CykelTech AB"
+        "sjalvkostnad", inputs, outputs, scenario_name="Exempelföretag AB"
     )
 
     print("\n--- System Prompt (first 200 chars) ---")
