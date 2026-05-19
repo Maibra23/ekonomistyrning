@@ -236,9 +236,10 @@ class TestInvesteringSmoke:
     def test_irr(self):
         from utils.investering import irr
 
-        result = irr([-200_000, 80_000, 90_000, 100_000])
+        result, msg = irr([-200_000, 80_000, 90_000, 100_000])
         assert result is not None
         assert 0 < result < 1
+        assert msg is None
 
     def test_payback(self):
         from utils.investering import payback
