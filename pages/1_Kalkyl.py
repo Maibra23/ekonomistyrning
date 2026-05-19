@@ -35,6 +35,7 @@ from utils.prompts import (
     build_qa_prompt,
 )
 from utils.scenarios import SCENARIOS
+from utils.state_save import clear_state, load_state, save_state
 from utils.ui import (
     footer_note,
     inject_css,
@@ -304,6 +305,13 @@ tab_sj, tab_bid, tab_abc = st.tabs(
 # ===========================================================================
 
 with tab_sj:
+    # Autosave: restore saved input values into session_state before widgets render
+    _sj_saved = load_state("kalkyl_sjalvkostnad")
+    if _sj_saved is not None:
+        for _k in ("sj_dm", "sj_dl", "sj_mo", "sj_to", "sj_ao", "sj_fo", "sj_units"):
+            if _k in _sj_saved:
+                st.session_state[_k] = float(_sj_saved[_k])
+
     sj_scenarios = {k: v for k, v in SCENARIOS.items() if v[2] == "sjalvkostnad"}
 
     with st.expander("Ladda exempelföretag", expanded=False):
@@ -393,6 +401,20 @@ with tab_sj:
             min_value=1.0, step=100.0, key="sj_units",
             help="Produktionsvolym per period",
         )
+
+    # Autosave current input values on every rerun (Streamlit rerun = keystroke commit)
+    save_state(
+        "kalkyl_sjalvkostnad",
+        {
+            "sj_dm": dm,
+            "sj_dl": dl,
+            "sj_mo": mo_pct,
+            "sj_to": to_pct,
+            "sj_ao": ao_pct,
+            "sj_fo": fo_pct,
+            "sj_units": units_sj,
+        },
+    )
 
     sj = self_cost_palagg(dm, dl, mo_pct, to_pct, ao_pct, fo_pct, int(units_sj))
 
@@ -487,6 +509,13 @@ with tab_sj:
     )
 
     st.caption("Referens: Andersson, Ekonomistyrning kapitel 6, Självkostnadskalkylering med påläggsmetoden")
+
+    if st.button("Återställ till standardvärden", key="sj_reset_autosave"):
+        clear_state("kalkyl_sjalvkostnad")
+        for _k, _v in _SJ_INIT.items():
+            st.session_state[_k] = _v
+        st.rerun()
+
     st.html(footer_note(updated="2026-05-06"))
 
 # ===========================================================================
@@ -494,6 +523,13 @@ with tab_sj:
 # ===========================================================================
 
 with tab_bid:
+    # Autosave: restore saved input values into session_state before widgets render
+    _bid_saved = load_state("kalkyl_bidrag")
+    if _bid_saved is not None:
+        for _k in ("bid_pris", "bid_rorlig", "bid_fasta", "bid_units"):
+            if _k in _bid_saved:
+                st.session_state[_k] = float(_bid_saved[_k])
+
     bid_scenarios = {k: v for k, v in SCENARIOS.items() if v[2] == "bidrag"}
 
     with st.expander("Ladda exempelföretag", expanded=False):
@@ -568,6 +604,17 @@ with tab_bid:
             min_value=1.0, step=500.0, key="bid_units",
             help="Antal sålda/producerade enheter per period",
         )
+
+    # Autosave current input values on every rerun
+    save_state(
+        "kalkyl_bidrag",
+        {
+            "bid_pris": pris,
+            "bid_rorlig": rorlig,
+            "bid_fasta": fasta,
+            "bid_units": units_bid,
+        },
+    )
 
     bid = contribution_calc(pris, rorlig, fasta, int(units_bid))
     tb = bid["tackningsbidrag_per_styck"]
@@ -700,6 +747,13 @@ with tab_bid:
     )
 
     st.caption("Referens: Andersson, Ekonomistyrning kapitel 8, Bidragskalkyl och nollpunktsanalys")
+
+    if st.button("Återställ till standardvärden", key="bid_reset_autosave"):
+        clear_state("kalkyl_bidrag")
+        for _k, _v in _BID_INIT.items():
+            st.session_state[_k] = _v
+        st.rerun()
+
     st.html(footer_note(updated="2026-05-06"))
 
 # ===========================================================================
@@ -707,6 +761,17 @@ with tab_bid:
 # ===========================================================================
 
 with tab_abc:
+    # Autosave: restore saved ABC tables before widgets render
+    _abc_saved = load_state("kalkyl_abc")
+    if _abc_saved is not None:
+        try:
+            if "abc_act_records" in _abc_saved:
+                st.session_state.abc_act_df = pd.DataFrame(_abc_saved["abc_act_records"])
+            if "abc_prod_records" in _abc_saved:
+                st.session_state.abc_prod_df = pd.DataFrame(_abc_saved["abc_prod_records"])
+        except (ValueError, TypeError):
+            pass
+
     abc_scenarios = {k: v for k, v in SCENARIOS.items() if v[2] == "abc"}
 
     with st.expander("Ladda exempelföretag", expanded=False):
@@ -786,6 +851,15 @@ with tab_abc:
             },
         )
         st.session_state.abc_prod_df = prod_df
+
+    # Autosave ABC tables as JSON serializable record lists
+    save_state(
+        "kalkyl_abc",
+        {
+            "abc_act_records": act_df.to_dict(orient="records"),
+            "abc_prod_records": prod_df.to_dict(orient="records"),
+        },
+    )
 
     activities = [
         {
@@ -890,4 +964,11 @@ with tab_abc:
             )
 
     st.caption("Referens: Andersson, Ekonomistyrning kapitel 7, Aktivitetsbaserad kalkylering (ABC)")
+
+    if st.button("Återställ till standardvärden", key="abc_reset_autosave"):
+        clear_state("kalkyl_abc")
+        st.session_state.abc_act_df = _activities_to_df(_ABC_DEFAULT_ACT)
+        st.session_state.abc_prod_df = _products_to_df(_ABC_DEFAULT_PROD, _ABC_DEFAULT_ACT)
+        st.rerun()
+
     st.html(footer_note(updated="2026-05-06"))
