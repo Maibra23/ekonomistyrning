@@ -45,7 +45,15 @@
       "Bash(/usr/local/opt/python@3.11/bin/python3.11 -m pytest \"tests/test_smoke.py::TestPageImport::test_import_page[pages.3_Budget]\" -v)",
       "Bash(/usr/local/opt/python@3.11/bin/python3.11 -m pytest tests/test_smoke.py -v --tb=line)",
       "Bash(/usr/local/opt/python@3.11/bin/python3.11 -m pytest tests/test_scenarios.py tests/test_smoke.py -v --tb=short)",
-      "Bash(/usr/local/opt/python@3.11/bin/python3.11 *)"
+      "Bash(/usr/local/opt/python@3.11/bin/python3.11 *)",
+      "Bash(.venv/bin/streamlit run *)",
+      "Bash(echo \"launched pid $!\")",
+      "mcp__plugin_playwright_playwright__browser_click",
+      "Bash(kill 76628)",
+      "Read(//private/tmp/**)",
+      "Bash(awk *)",
+      "Bash(.venv/bin/python *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:8508/)"
     ]
   }
 }

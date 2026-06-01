@@ -177,6 +177,11 @@ def test_build_quiz_clusters_have_kapitel():
         assert "kapitel" in sp.lower()
 
 
+def _digits_only(text: str) -> str:
+    """Strip everything but digits so assertions ignore NBSP grouping."""
+    return "".join(ch for ch in text if ch.isdigit())
+
+
 def test_fallback_kalkyl_template():
     out = fallback_kalkyl_template(
         "sjalvkostnad", {"direkt_material": 850}, {"sjalvkostnad": 1500}
@@ -185,8 +190,9 @@ def test_fallback_kalkyl_template():
     assert "Beräkning" in out
     assert "Tolkning" in out
     assert "Källor och förbehåll" in out
-    assert "850" in out
-    assert "1500" in out
+    digits = _digits_only(out)
+    assert "850" in digits
+    assert "1500" in digits
     assert "kapitel 6" in out
 
 
@@ -196,8 +202,9 @@ def test_fallback_investering_template():
     )
     assert "Antagande" in out
     assert "kapitel 10.4" in out
-    assert "100000" in out
-    assert "12345" in out
+    digits = _digits_only(out)
+    assert "100000" in digits
+    assert "12345" in digits
 
 
 def test_fallback_budget_template():
@@ -208,8 +215,9 @@ def test_fallback_budget_template():
     assert "Beräkning" in out
     assert "Tolkning" in out
     assert "Källor och förbehåll" in out
-    assert "5000000" in out
-    assert "350000" in out
+    digits = _digits_only(out)
+    assert "5000000" in digits
+    assert "350000" in digits
     assert "kapitel 13" in out
 
 
@@ -223,8 +231,9 @@ def test_fallback_standardkost_template():
     assert "Beräkning" in out
     assert "Tolkning" in out
     assert "Källor och förbehåll" in out
-    assert "50" in out
-    assert "5000" in out
+    digits = _digits_only(out)
+    assert "50" in digits
+    assert "5000" in digits
     assert "kapitel 17" in out
 
 
