@@ -263,6 +263,19 @@ for _k, _v in {**_SJ_INIT, **_BID_INIT}.items():
     if _k not in st.session_state:
         st.session_state[_k] = _v
 
+# Pending reset flags: when set, restore defaults BEFORE the matching widgets
+# instantiate this run. Streamlit forbids writing to a widget's session key
+# after the widget renders, so the actual reset has to land here.
+if st.session_state.pop("_reset_sj", False):
+    for _k, _v in _SJ_INIT.items():
+        st.session_state[_k] = _v
+    st.session_state.pop("sj_scenario_info", None)
+
+if st.session_state.pop("_reset_bid", False):
+    for _k, _v in _BID_INIT.items():
+        st.session_state[_k] = _v
+    st.session_state.pop("bid_scenario_info", None)
+
 _ABC_DEFAULT_ACT = [
     {"name": "Planering", "total_cost": 2_400_000, "cost_driver": "timmar", "total_driver_volume": 800},
     {"name": "Fältarbete", "total_cost": 3_500_000, "cost_driver": "dagar", "total_driver_volume": 350},
@@ -533,8 +546,7 @@ with tab_sj:
 
     if st.button("Återställ till standardvärden", key="sj_reset_autosave"):
         clear_state("kalkyl_sjalvkostnad")
-        for _k, _v in _SJ_INIT.items():
-            st.session_state[_k] = _v
+        st.session_state["_reset_sj"] = True
         st.rerun()
 
     st.html(footer_note(updated="2026-05-06"))
@@ -762,8 +774,7 @@ with tab_bid:
 
     if st.button("Återställ till standardvärden", key="bid_reset_autosave"):
         clear_state("kalkyl_bidrag")
-        for _k, _v in _BID_INIT.items():
-            st.session_state[_k] = _v
+        st.session_state["_reset_bid"] = True
         st.rerun()
 
     st.html(footer_note(updated="2026-05-06"))

@@ -133,6 +133,16 @@ if "inv_rate" not in st.session_state:
 if "inv_cf_df" not in st.session_state:
     st.session_state["inv_cf_df"] = _init_cf_df(_DEFAULT_YEARS)
 
+# Pending reset flags. Streamlit forbids writing to a widget session key
+# after the widget has been rendered this run, so any "Återställ" button
+# must defer the actual reset to the next rerun via these flags.
+if st.session_state.pop("_reset_inv_basic", False):
+    st.session_state["inv_years"] = _DEFAULT_YEARS
+    st.session_state["inv_initial"] = _DEFAULT_INVESTMENT
+    st.session_state["inv_rate"] = _DEFAULT_RATE
+    st.session_state["inv_cf_df"] = _init_cf_df(_DEFAULT_YEARS)
+    st.session_state.pop("inv_scenario_info", None)
+
 # ---------------------------------------------------------------------------
 # LLM helper
 # ---------------------------------------------------------------------------
@@ -551,10 +561,7 @@ with tab1:
 
     if st.button("Återställ till standardvärden", key="inv_basic_reset_autosave"):
         clear_state("investering_basic")
-        st.session_state["inv_years"] = _DEFAULT_YEARS
-        st.session_state["inv_initial"] = _DEFAULT_INVESTMENT
-        st.session_state["inv_rate"] = _DEFAULT_RATE
-        st.session_state["inv_cf_df"] = _init_cf_df(_DEFAULT_YEARS)
+        st.session_state["_reset_inv_basic"] = True
         st.rerun()
 
     st.html(footer_note(updated="2026-05-06"))
@@ -573,6 +580,10 @@ with tab2:
     _SA_DEFAULTS = {"sa_param": "cash_flows", "sa_min": -30, "sa_max": 30}
     for _k, _v in _SA_DEFAULTS.items():
         if _k not in st.session_state:
+            st.session_state[_k] = _v
+
+    if st.session_state.pop("_reset_inv_sens", False):
+        for _k, _v in _SA_DEFAULTS.items():
             st.session_state[_k] = _v
 
     # Restore saved sensitivity inputs
@@ -719,8 +730,7 @@ with tab2:
 
     if st.button("Återställ till standardvärden", key="inv_sens_reset_autosave"):
         clear_state("investering_sensitivity")
-        for _k, _v in _SA_DEFAULTS.items():
-            st.session_state[_k] = _v
+        st.session_state["_reset_inv_sens"] = True
         st.rerun()
 
     st.html(footer_note(updated="2026-05-06"))
@@ -745,6 +755,10 @@ with tab3:
     }
     for _k, _v in _IT_DEFAULTS.items():
         if _k not in st.session_state:
+            st.session_state[_k] = _v
+
+    if st.session_state.pop("_reset_inv_inflation", False):
+        for _k, _v in _IT_DEFAULTS.items():
             st.session_state[_k] = _v
 
     # Restore saved inflation inputs
@@ -912,8 +926,7 @@ with tab3:
 
     if st.button("Återställ till standardvärden", key="inv_inflation_reset_autosave"):
         clear_state("investering_inflation")
-        for _k, _v in _IT_DEFAULTS.items():
-            st.session_state[_k] = _v
+        st.session_state["_reset_inv_inflation"] = True
         st.rerun()
 
     st.html(footer_note(updated="2026-05-06"))
@@ -941,6 +954,12 @@ with tab4:
     for _k, _v in _MC_DEFAULTS.items():
         if _k not in st.session_state:
             st.session_state[_k] = _v
+
+    if st.session_state.pop("_reset_inv_mc", False):
+        for _k, _v in _MC_DEFAULTS.items():
+            st.session_state[_k] = _v
+        for _drop_k in ("mc_cf_df", "mc_last_result"):
+            st.session_state.pop(_drop_k, None)
 
     # Restore saved Monte Carlo input parameters (not result arrays)
     _mc_saved = load_state("investering_monte_carlo")
@@ -1176,12 +1195,7 @@ with tab4:
 
     if st.button("Återställ till standardvärden", key="inv_mc_reset_autosave"):
         clear_state("investering_monte_carlo")
-        for _k, _v in _MC_DEFAULTS.items():
-            st.session_state[_k] = _v
-        # Drop cached mc data so it rebuilds from defaults
-        for _drop_k in ("mc_cf_df", "mc_last_result"):
-            if _drop_k in st.session_state:
-                del st.session_state[_drop_k]
+        st.session_state["_reset_inv_mc"] = True
         st.rerun()
 
     st.html(footer_note(updated="2026-05-06"))

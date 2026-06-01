@@ -130,10 +130,33 @@ section[data-testid="stSidebar"] nav {display: none !important;}
 /* --- Sidebar base --- */
 section[data-testid="stSidebar"] {
     background-color: %(sidebar_bg)s !important;
+    min-width: 260px !important;
+    width: 260px !important;
+    transform: translateX(0) !important;
+    visibility: visible !important;
+    display: block !important;
 }
 section[data-testid="stSidebar"],
 section[data-testid="stSidebar"] * {
     color: rgba(255,255,255,0.65) !important;
+}
+/* Lock sidebar open: hide every Streamlit collapse handle so the student
+   cannot accidentally hide the navigation. The list of pages must stay
+   visible at all times. */
+button[data-testid="stSidebarCollapseButton"],
+button[data-testid="stSidebarCollapsedControl"],
+div[data-testid="stSidebarCollapseButton"],
+div[data-testid="collapsedControl"],
+button[kind="header"] {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+/* Streamlit pushes the main area aside while the sidebar is open. When the
+   collapse button is hidden the layout occasionally resets the offset on
+   narrow screens; force the main column to respect the locked width. */
+section.main > div.block-container {
+    margin-left: 0 !important;
 }
 
 /* --- Streamlit widget overrides --- */

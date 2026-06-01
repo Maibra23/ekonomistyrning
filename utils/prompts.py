@@ -121,8 +121,112 @@ LÄNGD
 """ + "\n" + _ORDLISTA_BLOCK + "\n"
 
 
+# Human readable Swedish labels for snake_case payload keys. Used by the
+# offline fallback templates so the UI never leaks raw machine identifiers
+# like "direkt_material_per_styck" to the student. Order is preserved.
+_FIELD_LABELS: dict[str, str] = {
+    # Sjalvkostnadskalkyl
+    "direkt_material_per_styck": "Direkt material (kr/styck)",
+    "direkt_lon_per_styck": "Direkt lön (kr/styck)",
+    "MO_procent": "Materialomkostnad MO (%)",
+    "TO_procent": "Tillverkningsomkostnad TO (%)",
+    "AO_procent": "Administrationsomkostnad AO (%)",
+    "FO_procent": "Försäljningsomkostnad FO (%)",
+    "antal_enheter": "Antal enheter",
+    "sjalvkostnad_per_styck": "Självkostnad per styck (kr)",
+    "tillverkningskostnad": "Tillverkningskostnad totalt (kr)",
+    "sjalvkostnad_totalt": "Självkostnad totalt (kr)",
+    # Bidragskalkyl
+    "pris_per_styck": "Försäljningspris (kr/styck)",
+    "rorlig_kostnad_per_styck": "Rörlig kostnad (kr/styck)",
+    "fasta_kostnader": "Fasta kostnader (kr)",
+    "volym": "Volym (antal enheter)",
+    "tackningsbidrag_per_styck": "Täckningsbidrag per styck (kr)",
+    "resultat": "Resultat (kr)",
+    "breakeven_units": "Nollpunktsvolym (st)",
+    "sakerhetsmarginal_pct": "Säkerhetsmarginal (%)",
+    # ABC
+    "total_kostnad": "Total kostnad (kr)",
+    "antal_aktiviteter": "Antal aktiviteter",
+    "antal_produkter": "Antal produkter",
+    # Investering
+    "grundinvestering": "Grundinvestering (kr)",
+    "kalkylranta": "Kalkylränta (decimal)",
+    "antal_ar": "Antal år",
+    "kassafloden": "Årliga kassaflöden (kr)",
+    "npv": "Nuvärde NPV (kr)",
+    "irr": "Internränta IRR (decimal)",
+    "aterbetalingstid": "Återbetalningstid (år)",
+    "annuitet": "Annuitet (kr)",
+    "parameter": "Varierad parameter",
+    "variation_min": "Variation min (%)",
+    "variation_max": "Variation max (%)",
+    "bas_npv": "Bas-NPV (kr)",
+    "kritisk_variation": "Kritisk variation (%)",
+    "real_kalkylranta": "Real kalkylränta (decimal)",
+    "skattesats": "Skattesats (decimal)",
+    "avskrivning_per_ar": "Avskrivning per år (kr)",
+    "nominell_kalkylranta": "Nominell kalkylränta (decimal)",
+    "npv_fore_skatt": "NPV före skatt (kr)",
+    "npv_efter_skatt": "NPV efter skatt (kr)",
+    "mean_npv": "Medel-NPV (kr)",
+    "median_npv": "Median-NPV (kr)",
+    "p5": "5:e percentilen NPV (kr)",
+    "p95": "95:e percentilen NPV (kr)",
+    "sannolikhet_positiv_npv": "Sannolikhet för positiv NPV (decimal)",
+    # Standardkost
+    "kostnadsslag": "Kostnadsslag",
+    "standard_volym": "Standardvolym",
+    "standard_pris": "Standardpris (kr)",
+    "standard_forbrukning": "Standardförbrukning per enhet",
+    "verklig_volym": "Verklig volym",
+    "verkligt_pris": "Verkligt pris (kr)",
+    "verklig_forbrukning": "Verklig förbrukning per enhet",
+    "volymavvikelse": "Volymavvikelse (kr)",
+    "prisavvikelse": "Prisavvikelse (kr)",
+    "effektivitetsavvikelse": "Effektivitetsavvikelse (kr)",
+    "totalavvikelse": "Totalavvikelse (kr)",
+}
+
+
+def _label_for(key: str) -> str:
+    """Return a human readable Swedish label for a payload key."""
+    if key in _FIELD_LABELS:
+        return _FIELD_LABELS[key]
+    # Fall back to a readable version of the snake_case key.
+    return key.replace("_", " ").capitalize()
+
+
+def _format_value(value: Any) -> str:
+    """Format a payload value with Swedish thousand separators where useful."""
+    if isinstance(value, bool):
+        return "Ja" if value else "Nej"
+    if isinstance(value, int):
+        return f"{value:,}".replace(",", NBSP)
+    if isinstance(value, float):
+        # Trim trailing zeros but keep up to 4 decimals.
+        if abs(value) >= 1000:
+            integer_part = int(value)
+            integer_str = f"{integer_part:,}".replace(",", NBSP)
+            fractional = abs(value - integer_part)
+            if fractional < 1e-6:
+                return integer_str
+            decimals = f"{fractional:.2f}"[2:]
+            return f"{integer_str},{decimals}"
+        formatted = f"{value:.4f}".rstrip("0").rstrip(".")
+        if not formatted:
+            return "0"
+        return formatted.replace(".", ",")
+    return str(value)
+
+
 def _format_inputs_block(inputs: dict[str, Any]) -> str:
-    """Render an inputs dict as a bulleted list for the user prompt."""
+    """Render an inputs dict as a bulleted list using raw snake_case keys.
+
+    Used inside LLM user prompts where the model is expected to translate
+    the keys into prose. The offline fallback templates should use
+    ``_format_labeled_block`` instead so students never see raw keys.
+    """
     lines = []
     for key, value in inputs.items():
         if isinstance(value, float):
@@ -131,6 +235,15 @@ def _format_inputs_block(inputs: dict[str, Any]) -> str:
             formatted = str(value)
         lines.append(f"- {key}: {formatted}")
     return "\n".join(lines)
+
+
+def _format_labeled_block(inputs: dict[str, Any]) -> str:
+    """Render an inputs dict using human readable Swedish labels.
+
+    Use this for any text that is shown directly to the student, including
+    the four section offline fallback templates.
+    """
+    return "\n".join(f"- {_label_for(k)}: {_format_value(v)}" for k, v in inputs.items())
 
 
 def build_kalkyl_explanation_prompt(
@@ -377,8 +490,8 @@ def fallback_kalkyl_template(
         calc_type, "kapitel 4"
     )
 
-    inputs_lines = "\n".join(f"- {k}: {v}" for k, v in inputs.items())
-    outputs_lines = "\n".join(f"- {k}: {v}" for k, v in outputs.items())
+    inputs_lines = _format_labeled_block(inputs)
+    outputs_lines = _format_labeled_block(outputs)
 
     return (
         f"**Antagande**\n"
@@ -410,8 +523,8 @@ def fallback_investering_template(
         "monte_carlo": "kapitel 10.9 utvidgad",
     }
     kapitel = kapitel_map.get(method, "kapitel 10")
-    inputs_lines = "\n".join(f"- {k}: {v}" for k, v in inputs.items())
-    outputs_lines = "\n".join(f"- {k}: {v}" for k, v in outputs.items())
+    inputs_lines = _format_labeled_block(inputs)
+    outputs_lines = _format_labeled_block(outputs)
 
     return (
         f"**Antagande**\n"
@@ -431,8 +544,8 @@ def fallback_budget_template(
     calc_type: str, inputs: dict[str, Any], outputs: dict[str, Any]
 ) -> str:
     """Return a fallback four section explanation for budget analysis."""
-    inputs_lines = "\n".join(f"- {k}: {v}" for k, v in inputs.items())
-    outputs_lines = "\n".join(f"- {k}: {v}" for k, v in outputs.items())
+    inputs_lines = _format_labeled_block(inputs)
+    outputs_lines = _format_labeled_block(outputs)
 
     return (
         f"**Antagande**\n"
@@ -455,8 +568,8 @@ def fallback_standardkost_template(
     calc_type: str, inputs: dict[str, Any], outputs: dict[str, Any]
 ) -> str:
     """Return a fallback four section explanation for variance analysis."""
-    inputs_lines = "\n".join(f"- {k}: {v}" for k, v in inputs.items())
-    outputs_lines = "\n".join(f"- {k}: {v}" for k, v in outputs.items())
+    inputs_lines = _format_labeled_block(inputs)
+    outputs_lines = _format_labeled_block(outputs)
 
     return (
         f"**Antagande**\n"
@@ -626,8 +739,17 @@ def build_scenario_generation_prompt(
         "för industriell maskin, ingen femårig ROI på enkla tjänster, "
         "inga miljardomsättningar för ett mikroföretag). "
         "Företagsnamnet ska vara påhittat och får INTE vara ett känt "
-        "svenskt företag. Output måste vara GILTIG JSON och INGENTING "
-        "annat, ingen omgivande prosa, ingen markdown och inga förklaringar."
+        "svenskt företag. "
+        "Fältet bransch_beskrivning (eller projekt_beskrivning för "
+        "investering) ska börja med tydlig företagstyp, till exempel "
+        "\"Tillverkningsföretag som ...\", \"Tjänsteföretag inom ...\", "
+        "\"Handelsföretag specialiserat på ...\", \"Konsultbyrå som ...\" "
+        "eller \"E-handelsföretag som ...\". Beskrivningen ska vara två "
+        "till tre meningar och ange bransch, produkt eller tjänst, "
+        "ungefärlig storlek (mikro, små eller medelstort) samt något "
+        "som motiverar de valda siffrorna. "
+        "Output måste vara GILTIG JSON och INGENTING annat, ingen "
+        "omgivande prosa, ingen markdown och inga förklaringar."
     )
 
     schema = _MODULE_SCHEMAS[module]
