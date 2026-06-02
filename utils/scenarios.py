@@ -13,6 +13,7 @@ returned so the calling page can always populate its inputs.
 from __future__ import annotations
 
 import json
+import random
 from typing import Any
 
 from utils.llm import LLMUnavailableError, cached_chat
@@ -86,12 +87,12 @@ _REQUIRED_KEYS: dict[str, tuple[str, ...]] = {
 # Fallback templates (plausible Swedish placeholder data)
 # ---------------------------------------------------------------------------
 
-def _fallback_for(module: str) -> dict[str, Any]:
-    """Return a deterministic placeholder scenario for ``module``.
+def _fallback_base(module: str) -> dict[str, Any]:
+    """Return the base placeholder scenario for ``module``.
 
-    Used when the LLM is unavailable, returns invalid JSON, or returns
-    a JSON object missing required keys. Names are generic placeholders
-    so no static company names from the legacy set leak through.
+    Used as the seed for :func:`_fallback_for`, which adds per-call
+    variation. Names are generic placeholders so no static company names
+    from the legacy set leak through.
     """
     if module == "kalkyl_sjalvkostnad":
         return {
@@ -225,6 +226,92 @@ def _fallback_for(module: str) -> dict[str, Any]:
         }
     # Unknown module: return an empty dict, callers should validate
     return {}
+
+
+# ---------------------------------------------------------------------------
+# Per-call variation
+#
+# Without variation every offline scenario for a given module is identical,
+# so the student sees the same company and numbers regardless of which
+# "company" was generated. The helpers below scale the monetary base by one
+# shared factor (preserving all internal ratios, so the scenario stays valid)
+# and nudge the rate-style fields, while picking a fresh company name.
+# ---------------------------------------------------------------------------
+
+# Fields that are rates/shares, not monetary amounts. They are nudged
+# slightly rather than scaled by the shared monetary factor.
+_RATE_KEYS = frozenset({"mo_pct", "to_pct", "ao_pct", "fo_pct", "kalkylranta", "skattesats"})
+
+# String fields that must never be scaled or replaced by the numeric walker.
+_TEXT_KEYS = frozenset(
+    {"foretag_namn", "bransch_beskrivning", "projekt_beskrivning",
+     "name", "cost_driver", "kostnadsslag"}
+)
+
+_COMPANY_NAMES: tuple[str, ...] = (
+    "Nordvik Industri AB",
+    "Sävsjö Komponenter AB",
+    "Lindgren & Partner AB",
+    "Kustkraft Produktion AB",
+    "Mälardalens Verkstad AB",
+    "Bergslagens Tillverkning AB",
+    "Vänern Logistik AB",
+    "Sundström Tjänster AB",
+    "Aurora Teknik AB",
+    "Granlund & Söner AB",
+)
+
+
+def _vary_number(key: str | None, value: float, factor: float, rng: random.Random) -> float:
+    """Vary a single numeric leaf, keeping the result plausible."""
+    if key in _RATE_KEYS:
+        nudged = value * rng.uniform(0.85, 1.15)
+        return round(nudged, 4) if abs(value) < 1 else round(nudged, 1)
+    scaled = value * factor
+    if isinstance(value, bool):  # pragma: no cover - defensive
+        return value
+    if isinstance(value, int):
+        return max(1, int(round(scaled)))
+    if abs(scaled) >= 1000:
+        return float(round(scaled, -2))  # nearest hundred for tidy kronor
+    return round(scaled, 2)
+
+
+def _vary(obj: Any, factor: float, rng: random.Random, key: str | None = None) -> Any:
+    """Recursively scale numeric values while leaving text fields untouched."""
+    if isinstance(obj, dict):
+        return {k: _vary(v, factor, rng, k) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_vary(v, factor, rng, key) for v in obj]
+    if isinstance(obj, bool):
+        return obj
+    if isinstance(obj, (int, float)):
+        if key in _TEXT_KEYS:
+            return obj
+        return _vary_number(key, obj, factor, rng)
+    return obj
+
+
+def _apply_variation(module: str, base: dict[str, Any]) -> dict[str, Any]:
+    """Return a varied copy of ``base`` with a fresh company name."""
+    if not base:
+        return base
+    rng = random.Random()  # unseeded: a genuinely different draw each call
+    factor = rng.uniform(0.7, 1.45)
+    varied = _vary(base, factor, rng)
+    varied["foretag_namn"] = rng.choice(_COMPANY_NAMES)
+    return varied
+
+
+def _fallback_for(module: str) -> dict[str, Any]:
+    """Return a placeholder scenario for ``module`` with per-call variation.
+
+    Used when the LLM is unavailable, returns invalid JSON, or returns a
+    JSON object missing required keys. Each call yields a different company
+    name and scaled numbers so the student never sees identical data for
+    every "generated" company, while internal ratios stay valid.
+    """
+    return _apply_variation(module, _fallback_base(module))
 
 
 # ---------------------------------------------------------------------------

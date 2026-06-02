@@ -63,6 +63,39 @@ DASH_PATTERN = re.compile(r"[\u2014\u2013\u2012\u2015\u2212]")
 # Hyphen between spaces (used as a sentence break, not a compound word hyphen)
 SPACED_HYPHEN_PATTERN = re.compile(r"\s+-\s+")
 
+# A subtraction between two numbers, e.g. "599 kr - 325 kr" or "35000 - 15328".
+# The left side is a number with an optional currency/quantity unit; the right
+# side begins with a digit. We convert the operator to the word "minus" so the
+# dash-stripping rules below cannot turn the subtraction into a comma (which
+# would silently corrupt a calculation shown to the student).
+SUBTRACTION_PATTERN = re.compile(
+    r"(\d(?:[\u00a0 ]?(?:kr|%|st|styck(?:en)?))?)[ \t]+[-\u2212][ \t]+(?=\d)"
+)
+
+# LaTeX / math markup the model sometimes emits despite instructions. These are
+# stripped before the text is rendered with st.markdown so the student never
+# sees raw commands like \text{kr} or \frac{a}{b}.
+_LATEX_FRAC = re.compile(r"\\[dt]?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}")
+_LATEX_TEXT_CMD = re.compile(
+    r"\\(?:text|mathrm|mathbf|mathit|operatorname|mathsf)\s*\{([^{}]*)\}"
+)
+_LATEX_SPACING = re.compile(r"\\[,;:!]|\\q?quad|\\ ")
+_LATEX_DELIMS = re.compile(r"\$\$|\$|\\\(|\\\)|\\\[|\\\]|\\left|\\right")
+_LATEX_DECIMAL_BRACE = re.compile(r"\{\s*([.,])\s*\}")
+_LATEX_RESIDUAL_CMD = re.compile(r"\\[a-zA-Z]+")
+_LATEX_SYMBOLS: tuple[tuple[str, str], ...] = (
+    (r"\times", "\u00d7"),
+    (r"\cdot", "\u00b7"),
+    (r"\div", "/"),
+    (r"\approx", "\u2248"),
+    (r"\leq", "\u2264"),
+    (r"\geq", "\u2265"),
+    (r"\le", "\u2264"),
+    (r"\ge", "\u2265"),
+    (r"\neq", "\u2260"),
+    (r"\pm", "\u00b1"),
+)
+
 # Number with English thousand and decimal separators: 1,234.56
 EN_NUMBER_PATTERN = re.compile(r"(?<![A-Za-z])(\d{1,3}(?:,\d{3})+)(?:\.(\d+))?(?![A-Za-z])")
 
@@ -137,12 +170,48 @@ def strip_ai_tells(text: str) -> tuple[str, list[str]]:
     return cleaned, found
 
 
+def strip_latex(text: str) -> str:
+    """Remove LaTeX / math markup, leaving readable plain text.
+
+    Models occasionally answer with LaTeX (``\\frac{a}{b}``, ``\\text{kr}``,
+    ``\\,`` thin spaces, ``$...$`` delimiters) even though the system prompt
+    forbids it. ``st.markdown`` renders only fenced math, so the raw commands
+    leak to the student. This converts the common constructs to plain text:
+
+    - ``\\frac{a}{b}`` becomes ``a / b``
+    - ``\\text{kr}`` becomes ``kr`` (argument kept)
+    - ``\\times`` becomes ``×`` and similar operators to their glyphs
+    - thin spaces, ``$`` delimiters and residual ``\\command`` tokens removed
+    - ``0{,}562`` (LaTeX decimal comma) becomes ``0,562``
+    """
+    # Remove inner spacing and \text{...} wrappers first so that the
+    # \frac argument braces are clean. Otherwise the nested braces from
+    # \text{kr} break the \frac match and the division slash is lost.
+    cleaned = _LATEX_SPACING.sub(" ", text)
+    cleaned = _LATEX_TEXT_CMD.sub(r"\1", cleaned)
+    cleaned = _LATEX_FRAC.sub(r"\1 / \2", cleaned)
+    for command, glyph in _LATEX_SYMBOLS:
+        cleaned = cleaned.replace(command, glyph)
+    cleaned = _LATEX_DELIMS.sub("", cleaned)
+    cleaned = _LATEX_DECIMAL_BRACE.sub(r"\1", cleaned)
+    cleaned = _LATEX_RESIDUAL_CMD.sub("", cleaned)
+    # Drop any leftover math braces and stray escape backslashes now that
+    # their commands are gone.
+    cleaned = cleaned.replace("{", "").replace("}", "").replace("\\", "")
+    cleaned = re.sub(r" {2,}", " ", cleaned)
+    cleaned = re.sub(r" +([,.;:!?])", r"\1", cleaned)
+    return cleaned
+
+
 def normalize_dashes(text: str) -> str:
     """Replace em and en dashes with comma plus space.
 
     Hyphens inside compound words (no spaces around them) are preserved.
+    Subtraction between numbers (``599 kr - 325 kr``) is converted to the
+    word ``minus`` first so it is not mistaken for a sentence dash.
     """
-    cleaned = DASH_PATTERN.sub(", ", text)
+    cleaned = SUBTRACTION_PATTERN.sub(r"\1 minus ", text)
+    cleaned = DASH_PATTERN.sub(", ", cleaned)
     cleaned = SPACED_HYPHEN_PATTERN.sub(", ", cleaned)
     cleaned = re.sub(r",\s*,", ",", cleaned)
     cleaned = re.sub(r"\s{2,}", " ", cleaned)
@@ -274,6 +343,11 @@ def humanize(
     cleaned, tells = strip_ai_tells(text)
     if tells:
         transformations.append("strip_ai_tells")
+
+    cleaned_no_latex = strip_latex(cleaned)
+    if cleaned_no_latex != cleaned:
+        transformations.append("strip_latex")
+    cleaned = cleaned_no_latex
 
     terminology_corrections: list[tuple[str, str]] = []
     if glossary is not None:

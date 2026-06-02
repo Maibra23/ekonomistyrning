@@ -22,10 +22,36 @@ from utils.prompts import (
 )
 from utils.scenarios import (
     _REQUIRED_KEYS,
+    _fallback_for,
     generate_scenario,
     list_modules_for_scenarios,
     validate_generated_scenario,
 )
+
+
+class TestFallbackVariation:
+    """The offline fallback must produce a different company each time so the
+    student does not see identical numbers for every generated scenario."""
+
+    def test_fallback_values_vary_between_calls(self):
+        # Across several draws at least one numeric field should differ.
+        a = _fallback_for("kalkyl_bidrag")
+        draws = [_fallback_for("kalkyl_bidrag") for _ in range(8)]
+        assert any(d["pris_per_styck"] != a["pris_per_styck"] for d in draws)
+
+    def test_fallback_bidrag_keeps_positive_margin(self):
+        # Variation must not break validity: price stays above variable cost.
+        for _ in range(20):
+            d = _fallback_for("kalkyl_bidrag")
+            assert d["pris_per_styck"] > d["rorlig_kostnad_per_styck"]
+            assert d["volym"] >= 1
+            assert d["fasta_kostnader"] > 0
+
+    def test_fallback_still_has_required_keys(self):
+        for module in _REQUIRED_KEYS:
+            d = _fallback_for(module)
+            for key in _REQUIRED_KEYS[module]:
+                assert key in d
 
 
 class TestBuildScenarioGenerationPrompt:

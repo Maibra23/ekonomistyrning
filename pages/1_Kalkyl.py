@@ -708,7 +708,24 @@ with tab_bid:
             annotation_text=f"Nollpunkt: {int(bid['breakeven_units'])} st",
             annotation_position="top right",
         )
-        apply_layout(fig_be, title="Nollpunktsdiagram (kr vs antal enheter)", height=320)
+        # Circular marker at the intersection of the revenue and cost lines.
+        fig_be.add_trace(go.Scatter(
+            x=[bid["breakeven_units"]], y=[bid["breakeven_revenue"]],
+            mode="markers", name="Nollpunkt",
+            marker={
+                "size": 13,
+                "color": COLORS["warning"],
+                "line": {"width": 2, "color": "#FFFFFF"},
+                "symbol": "circle",
+            },
+            hovertemplate="Nollpunkt<br>%{x:,.0f} st<br>%{y:,.0f} kr<extra></extra>",
+        ))
+        apply_layout(fig_be, title="Nollpunktsdiagram (kr vs antal enheter)", height=380)
+        # Label both axes and let Plotly expand the margins so the tick labels
+        # and titles are never clipped or hidden behind the legend.
+        fig_be.update_xaxes(title_text="Antal enheter (st)", automargin=True)
+        fig_be.update_yaxes(title_text="Kronor (kr)", automargin=True)
+        fig_be.update_layout(margin={"l": 70, "r": 30, "t": 60, "b": 90})
         st.plotly_chart(fig_be, use_container_width=True)
 
     # Build inputs/outputs dicts for LLM

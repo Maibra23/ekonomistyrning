@@ -10,8 +10,102 @@ from utils.humanizer import (
     normalize_dashes,
     normalize_swedish_terminology,
     strip_ai_tells,
+    strip_latex,
     validate_structure,
 )
+
+
+# ---------------------------------------------------------------------------
+# LaTeX stripping (Day 10 hardening: tutor text must never leak raw LaTeX)
+# ---------------------------------------------------------------------------
+
+
+def test_strip_latex_removes_text_command():
+    text = r"Resultatet blir 274 \text{kr} per styck."
+    cleaned = strip_latex(text)
+    assert "\\text" not in cleaned
+    assert "kr" in cleaned
+
+
+def test_strip_latex_removes_thin_space():
+    text = r"599 \, kr minus 325 \, kr"
+    cleaned = strip_latex(text)
+    assert "\\," not in cleaned
+    assert "\\" not in cleaned
+
+
+def test_strip_latex_converts_frac_to_division():
+    text = r"\frac{4200000}{274} = 15328"
+    cleaned = strip_latex(text)
+    assert "\\frac" not in cleaned
+    assert "/" in cleaned
+    assert "4200000" in cleaned and "274" in cleaned
+
+
+def test_strip_latex_removes_dollar_delimiters():
+    text = r"Vi får $TB = 274$ kr."
+    cleaned = strip_latex(text)
+    assert "$" not in cleaned
+    assert "274" in cleaned
+
+
+def test_strip_latex_converts_times_symbol():
+    text = r"274 \times 35000"
+    cleaned = strip_latex(text)
+    assert "\\times" not in cleaned
+    assert "35000" in cleaned
+
+
+def test_strip_latex_decimal_comma_brace():
+    text = r"Säkerhetsmarginal 0{,}562"
+    cleaned = strip_latex(text)
+    assert "0,562" in cleaned
+    assert "{" not in cleaned and "}" not in cleaned
+
+
+def test_strip_latex_leaves_plain_text_unchanged():
+    text = "Täckningsbidraget är 274 kr per styck."
+    assert strip_latex(text) == text
+
+
+# ---------------------------------------------------------------------------
+# Numeric subtraction must survive dash normalization
+# ---------------------------------------------------------------------------
+
+
+def test_normalize_dashes_preserves_numeric_subtraction():
+    text = "599 kr - 325 kr"
+    cleaned = normalize_dashes(text)
+    # The subtraction must not become a comma (which corrupts the math).
+    assert "599 kr, 325" not in cleaned
+    assert "minus" in cleaned
+
+
+def test_normalize_dashes_plain_numbers_subtraction():
+    text = "35000 - 15328"
+    cleaned = normalize_dashes(text)
+    assert "minus" in cleaned
+    assert "35000, 15328" not in cleaned
+
+
+def test_humanize_cleans_latex_calculation():
+    text = (
+        r"**Antagande** Vi räknar enligt kapitel 8."
+        "\n\n"
+        r"**Beräkning** Täckningsbidrag: $599 \, \text{kr} - 325 \, \text{kr} = 274 \, \text{kr}$. "
+        r"Nollpunkt: $\frac{4200000 \, \text{kr}}{274 \, \text{kr}} = 15328$ st."
+        "\n\n"
+        r"**Tolkning** Marginalen är god."
+        "\n\n"
+        r"**Källor** Kapitel 8."
+    )
+    result = humanize(text)
+    assert "\\text" not in result.text
+    assert "\\frac" not in result.text
+    assert "\\," not in result.text
+    assert "$" not in result.text
+    # Subtraction preserved, not turned into a comma list.
+    assert "599 kr, 325" not in result.text
 
 
 def test_strip_ai_tells_english():
