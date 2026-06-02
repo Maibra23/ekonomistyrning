@@ -270,11 +270,15 @@ div[data-testid="stSlider"] label {
 }
 .eks-kpi-value {
     font-family: "IBM Plex Mono", monospace;
-    font-size: 30px;
+    /* Scale down on narrow cards so long values (e.g. 9 186 359 kr) never
+       overflow the card while staying large on wide layouts. */
+    font-size: clamp(19px, 2.1vw, 30px);
     font-weight: 700;
     color: %(text_primary)s;
-    line-height: 1.1;
+    line-height: 1.15;
     font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 .eks-kpi-unit {
     font-family: Inter, sans-serif;
@@ -352,10 +356,12 @@ div[data-testid="stSlider"] label {
 .eks-stat-cell:last-child  { border-right: 1px solid %(border)s; border-radius: 0 4px 4px 0; }
 .eks-stat-value {
     font-family: "IBM Plex Mono", monospace;
-    font-size: 22px;
+    font-size: clamp(16px, 1.7vw, 22px);
     font-weight: 500;
     color: %(text_primary)s;
     display: block;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 .eks-stat-label {
     font-family: Inter, sans-serif;
