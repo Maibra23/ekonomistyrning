@@ -36,6 +36,7 @@ from utils.prompts import (
 from utils.scenarios import generate_scenario
 from utils.state_save import clear_state, load_state, save_state
 from utils.ui import (
+    SCENARIO_DIFFICULTY_HELP,
     footer_note,
     inject_css,
     kpi_card,
@@ -338,6 +339,7 @@ with tab_sj:
             _DIFFICULTY_OPTIONS,
             index=1,
             key="sj_scenario_difficulty",
+            help=SCENARIO_DIFFICULTY_HELP,
         )
     with sj_gen_cols[1]:
         st.write("")
@@ -570,6 +572,7 @@ with tab_bid:
             _DIFFICULTY_OPTIONS,
             index=1,
             key="bid_scenario_difficulty",
+            help=SCENARIO_DIFFICULTY_HELP,
         )
     with bid_gen_cols[1]:
         st.write("")
@@ -819,6 +822,7 @@ with tab_abc:
             _DIFFICULTY_OPTIONS,
             index=1,
             key="abc_scenario_difficulty",
+            help=SCENARIO_DIFFICULTY_HELP,
         )
     with abc_gen_cols[1]:
         st.write("")

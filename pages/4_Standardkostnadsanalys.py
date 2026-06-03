@@ -33,7 +33,7 @@ from utils.standardkost import (
     variance_decomposition_rorlig,
     variance_fixed_overhead,
 )
-from utils.ui import footer_note, inject_css, kpi_card, page_title, render_kpi_row, render_session_cap_card, render_sidebar
+from utils.ui import SCENARIO_DIFFICULTY_HELP, footer_note, inject_css, kpi_card, page_title, render_kpi_row, render_session_cap_card, render_sidebar
 
 # Difficulty label mapping for the scenario generator dropdown
 _DIFFICULTY_OPTIONS = ("Lätt", "Medel", "Svår")
@@ -95,6 +95,7 @@ with tab1:
             _DIFFICULTY_OPTIONS,
             index=1,
             key="sk_scenario_difficulty",
+            help=SCENARIO_DIFFICULTY_HELP,
         )
     with sk_gen_cols[1]:
         st.write("")

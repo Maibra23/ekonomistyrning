@@ -1,4 +1,4 @@
-"""Prompt library for Qwen3-14B integration.
+"""Prompt library for the Qwen3 (Qwen/Qwen3-8B) integration.
 
 Every prompt used in the app lives here. Each builder returns a tuple
 of (system_prompt, user_prompt). Pure Python, no streamlit, no LLM client.
