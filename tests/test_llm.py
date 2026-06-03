@@ -6,18 +6,21 @@ tests/manual_llm_smoke.py.
 """
 from __future__ import annotations
 
-import os
 from unittest.mock import patch
 
 from utils.llm import (
+    ALTERNATIVE_MODEL,
     DEFAULT_MODEL,
     DEFAULT_PROVIDER,
     SESSION_CALL_CAP,
+    SUPPORTED_MODELS,
     LLMUnavailableError,
     extract_numbers,
+    get_active_model,
     get_hf_token,
     get_llm_config,
     is_llm_available,
+    normalize_model,
     verify_grounding,
 )
 
@@ -60,14 +63,50 @@ def test_get_llm_config_defaults(monkeypatch):
 
 def test_get_llm_config_from_env(monkeypatch):
     monkeypatch.setenv("HF_TOKEN", "hf_x")
-    monkeypatch.setenv("LLM_MODEL", "Qwen/Qwen3-32B")
+    monkeypatch.setenv("LLM_MODEL", "Qwen/Qwen3-14B")
     monkeypatch.setenv("LLM_PROVIDER", "together")
     monkeypatch.setenv("LLM_HUMANIZER_FALLBACK", "true")
     config = get_llm_config()
     assert config.token == "hf_x"
-    assert config.model == "Qwen/Qwen3-32B"
+    assert config.model == ALTERNATIVE_MODEL
     assert config.provider == "together"
     assert config.humanizer_fallback is True
+
+
+def test_supported_models_are_the_two_qwen_variants():
+    assert SUPPORTED_MODELS == (DEFAULT_MODEL, ALTERNATIVE_MODEL)
+    assert DEFAULT_MODEL == "Qwen/Qwen3-8B"
+    assert ALTERNATIVE_MODEL == "Qwen/Qwen3-14B"
+
+
+def test_normalize_model_accepts_full_and_short_names():
+    assert normalize_model("Qwen/Qwen3-8B") == DEFAULT_MODEL
+    assert normalize_model("Qwen3-14B") == ALTERNATIVE_MODEL
+    assert normalize_model("qwen3-14b") == ALTERNATIVE_MODEL
+    assert normalize_model("Qwen/Qwen3-32B") is None
+    assert normalize_model(None) is None
+
+
+def test_unsupported_model_falls_back_to_default(monkeypatch):
+    monkeypatch.delenv("HF_TOKEN", raising=False)
+    monkeypatch.setenv("LLM_MODEL", "Qwen/Qwen3-32B")
+    assert get_active_model() == DEFAULT_MODEL
+    assert get_llm_config().model == DEFAULT_MODEL
+
+
+def test_active_model_uses_alternative_when_configured(monkeypatch):
+    monkeypatch.setenv("LLM_MODEL", "Qwen3-14B")
+    assert get_active_model() == ALTERNATIVE_MODEL
+
+
+def test_session_override_takes_precedence(monkeypatch):
+    import streamlit as st
+
+    from utils.llm import MODEL_SESSION_KEY
+
+    monkeypatch.setenv("LLM_MODEL", DEFAULT_MODEL)
+    monkeypatch.setattr(st, "session_state", {MODEL_SESSION_KEY: ALTERNATIVE_MODEL})
+    assert get_active_model() == ALTERNATIVE_MODEL
 
 
 def test_extract_numbers_swedish_format():
@@ -130,6 +169,30 @@ def test_verify_grounding_zero_value():
     expected = {"saldo": 0}
     result = verify_grounding(text, expected)
     assert "saldo" in result["matched"]
+
+
+def test_verify_grounding_fraction_accepted_as_percent():
+    # The tutor cites säkerhetsmarginal as 56,2 % while the calculator
+    # stores it as the fraction 0,562. This must count as grounded.
+    text = "Säkerhetsmarginalen är 56,2 % vilket ger marginal."
+    expected = {"sakerhetsmarginal_pct": 0.562}
+    result = verify_grounding(text, expected)
+    assert "sakerhetsmarginal_pct" in result["matched"]
+    assert result["missing"] == []
+
+
+def test_verify_grounding_fraction_also_accepts_decimal_form():
+    text = "Säkerhetsmarginalen är 0,562 av volymen."
+    expected = {"sakerhetsmarginal_pct": 0.562}
+    result = verify_grounding(text, expected)
+    assert "sakerhetsmarginal_pct" in result["matched"]
+
+
+def test_verify_grounding_fraction_still_flags_wrong_value():
+    text = "Säkerhetsmarginalen är 80 %."
+    expected = {"sakerhetsmarginal_pct": 0.562}
+    result = verify_grounding(text, expected)
+    assert "sakerhetsmarginal_pct" in result["missing"]
 
 
 def test_llm_unavailable_error_is_exception():

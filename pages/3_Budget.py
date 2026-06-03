@@ -36,7 +36,10 @@ from utils.prompts import (
 )
 from utils.scenarios import generate_scenario
 from utils.ui import (
+    BUDGET_VS_RAKNING_HELP,
+    SCENARIO_DIFFICULTY_HELP,
     footer_note,
+    info_tooltip,
     inject_css,
     kpi_card,
     page_title,
@@ -145,6 +148,11 @@ st.html(
     pipeline_steps(["Resultatbudget", "Likviditetsbudget", "Balansbudget"])
 )
 
+# Hover tooltip clarifying budget (plan) vs. resultaträkning/balansräkning (utfall)
+st.html(
+    info_tooltip("Budget vs. resultaträkning/balansräkning – vad är skillnaden?", BUDGET_VS_RAKNING_HELP)
+)
+
 # ---------------------------------------------------------------------------
 # Scenario controls at top: LLM driven exempelföretag plus deterministic preset
 # ---------------------------------------------------------------------------
@@ -177,6 +185,7 @@ with bud_gen_cols[0]:
         _DIFFICULTY_OPTIONS,
         index=1,
         key="bud_scenario_difficulty",
+        help=SCENARIO_DIFFICULTY_HELP,
     )
 with bud_gen_cols[1]:
     st.write("")
@@ -798,23 +807,32 @@ with st.expander("Steg 3: Balansbudget", expanded=True):
                 ingaende_vals.append(0.0)
                 utgaende_vals.append(0.0)
 
+        # Horizontal bars keep the long Swedish post names on the y-axis where
+        # they have room to read. The previous vertical layout rotated them at
+        # -30 deg in a narrow column, so the labels collided with the legend
+        # below and the title above. orientation="h" removes the overlap.
         fig_balans = go.Figure()
         fig_balans.add_trace(go.Bar(
-            x=item_posts,
-            y=ingaende_vals,
+            y=item_posts,
+            x=ingaende_vals,
             name="Ingående balans",
+            orientation="h",
             marker_color=COLORS["primary_light"],
             opacity=0.8,
         ))
         fig_balans.add_trace(go.Bar(
-            x=item_posts,
-            y=utgaende_vals,
+            y=item_posts,
+            x=utgaende_vals,
             name="Utgående balans",
+            orientation="h",
             marker_color=COLORS["primary"],
             opacity=0.9,
         ))
         apply_layout(fig_balans, title="Ingående vs utgående balans", height=420)
-        fig_balans.update_layout(barmode="group", xaxis_tickangle=-30)
+        fig_balans.update_layout(barmode="group")
+        # autorange="reversed" lists Anläggningstillgångar at the top so the
+        # posts read top-to-bottom; automargin reserves room for long names.
+        fig_balans.update_yaxes(automargin=True, autorange="reversed")
         st.plotly_chart(fig_balans, use_container_width=True)
 
 # ===========================================================================

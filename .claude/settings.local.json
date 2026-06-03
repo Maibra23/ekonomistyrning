@@ -53,7 +53,13 @@
       "Read(//private/tmp/**)",
       "Bash(awk *)",
       "Bash(.venv/bin/python *)",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:8508/)"
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:8508/)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8765/)",
+      "mcp__plugin_playwright_playwright__browser_resize",
+      "mcp__plugin_playwright_playwright__browser_take_screenshot",
+      "Bash(pkill -f \"streamlit run streamlit_app.py\")",
+      "Bash(lsof -iTCP -sTCP:LISTEN)",
+      "Bash(.venv/bin/pip install *)"
     ]
   }
 }

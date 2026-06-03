@@ -39,7 +39,7 @@ from utils.prompts import (
 )
 from utils.scenarios import generate_scenario
 from utils.state_save import clear_state, load_state, save_state
-from utils.ui import footer_note, inject_css, kpi_card, page_title, render_kpi_row, render_session_cap_card, render_sidebar
+from utils.ui import SCENARIO_DIFFICULTY_HELP, footer_note, inject_css, kpi_card, page_title, render_kpi_row, render_session_cap_card, render_sidebar
 
 
 # Difficulty label to API code mapping used by the LLM scenario generator
@@ -284,6 +284,7 @@ with tab1:
             _DIFFICULTY_OPTIONS,
             index=1,
             key="inv_scenario_difficulty",
+            help=SCENARIO_DIFFICULTY_HELP,
         )
     with inv_gen_cols[1]:
         st.write("")

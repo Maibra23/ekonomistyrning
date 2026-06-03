@@ -12,6 +12,41 @@ from __future__ import annotations
 import streamlit as st
 
 # ---------------------------------------------------------------------------
+# App metadata (single source of truth)
+#
+# Version, last-updated date and the displayed LLM model name all live here so
+# the hero, sidebar and footer can never drift out of sync.
+# ---------------------------------------------------------------------------
+
+APP_VERSION = "0.2.0"
+APP_UPDATED = "2026-06-02"
+
+
+def model_display_name() -> str:
+    """Return the configured LLM model name without its provider prefix.
+
+    Reads the live config so the UI always reflects the model the code
+    actually uses, falling back to the package default. Example:
+    ``"Qwen/Qwen3-8B"`` becomes ``"Qwen3-8B"``.
+    """
+    model = ""
+    try:
+        from utils.llm import get_llm_config
+
+        model = get_llm_config().model or ""
+    except Exception:
+        model = ""
+    if not model:
+        try:
+            from utils.llm import DEFAULT_MODEL
+
+            model = DEFAULT_MODEL
+        except Exception:
+            model = "Qwen3-8B"
+    return model.split("/")[-1]
+
+
+# ---------------------------------------------------------------------------
 # Design tokens
 # ---------------------------------------------------------------------------
 
@@ -104,6 +139,36 @@ LABELS: dict[str, str] = {
 }
 
 # ---------------------------------------------------------------------------
+# Shared help / tooltip texts
+#
+# Kept here as single sources of truth so the same explanation appears
+# identically on every page that reuses the concept.
+# ---------------------------------------------------------------------------
+
+# Shown as the "?" tooltip next to every "Svårighetsgrad" selectbox that
+# drives the AI scenario generator (Kalkyl, Investering, Budget,
+# Standardkostnadsanalys). Explains that the scale is shared across modules.
+SCENARIO_DIFFICULTY_HELP: str = (
+    "Styr hur avancerat det AI-genererade exempelföretaget blir. "
+    "Lätt ger rena, runda tal som är lätta att följa, Medel liknar ett "
+    "vanligt företag och Svår lägger till mer realistiska siffror och fler "
+    "komplicerande faktorer. Samma skala används i alla moduler – välj en "
+    "lägre nivå när du lär dig en metod och en högre när du vill öva."
+)
+
+# Explains the difference between the three forward-looking budgets built on
+# the Budget page and the realized resultaträkning / balansräkning. Rendered
+# as a hover tooltip via info_tooltip() under the budget pipeline.
+BUDGET_VS_RAKNING_HELP: str = (
+    "Budget = en plan för framtiden. Resultatbudgeten visar planerat "
+    "resultat, likviditetsbudgeten planerade in- och utbetalningar och "
+    "balansbudgeten företagets planerade ställning vid årets slut. "
+    "Resultaträkning och balansräkning är samma uppställningar i bokslutet "
+    "men visar vad som faktiskt hände. Här bygger du budgetarna – utfallet "
+    "följs sedan upp i Standardkostnadsanalys."
+)
+
+# ---------------------------------------------------------------------------
 # Global CSS
 # ---------------------------------------------------------------------------
 
@@ -175,6 +240,12 @@ section[data-testid="stSidebar"] label {
     color: rgba(255,255,255,0.5) !important;
     font-size: 10.5px !important;
     font-weight: 600 !important;
+}
+/* The model selectbox sits on a white widget background; the global
+   near-white sidebar text rule would otherwise hide its value. Keep the
+   selected value and dropdown text dark and readable. */
+section[data-testid="stSidebar"] div[data-baseweb="select"] * {
+    color: %(text_primary)s !important;
 }
 button[data-testid="stDownloadButton"] {
     font-family: Inter, sans-serif;
@@ -434,6 +505,177 @@ div[data-testid="stSlider"] label {
     color: %(text_secondary)s;
     margin: 0;
     line-height: 1.5;
+}
+
+/* --- In-page section heading --- */
+.eks-section-heading {
+    margin: 20px 0 8px 0;
+}
+.eks-section-heading h2 {
+    font-family: Inter, sans-serif;
+    font-size: 20px;
+    font-weight: 700;
+    color: %(text_primary)s;
+    margin: 2px 0 0 0;
+}
+
+/* --- Module map (interconnected modules) --- */
+.eks-map {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    margin: 4px 0 18px 0;
+}
+.eks-map-node {
+    flex: 1 1 0;
+    min-width: 0;
+    background: %(card_bg)s;
+    border: 1px solid %(border)s;
+    border-top: 3px solid %(primary)s;
+    border-radius: 4px;
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+.eks-map-node:hover {
+    border-color: %(primary_light)s;
+    box-shadow: 0 2px 10px rgba(30,64,175,0.08);
+}
+.eks-map-role {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 9.5px;
+    font-weight: 500;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: %(primary_light)s;
+    display: block;
+    margin-bottom: 8px;
+}
+.eks-map-node h4 {
+    font-family: Inter, sans-serif;
+    /* Scale slightly with the card so long names like
+       "Standardkostnadsanalys" never overflow a narrow column. */
+    font-size: clamp(13px, 1vw, 14px);
+    font-weight: 700;
+    color: %(text_primary)s;
+    margin: 0 0 6px 0;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+    hyphens: auto;
+}
+.eks-map-tag {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 9.5px;
+    color: %(text_tertiary)s;
+    background: %(bg)s;
+    padding: 2px 7px;
+    border-radius: 3px;
+    align-self: flex-start;
+    margin-bottom: 10px;
+}
+.eks-map-node p {
+    font-family: Inter, sans-serif;
+    font-size: 12px;
+    line-height: 1.5;
+    color: %(text_secondary)s;
+    margin: 0;
+    overflow-wrap: anywhere;
+    hyphens: auto;
+}
+.eks-map-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: %(primary_light)s;
+    font-size: 17px;
+    padding: 0 7px;
+    flex: 0 0 auto;
+}
+.eks-map-thread {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: linear-gradient(90deg, rgba(30,64,175,0.07), rgba(59,130,246,0.02));
+    border: 1px dashed %(primary_light)s;
+    border-radius: 4px;
+    padding: 12px 18px;
+    margin-bottom: 24px;
+    font-family: Inter, sans-serif;
+    font-size: 13px;
+    color: %(text_secondary)s;
+    line-height: 1.5;
+}
+.eks-map-thread strong { color: %(text_primary)s; font-weight: 600; }
+.eks-map-thread .eks-map-thread-mark {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    color: %(primary_light)s;
+    border: 1px solid %(primary_light)s;
+    border-radius: 3px;
+    padding: 2px 7px;
+    flex: 0 0 auto;
+}
+/* Stack the map vertically on narrow screens; arrows point downward. */
+@media (max-width: 900px) {
+    .eks-map { flex-direction: column; }
+    .eks-map-arrow { transform: rotate(90deg); padding: 6px 0; }
+}
+
+/* --- Inline info tooltip (hover badge) --- */
+.eks-tip {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 20px 0;
+    font-family: Inter, sans-serif;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: %(text_secondary)s;
+    cursor: help;
+}
+.eks-tip-badge {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+    font-weight: 700;
+    color: %(primary)s;
+    background: %(bg)s;
+    border: 1px solid %(border)s;
+    border-radius: 999px;
+    width: 18px;
+    height: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+}
+.eks-tip-text {
+    visibility: hidden;
+    opacity: 0;
+    position: absolute;
+    top: calc(100%% + 8px);
+    left: 0;
+    z-index: 60;
+    width: 360px;
+    max-width: 80vw;
+    background: %(text_primary)s;
+    color: #FFFFFF;
+    font-size: 12.5px;
+    font-weight: 400;
+    line-height: 1.6;
+    padding: 12px 15px;
+    border-radius: 6px;
+    box-shadow: 0 8px 28px rgba(17,24,39,0.22);
+    transition: opacity 0.15s ease;
+    pointer-events: none;
+}
+.eks-tip:hover .eks-tip-text,
+.eks-tip:focus-within .eks-tip-text {
+    visibility: visible;
+    opacity: 1;
 }
 
 /* --- Summary callout --- */
@@ -708,6 +950,62 @@ def pipeline_steps(steps: list[str]) -> str:
     return f'<div class="eks-pipeline">{"".join(parts)}</div>'
 
 
+def section_heading(eyebrow: str, title: str) -> str:
+    """Render a lightweight in-page section heading (eyebrow + title).
+
+    Smaller than ``page_title``; used to introduce sections on the landing
+    page so they match the design system instead of raw Markdown headers.
+    """
+    return (
+        f'<div class="eks-section-heading">'
+        f'<div class="eks-eyebrow">{eyebrow}</div>'
+        f"<h2>{title}</h2>"
+        f"</div>"
+    )
+
+
+def module_map(nodes: list[dict[str, str]]) -> str:
+    """Render the modules as an interconnected flow of nodes.
+
+    Each node dict accepts ``role`` (short stage label), ``title``, ``tag``
+    (e.g. chapter reference) and ``desc``. Arrow connectors are inserted
+    between nodes to show the modules belong to one continuous workflow.
+    Nodes are not links; navigation happens through the sidebar.
+    """
+    parts: list[str] = []
+    for i, node in enumerate(nodes):
+        role = node.get("role", "")
+        tag = node.get("tag", "")
+        role_html = f'<span class="eks-map-role">{role}</span>' if role else ""
+        tag_html = f'<span class="eks-map-tag">{tag}</span>' if tag else ""
+        parts.append(
+            f'<div class="eks-map-node">'
+            f"{role_html}"
+            f'<h4>{node["title"]}</h4>'
+            f"{tag_html}"
+            f'<p>{node["desc"]}</p>'
+            f"</div>"
+        )
+        if i < len(nodes) - 1:
+            parts.append('<div class="eks-map-arrow">&#8594;</div>')
+    return f'<div class="eks-map">{"".join(parts)}</div>'
+
+
+def thread_band(mark: str, text: str) -> str:
+    """Render a full-width band that ties the modules together visually.
+
+    Used under the module map to highlight what every module shares (for
+    example the common LLM tutor). ``text`` may contain inline HTML such as
+    ``<strong>``.
+    """
+    return (
+        f'<div class="eks-map-thread">'
+        f'<span class="eks-map-thread-mark">{mark}</span>'
+        f"<span>{text}</span>"
+        f"</div>"
+    )
+
+
 def nav_card(title: str, description: str) -> str:
     """Module navigation card. Pair with st.page_link() for navigation."""
     return (
@@ -721,6 +1019,24 @@ def nav_card(title: str, description: str) -> str:
 def summary_box(text: str) -> str:
     """Highlighted contextual summary box with blue left border."""
     return f'<div class="eks-summary">{text}</div>'
+
+
+def info_tooltip(label: str, text: str) -> str:
+    """Inline label with a "?" badge that reveals ``text`` on hover/focus.
+
+    A lightweight, design-system-styled alternative to Streamlit's widget
+    ``help`` icon for explaining a concept that is not tied to a single
+    widget (e.g. the difference between budget and bokslut). ``tabindex``
+    makes the badge keyboard focusable so the tooltip is also reachable
+    without a mouse.
+    """
+    return (
+        f'<span class="eks-tip" tabindex="0">'
+        f'<span class="eks-tip-badge">?</span>'
+        f"<span>{label}</span>"
+        f'<span class="eks-tip-text">{text}</span>'
+        f"</span>"
+    )
 
 
 def footer_note(version: str = "1.0", updated: str = "") -> str:
@@ -814,14 +1130,36 @@ def render_sidebar(active_page: str) -> None:
             f"</div>"
         )
 
+        # Model selector: the app runs on Qwen3-8B (standard) or Qwen3-14B.
+        try:
+            from utils.llm import (
+                ALTERNATIVE_MODEL,
+                DEFAULT_MODEL,
+                MODEL_SESSION_KEY,
+                SUPPORTED_MODELS,
+            )
+
+            _model_labels = {
+                DEFAULT_MODEL: "Qwen3-8B (standard)",
+                ALTERNATIVE_MODEL: "Qwen3-14B (alternativ)",
+            }
+            st.selectbox(
+                "LLM-modell",
+                options=list(SUPPORTED_MODELS),
+                format_func=lambda m: _model_labels.get(m, m.split("/")[-1]),
+                key=MODEL_SESSION_KEY,
+            )
+        except Exception:
+            pass
+
         st.html('<span class="eks-sidebar-section-label">INFORMATION</span>')
         st.page_link("streamlit_app.py", label="Om appen")
 
         llm_calls = st.session_state.get("llm_call_count", 0)
         st.html(
             f'<div class="eks-sidebar-footer">'
-            f"v0.2.0 | 2026-05-07<br>"
-            f"Qwen3-8B via HF Inference Providers<br>"
+            f"v{APP_VERSION} | uppdaterad {APP_UPDATED}<br>"
+            f"{model_display_name()} via HF Inference Providers<br>"
             f"LLM-anrop: {llm_calls} / 50<br>"
             f'<span style="font-size:9px;opacity:0.7;">'
             f"Prompts behandlas av Hugging Face"

@@ -7,8 +7,6 @@ from __future__ import annotations
 
 import streamlit as st
 
-APP_VERSION = "0.2.0"
-
 st.set_page_config(
     page_title="Ekonomistyrning Sandbox",
     page_icon=None,
@@ -18,15 +16,19 @@ st.set_page_config(
 )
 
 from utils.ui import (  # noqa: E402
+    APP_UPDATED,
+    APP_VERSION,
     footer_note,
     hero,
     inject_css,
     llm_badge,
-    nav_card,
+    module_map,
     pipeline_steps,
     render_sidebar,
+    section_heading,
     stat_strip,
     summary_box,
+    thread_band,
 )
 
 inject_css()
@@ -45,11 +47,12 @@ def render_landing() -> None:
     st.html(
         hero(
             eyebrow="EKONOMISTYRNING",
-            title="Lär dig räkna med interaktiva kalkyler",
+            title="Räkna, bedöm, planera och följ upp",
             lead=(
-                "Öva självkostnadskalkyl, investeringsbedömning, budgetering och "
-                "avvikelseanalys direkt i webbläsaren. En LLM-tutor (Qwen3-14B) "
-                "förklarar varje resultat grundat i dina egna siffror."
+                "Fem moduler tar dig genom ekonomistyrningens kretslopp, från "
+                "produktkalkyl till uppföljning av avvikelser. Mata in egna "
+                "siffror, se diagrammen växa fram och låt en svensk LLM-tutor "
+                "förklara varje resultat steg för steg, grundat i dina egna tal."
             ),
         )
     )
@@ -57,15 +60,91 @@ def render_landing() -> None:
     st.html(
         stat_strip([
             ("5", "moduler"),
-            ("3", "kalkyleringsmetoder"),
+            ("1", "styrcykel"),
             ("10 000", "MC-iterationer"),
-            ("100%", "Svenska"),
+            ("100%", "svenska"),
         ])
     )
 
     online = _llm_online()
     col_badge, _ = st.columns([1, 5])
     col_badge.html(llm_badge(online))
+
+    # --- Interconnected module map ---------------------------------------
+    st.html(section_heading("EKONOMISTYRNINGENS KRETSLOPP", "Så hänger modulerna ihop"))
+    st.html(
+        summary_box(
+            "Modulerna bildar en sammanhängande arbetsgång. Du räknar fram "
+            "kostnader, bedömer investeringar, planerar i budget och följer upp "
+            "utfallet med avvikelseanalys. Slutsatserna återförs till nästa "
+            "budget, så kretsloppet börjar om. Öppna en modul i menyn till "
+            "vänster när du vill börja."
+        )
+    )
+    st.html(
+        module_map([
+            {
+                "role": "Beräkna",
+                "title": "Kalkylering",
+                "tag": "Kap. 4, 6–8",
+                "desc": "Självkostnads-, bidrags- och ABC-kalkyl. Ta reda på vad "
+                "en produkt faktiskt kostar.",
+            },
+            {
+                "role": "Bedöm",
+                "title": "Investering",
+                "tag": "Kap. 10",
+                "desc": "NPV, IRR, payback och annuitet, plus känslighet och "
+                "Monte Carlo för långsiktiga beslut.",
+            },
+            {
+                "role": "Planera",
+                "title": "Budget",
+                "tag": "Kap. 13–15",
+                "desc": "Resultat-, likviditets- och balansbudget som länkas "
+                "automatiskt till en helhet.",
+            },
+            {
+                "role": "Följ upp",
+                "title": "Standardkostnadsanalys",
+                "tag": "Kap. 17",
+                "desc": "Dela upp avvikelser i volym, pris och effektivitet och "
+                "jämför utfallet mot planen.",
+            },
+            {
+                "role": "Pröva",
+                "title": "Kunskapstest",
+                "tag": "Kap. 4–17",
+                "desc": "Scenariofrågor som verifieras mot kalkylatorn så att du "
+                "kan testa det du lärt dig.",
+            },
+        ])
+    )
+    st.html(
+        thread_band(
+            "LLM-TUTOR",
+            "En gemensam tutor löper genom alla moduler. Den förklarar, vägleder "
+            "steg för steg och svarar på frågor, alltid grundat i dina egna siffror.",
+        )
+    )
+
+    # --- How each module works ------------------------------------------
+    st.html(section_heading("ARBETSGÅNG", "Så arbetar du i varje modul"))
+    st.html(
+        pipeline_steps([
+            "Välj modul",
+            "Ange data",
+            "Beräkna och tolka",
+            "Exportera",
+        ])
+    )
+    st.html(
+        summary_box(
+            "Varje modul innehåller en deterministisk kalkylator, interaktiva "
+            "Plotly-diagram, en LLM-genererad förklaring med steg-för-steg-guide "
+            "och ett Q&amp;A-chattfönster. Excel-export finns i alla moduler."
+        )
+    )
 
     with st.expander("Om appen", expanded=False):
         st.markdown(
@@ -84,69 +163,7 @@ def render_landing() -> None:
             """
         )
 
-    st.html(
-        pipeline_steps([
-            "Välj modul",
-            "Ange data",
-            "Beräkna och tolka",
-            "Exportera",
-        ])
-    )
-
-    st.html(
-        summary_box(
-            "Varje modul innehåller en deterministisk kalkylator, interaktiva "
-            "Plotly-diagram, en LLM-genererad förklaring med steg-för-steg-guide "
-            "och ett Q&amp;A-chattfönster. Excel-export finns i alla moduler."
-        )
-    )
-
-    st.markdown("### Moduler")
-
-    row1 = st.columns(3)
-    row2 = st.columns(2)
-
-    with row1[0]:
-        st.html(nav_card(
-            "Kalkylering",
-            "Självkostnadskalkyl via pålägg, bidragskalkyl och ABC-kalkyl "
-            "med waterfall-diagram. Kapitel 4, 6, 7, 8.",
-        ))
-        st.page_link("pages/1_Kalkyl.py", label="Öppna modul →")
-
-    with row1[1]:
-        st.html(nav_card(
-            "Investering",
-            "NPV, IRR, payback, annuitet, känslighetsanalys och Monte Carlo "
-            "med 10 000 iterationer. Kapitel 10.",
-        ))
-        st.page_link("pages/2_Investering.py", label="Öppna modul →")
-
-    with row1[2]:
-        st.html(nav_card(
-            "Budget",
-            "Resultatbudget, likviditetsbudget och balansbudget med automatisk "
-            "länkning och LLM-konsistensanalys. Kapitel 13, 14, 15.",
-        ))
-        st.page_link("pages/3_Budget.py", label="Öppna modul →")
-
-    with row2[0]:
-        st.html(nav_card(
-            "Standardkostnadsanalys",
-            "Dekomponera avvikelser i volym, pris och effektivitet. "
-            "LLM föreslår sannolika orsaker. Kapitel 17.",
-        ))
-        st.page_link("pages/4_Standardkostnadsanalys.py", label="Öppna modul →")
-
-    with row2[1]:
-        st.html(nav_card(
-            "Kunskapstest",
-            "LLM-genererade scenariofrågor per kapitelkluster. Numeriska svar "
-            "verifieras mot kalkylator. Kapitel 4 till 17.",
-        ))
-        st.page_link("pages/5_Kunskapstest.py", label="Öppna modul →")
-
-    st.html(footer_note(version=APP_VERSION))
+    st.html(footer_note(version=APP_VERSION, updated=APP_UPDATED))
 
 
 render_landing()
