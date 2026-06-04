@@ -20,10 +20,8 @@ from utils.export import export_to_excel
 from utils.formatting import format_sek
 from utils.grounding_ui import show_grounding_warning
 from utils.llm import (
-    LLMSessionCapError,
     LLMUnavailableError,
     cached_chat,
-    get_session_calls_remaining,
     is_llm_available,
     verify_grounding,
 )
@@ -34,6 +32,7 @@ from utils.prompts import (
     FALLBACK_TEMPLATES,
 )
 from utils.scenarios import generate_scenario
+from utils.tutor import render_tutor_explanation
 from utils.ui import (
     BUDGET_VS_RAKNING_HELP,
     SCENARIO_DIFFICULTY_HELP,
@@ -44,7 +43,6 @@ from utils.ui import (
     page_title,
     pipeline_steps,
     render_kpi_row,
-    render_session_cap_card,
     render_sidebar,
 )
 
@@ -864,51 +862,41 @@ if True:
         "differens": difference,
     }
 
-    try:
-        if not is_llm_available():
-            raise LLMUnavailableError("Ingen token")
-        sys_p, usr_p = build_budget_consistency_prompt(
+    _budget_fallback_inputs = {
+        "forsaljning": forsaljning,
+        "arets_resultat": arets_resultat,
+    }
+    _budget_fallback_outputs = {
+        "likvida_medel_ub": likvida_ub,
+        "summa_tillgangar_ub": summa_tillgangar_ub,
+        "balanserad": is_balanced,
+    }
+    render_tutor_explanation(
+        state_key="budget_consistency_llm",
+        inputs={
+            **resultat_summary,
+            **likviditet_summary,
+            **balans_summary_dict,
+            "is_balanced": is_balanced,
+        },
+        outputs={"difference": difference},
+        build_prompt=lambda: build_budget_consistency_prompt(
             resultat_summary, likviditet_summary, balans_summary_dict,
             is_balanced, difference,
-        )
-        with st.spinner("Analyserar budgetkonsistens..."):
-            raw = cached_chat(sys_p, usr_p)
-        result = humanize(raw, required_sections=["Antagande", "Beräkning", "Tolkning", "Källor och förbehåll"])
-        st.markdown(result.text)
-
-        if result.tells_found:
-            st.caption(f"Humanizer rensade: {', '.join(result.tells_found)}")
-
-        # Grounding
-        expected_nums = {
+        ),
+        fallback_text=lambda: FALLBACK_TEMPLATES["budget"](
+            "budget", _budget_fallback_inputs, _budget_fallback_outputs
+        ),
+        required_sections=["Antagande", "Beräkning", "Tolkning", "Källor och förbehåll"],
+        expected_numbers={
             "arets_resultat": arets_resultat,
             "forandring_likvida_medel": forandring,
             "summa_tillgangar": summa_tillgangar_ub,
             "balansavvikelse": difference,
-        }
-        grounding = verify_grounding(result.text, expected_nums)
-        if grounding["missing"]:
-            st.html(
-                '<div class="eks-grounding-warn">'
-                "OBS: Tutorn kan ha refererat fel siffra, verifiera mot beräkningen ovan."
-                "</div>"
-            )
-        show_grounding_warning(grounding)
-    except LLMSessionCapError:
-        render_session_cap_card()
-    except LLMUnavailableError:
-        st.html('<div class="eks-offline-badge">LLM offline, visar grundförklaring</div>')
-        budget_inputs = {
-            "forsaljning": forsaljning,
-            "arets_resultat": arets_resultat,
-        }
-        budget_outputs = {
-            "likvida_medel_ub": likvida_ub,
-            "summa_tillgangar_ub": summa_tillgangar_ub,
-            "balanserad": is_balanced,
-        }
-        fallback = FALLBACK_TEMPLATES["budget"]("budget", budget_inputs, budget_outputs)
-        st.markdown(fallback)
+        },
+        heading=None,
+        spinner_label="Analyserar budgetkonsistens...",
+    )
 
 # Q&A chat
 if "budget_chat_history" not in st.session_state:

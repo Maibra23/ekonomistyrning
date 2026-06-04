@@ -359,3 +359,83 @@ def test_quiz_quality_check_embeds_question_payload():
         {"fraga": "Specifik testfraga", "ratt_svar": 42}
     )
     assert "Specifik testfraga" in up
+
+
+# ---------------------------------------------------------------------------
+# Combined quiz prompt + content adherence helpers
+# ---------------------------------------------------------------------------
+
+def test_build_quiz_combined_prompt_flerval_contains_schema_and_quality():
+    from utils.prompts import build_quiz_combined_prompt
+
+    sp, up = build_quiz_combined_prompt("kalkyl", "medel", "flerval")
+    assert "JSON" in sp
+    assert "kvalitet" in sp.lower() or "kvalitet" in up.lower()
+    assert "pedagogiskt_varde" in sp + up
+    assert "tydlighet" in sp + up
+    assert "realism" in sp + up
+    assert "kapitel_referens" in sp + up
+
+
+def test_build_quiz_combined_prompt_numerisk_mentions_enhet():
+    from utils.prompts import build_quiz_combined_prompt
+
+    sp, up = build_quiz_combined_prompt("investering", "svar", "numerisk")
+    combined = (sp + up).lower()
+    assert "enhet" in combined
+    assert "numerisk" in combined or "ratt_svar" in combined
+
+
+def test_build_quiz_combined_prompt_includes_cluster_chapters():
+    from utils.prompts import build_quiz_combined_prompt
+
+    for cluster in ("kalkyl", "investering", "budget", "standardkost"):
+        sp, _ = build_quiz_combined_prompt(cluster, "medel", "flerval")
+        assert "kapitel" in sp.lower()
+
+
+def test_validate_kapitel_referens_in_scope():
+    from utils.prompts import validate_kapitel_referens
+
+    assert validate_kapitel_referens("kapitel 6", "kalkyl")
+    assert validate_kapitel_referens("kapitel 10.4", "investering")
+    assert validate_kapitel_referens("kap. 13", "budget")
+    assert validate_kapitel_referens("17.2", "standardkost")
+
+
+def test_validate_kapitel_referens_out_of_scope():
+    from utils.prompts import validate_kapitel_referens
+
+    assert not validate_kapitel_referens("kapitel 10", "kalkyl")
+    assert not validate_kapitel_referens("kapitel 9", "investering")
+    assert not validate_kapitel_referens(None, "budget")
+    assert not validate_kapitel_referens("", "standardkost")
+    assert not validate_kapitel_referens("no number here", "kalkyl")
+
+
+def test_contains_forbidden_terms_detects_off_topic():
+    from utils.prompts import contains_forbidden_terms
+
+    assert contains_forbidden_terms(
+        "Vi använder Black-Scholes för att värdera optionen.", "investering"
+    )
+    assert contains_forbidden_terms(
+        "Beräkna med WACC och CAPM", "investering"
+    )
+
+
+def test_contains_forbidden_terms_passes_in_scope_text():
+    from utils.prompts import contains_forbidden_terms
+
+    assert not contains_forbidden_terms(
+        "Beräkna nuvärdet med kalkylräntan 10 procent.", "investering"
+    )
+    assert not contains_forbidden_terms(
+        "Räkna ut självkostnaden med pålägg.", "kalkyl"
+    )
+
+
+def test_system_prompt_base_mentions_kursavgransning():
+    """The strengthened textbook scope reminder must be in the base prompt."""
+    assert "KURSAVGRÄNSNING" in SYSTEM_PROMPT_BASE or "kursavgränsning" in SYSTEM_PROMPT_BASE.lower()
+    assert "Andersson" in SYSTEM_PROMPT_BASE

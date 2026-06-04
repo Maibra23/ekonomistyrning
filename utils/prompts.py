@@ -121,6 +121,9 @@ ABSOLUTA REGLER
 
 LÄNGD
 200 till 600 ord för kompletta förklaringar. Kortare för Q&A svar. Studenten värdesätter att du säger det viktiga och slutar.
+
+KURSAVGRÄNSNING
+Innehållet måste ligga inom Andersson, Ekonomistyrning: beslut och handling. Använd inte begrepp eller metoder som inte finns i boken (till exempel WACC, Black-Scholes, EVA, balanserade styrkort som beslutsverktyg, ROIC, EBITDA-multiplar). Om frågan ligger utanför kursboken, säg det och hänvisa till relevant kapitel istället för att gissa.
 """ + "\n" + _ORDLISTA_BLOCK + "\n"
 
 
@@ -814,6 +817,169 @@ def build_quiz_quality_check_prompt(question_json: dict) -> tuple[str, str]:
         "Returnera GILTIG JSON enligt schemat i systemprompten. Fältet "
         "total ska vara summan av de tre delpoängen. Motiveringen ska "
         "vara EN mening på svenska som förklarar din bedömning."
+    )
+    return system_prompt, user_prompt
+
+
+# ---------------------------------------------------------------------------
+# Quiz content adherence: cluster -> in-scope chapter range, off-topic terms
+# ---------------------------------------------------------------------------
+
+# Inclusive chapter ranges per cluster, used by ``validate_kapitel_referens``.
+CLUSTER_KAPITEL_RANGE: dict[str, tuple[int, int]] = {
+    "kalkyl": (4, 8),
+    "investering": (10, 10),
+    "budget": (13, 15),
+    "standardkost": (17, 17),
+}
+
+
+# Terms that signal the model wandered outside Andersson's textbook. The
+# guard is deliberately small and conservative: only concepts that do not
+# appear in the book under any reasonable reading.
+FORBIDDEN_TERMS_BY_CLUSTER: dict[str, tuple[str, ...]] = {
+    "kalkyl": (
+        "black-scholes", "black scholes", "wacc", "eva ",
+        "roic", "ebitda-multipel", "lean six sigma",
+    ),
+    "investering": (
+        "black-scholes", "black scholes", "wacc",
+        "capm", "roic", "ebitda-multipel",
+    ),
+    "budget": (
+        "black-scholes", "wacc", "eva ", "roic", "capm",
+    ),
+    "standardkost": (
+        "black-scholes", "wacc", "eva ", "roic", "capm",
+        "lean six sigma",
+    ),
+}
+
+
+def validate_kapitel_referens(ref: str | None, cluster: str) -> bool:
+    """Return True iff ``ref`` cites a chapter inside the cluster scope.
+
+    Accepts strings like "kapitel 6", "Kapitel 10.4", "kap. 13", "17.2".
+    The first integer in the string is the chapter number and must fall
+    within ``CLUSTER_KAPITEL_RANGE[cluster]`` (inclusive). Empty or
+    unparseable references return False so the generator can retry.
+    """
+    if not ref or not isinstance(ref, str):
+        return False
+    lo, hi = CLUSTER_KAPITEL_RANGE.get(cluster, (1, 17))
+    # Pull the first integer in the string (handles "kap. 10.4", "17", etc.)
+    import re
+
+    match = re.search(r"\d+", ref)
+    if not match:
+        return False
+    try:
+        chapter = int(match.group(0))
+    except ValueError:
+        return False
+    return lo <= chapter <= hi
+
+
+def contains_forbidden_terms(text: str, cluster: str) -> list[str]:
+    """Return a list of forbidden terms found in ``text`` for ``cluster``.
+
+    Empty list means the text is in scope. The check is case-insensitive
+    and does not require word boundaries: substrings like "WACC" inside a
+    longer word would be unusual in Swedish text so this trade-off favors
+    precision in practice.
+    """
+    if not text:
+        return []
+    lower = text.lower()
+    return [t for t in FORBIDDEN_TERMS_BY_CLUSTER.get(cluster, ()) if t in lower]
+
+
+def build_quiz_combined_prompt(
+    kapitelkluster: str, difficulty: str, question_type: str
+) -> tuple[str, str]:
+    """Build the single-call quiz prompt that returns question + self-rating.
+
+    Replaces the previous two-step pipeline (generate, then re-rate) with
+    one structured-JSON envelope to roughly halve the token cost per quiz
+    item. The schema adds an optional ``enhet`` field used by the UI to
+    show the expected unit ("kr", "%", "styck", ...).
+
+    Args:
+        kapitelkluster: One of "kalkyl", "investering", "budget", "standardkost".
+        difficulty: One of "latt", "medel", "svar".
+        question_type: One of "flerval" or "numerisk".
+
+    Returns:
+        Tuple (system_prompt, user_prompt) ready for cached_chat.
+    """
+    cluster_kapitel = {
+        "kalkyl": "kapitel 4 till 8",
+        "investering": "kapitel 10",
+        "budget": "kapitel 13 till 15",
+        "standardkost": "kapitel 17",
+    }
+    kapitel_scope = cluster_kapitel.get(kapitelkluster, "kapitel 1 till 17")
+
+    difficulty_label = {"latt": "Lätt", "medel": "Medel", "svar": "Svår"}.get(
+        difficulty, "Medel"
+    )
+
+    schema_example = (
+        "{\n"
+        '  "fraga": "...",\n'
+        '  "scenario": "Beskrivning av fiktivt svenskt företag",\n'
+        '  "given_data": { "namn1": värde1, "namn2": värde2 },\n'
+        '  "alternativ": ["A", "B", "C", "D"],\n'
+        '  "ratt_svar": 0,\n'
+        '  "enhet": "kr",\n'
+        '  "berakning_steg": "Hur svaret härleds steg för steg",\n'
+        '  "forklaring": "Förklaring i hybridregister",\n'
+        '  "kapitel_referens": "kapitel X.Y",\n'
+        '  "kvalitet": {\n'
+        '    "pedagogiskt_varde": <heltal 1-5>,\n'
+        '    "tydlighet": <heltal 1-5>,\n'
+        '    "realism": <heltal 1-5>,\n'
+        '    "motivering": "<en kort mening>"\n'
+        "  }\n"
+        "}"
+    )
+
+    if question_type == "numerisk":
+        schema_note = (
+            'För numerisk fråga: "alternativ" ska vara tom lista, "ratt_svar" '
+            "ska vara ett tal (numeriskt värde, inte sträng). \"given_data\" "
+            "måste innehålla alla siffror som behövs för att verifiera svaret "
+            "med en kalkylator. Fältet \"enhet\" ska beskriva svarets enhet, "
+            'till exempel "kr", "%", "styck", "år".'
+        )
+    else:
+        schema_note = (
+            'För flerval: "alternativ" ska ha exakt 4 valmöjligheter, "ratt_svar" '
+            "ska vara index (0 till 3). Distraktorer ska vara plausibla, inte "
+            "uppenbart felaktiga. \"enhet\" kan utelämnas eller vara tom sträng "
+            "för rena begreppsfrågor."
+        )
+
+    extra_rules = (
+        "\nMODULSPECIFIKT\n"
+        f"Du genererar EN tentamenstil fråga i {kapitelkluster} ({kapitel_scope}) "
+        f"på svårighetsgrad {difficulty_label}, typ {question_type}. "
+        f"Använd ett fiktivt svenskt företag med realistiska siffror. "
+        f"Innehållet MÅSTE ligga inom Andersson, Ekonomistyrning, {kapitel_scope}. "
+        f"Fältet kapitel_referens är obligatoriskt och MÅSTE peka på ett kapitel "
+        f"inom {kapitel_scope}, formaterat \"kapitel X\" eller \"kapitel X.Y\". "
+        "Bedöm samtidigt frågans pedagogiska kvalitet på tre dimensioner "
+        "(pedagogiskt_varde, tydlighet, realism), heltal 1-5 vardera, i fältet "
+        "kvalitet. "
+        "Svara ENDAST med giltig JSON enligt schemat. Ingen text före eller efter."
+    )
+    system_prompt = SYSTEM_PROMPT_BASE + extra_rules
+
+    user_prompt = (
+        f"Generera en unik fråga.\n\n"
+        f"Schema:\n{schema_example}\n\n"
+        f"Anvisning: {schema_note}\n\n"
+        f"Producera nu JSON för en fråga och dess självvärdering."
     )
     return system_prompt, user_prompt
 

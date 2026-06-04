@@ -36,3 +36,6 @@ tests/output/
 *.xlsx
 !data/*.xlsx
 tests/eval_results_*.json
+
+# Claude harness scratch
+.claude-tmp/

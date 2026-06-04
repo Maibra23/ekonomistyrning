@@ -24,10 +24,8 @@ from utils.investering import (
 )
 from utils.grounding_ui import show_grounding_warning
 from utils.llm import (
-    LLMSessionCapError,
     LLMUnavailableError,
     cached_chat,
-    get_session_calls_remaining,
     is_llm_available,
     verify_grounding,
 )
@@ -38,7 +36,8 @@ from utils.prompts import (
 )
 from utils.scenarios import generate_scenario
 from utils.state_save import clear_state, load_state, save_state
-from utils.ui import SCENARIO_DIFFICULTY_HELP, footer_note, inject_css, kpi_card, page_title, render_kpi_row, render_session_cap_card, render_sidebar
+from utils.tutor import render_tutor_explanation
+from utils.ui import SCENARIO_DIFFICULTY_HELP, footer_note, inject_css, kpi_card, page_title, render_kpi_row, render_sidebar
 
 
 # Difficulty label to API code mapping used by the LLM scenario generator
@@ -153,36 +152,24 @@ def _render_investering_llm(
     outputs: dict,
     tab_key: str,
 ):
-    """Render LLM explanation and Q&A for an investering tab."""
-    st.markdown("### Tutor förklaring")
-
-    try:
-        if not is_llm_available():
-            raise LLMUnavailableError("Ingen token")
-        sys_p, usr_p = build_investering_explanation_prompt(method, inputs, outputs)
-        with st.spinner("Genererar förklaring..."):
-            raw = cached_chat(sys_p, usr_p)
-        result = humanize(raw, required_sections=["Antagande", "Berakning", "Tolkning", "Kallor och forbehall"])
-        st.markdown(result.text)
-
-        # Grounding verification
-        expected = {k: v for k, v in outputs.items() if isinstance(v, (int, float)) and v is not None}
-        if expected:
-            grounding = verify_grounding(result.text, expected)
-            if grounding["missing"]:
-                st.html(
-                    '<div class="eks-grounding-warn">'
-                    "OBS: Tutorn kan ha refererat fel siffra, verifiera mot beräkningen ovan."
-                    "</div>"
-                )
-            show_grounding_warning(grounding)
-    except LLMSessionCapError:
-        render_session_cap_card()
-        return
-    except LLMUnavailableError:
-        st.html('<div class="eks-offline-badge">LLM offline, visar grundförklaring</div>')
-        fallback = FALLBACK_TEMPLATES["investering"](method, inputs, outputs)
-        st.markdown(fallback)
+    """Render on-demand LLM explanation and Q&A for an investering tab."""
+    expected = {
+        k: v for k, v in outputs.items()
+        if isinstance(v, (int, float)) and v is not None
+    }
+    render_tutor_explanation(
+        state_key=f"{tab_key}_llm",
+        inputs=inputs,
+        outputs=outputs,
+        build_prompt=lambda: build_investering_explanation_prompt(
+            method, inputs, outputs
+        ),
+        fallback_text=lambda: FALLBACK_TEMPLATES["investering"](
+            method, inputs, outputs
+        ),
+        required_sections=["Antagande", "Berakning", "Tolkning", "Kallor och forbehall"],
+        expected_numbers=expected or None,
+    )
 
     # Q&A chat (shared across all tabs on one page)
     chat_key = "inv_chat_history"

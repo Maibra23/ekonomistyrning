@@ -17,12 +17,8 @@ from utils.humanizer import humanize
 from utils.kalkyl import abc_calc, contribution_calc, self_cost_palagg
 from utils.grounding_ui import show_grounding_warning
 from utils.llm import (
-    LLMClient,
-    LLMSessionCapError,
     LLMUnavailableError,
     cached_chat,
-    get_llm_config,
-    get_session_calls_remaining,
     is_llm_available,
     verify_grounding,
 )
@@ -34,6 +30,11 @@ from utils.prompts import (
 )
 from utils.scenarios import generate_scenario
 from utils.state_save import clear_state, load_state, save_state
+from utils.tutor import (
+    get_cached_tutor_text,
+    render_step_guide,
+    render_tutor_explanation,
+)
 from utils.ui import (
     SCENARIO_DIFFICULTY_HELP,
     footer_note,
@@ -41,7 +42,6 @@ from utils.ui import (
     kpi_card,
     page_title,
     render_kpi_row,
-    render_session_cap_card,
     render_sidebar,
 )
 
@@ -75,73 +75,44 @@ def _render_llm_section(
     tab_key: str,
     scenario_name: str | None = None,
 ):
-    """Render LLM tutor explanation, step guide, and Q&A chat for a kalkyl tab."""
+    """Render LLM tutor explanation, step guide, and Q&A chat for a kalkyl tab.
 
-    # --- Auto explanation ---
-    st.markdown("### Tutor förklaring")
+    The tutor explanation and step guide are on-demand: they only run when
+    the user presses a button. Generated text is cached in session state
+    and re-rendered on every rerun until the inputs change.
+    """
+    expected_numbers = {
+        k: v for k, v in outputs.items() if isinstance(v, (int, float))
+    }
 
-    try:
-        if not is_llm_available():
-            raise LLMUnavailableError("Ingen token")
-
-        sys_p, usr_p = build_kalkyl_explanation_prompt(
+    render_tutor_explanation(
+        state_key=f"{tab_key}_llm",
+        inputs=inputs,
+        outputs=outputs,
+        build_prompt=lambda: build_kalkyl_explanation_prompt(
             calc_type, inputs, outputs, scenario_name
-        )
+        ),
+        fallback_text=lambda: FALLBACK_TEMPLATES["kalkyl"](
+            calc_type, inputs, outputs
+        ),
+        required_sections=["Antagande", "Berakning", "Tolkning", "Kallor och forbehall"],
+        expected_numbers=expected_numbers or None,
+    )
 
-        # Use cached_chat for auto explanation
-        with st.spinner("Genererar förklaring..."):
-            raw_response = cached_chat(sys_p, usr_p)
-
-        result = humanize(
-            raw_response,
-            required_sections=["Antagande", "Berakning", "Tolkning", "Kallor och forbehall"],
-        )
-        st.markdown(result.text)
-
-        if result.tells_found:
-            st.caption(f"Humanizer rensade: {', '.join(result.tells_found)}")
-
-        # Grounding verification
-        expected = {k: v for k, v in outputs.items() if isinstance(v, (int, float))}
-        if expected:
-            grounding = verify_grounding(result.text, expected)
-            if grounding["missing"]:
-                st.html(
-                    '<div class="eks-grounding-warn">'
-                    "OBS: Tutorn kan ha refererat fel siffra, verifiera mot beräkningen ovan."
-                    "</div>"
-                )
-            show_grounding_warning(grounding)
-
-        # Store for Excel export
-        st.session_state[f"{tab_key}_llm_text"] = result.text
-
-    except LLMSessionCapError:
-        render_session_cap_card()
-        return
-    except LLMUnavailableError:
-        st.html(
-            '<div class="eks-offline-badge">LLM offline, visar grundförklaring</div>'
-        )
-        fallback = FALLBACK_TEMPLATES["kalkyl"](calc_type, inputs, outputs)
-        st.markdown(fallback)
-        st.session_state[f"{tab_key}_llm_text"] = fallback
+    # Sync to legacy key for Excel export compatibility
+    _cached = get_cached_tutor_text(f"{tab_key}_llm")
+    if _cached is not None:
+        st.session_state[f"{tab_key}_llm_text"] = _cached
 
     # --- Step-by-step guide ---
-    if st.button("Visa steg för steg guide", key=f"{tab_key}_step_btn"):
-        try:
-            if not is_llm_available():
-                raise LLMUnavailableError("Ingen token")
-            sys_p, usr_p = build_kalkyl_step_guide_prompt(calc_type, inputs, outputs)
-            with st.spinner("Genererar steg-för-steg guide..."):
-                raw = cached_chat(sys_p, usr_p)
-            result = humanize(raw)
-            with st.expander("Steg för steg guide", expanded=True):
-                st.markdown(result.text)
-        except LLMUnavailableError:
-            st.info(
-                "LLM ej tillgänglig. Steg-för-steg guide kräver aktiv LLM-anslutning."
-            )
+    render_step_guide(
+        state_key=f"{tab_key}_step_guide",
+        inputs=inputs,
+        outputs=outputs,
+        build_prompt=lambda: build_kalkyl_step_guide_prompt(
+            calc_type, inputs, outputs
+        ),
+    )
 
     # --- Q&A chat ---
     chat_key = f"{tab_key}_chat_history"
