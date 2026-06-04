@@ -59,7 +59,11 @@
       "mcp__plugin_playwright_playwright__browser_take_screenshot",
       "Bash(pkill -f \"streamlit run streamlit_app.py\")",
       "Bash(lsof -iTCP -sTCP:LISTEN)",
-      "Bash(.venv/bin/pip install *)"
+      "Bash(.venv/bin/pip install *)",
+      "Bash(sed -n '495,506p' pages/3_Budget.py)",
+      "Bash(sed -n '706,723p' pages/3_Budget.py)",
+      "Bash(sed -n '1,25p' docs/ROADMAP.md)",
+      "Bash(sed -n '1,18p' docs/LIMITATIONS.md)"
     ]
   }
 }

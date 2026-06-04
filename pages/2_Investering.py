@@ -28,7 +28,6 @@ from utils.llm import (
     LLMUnavailableError,
     cached_chat,
     get_session_calls_remaining,
-    increment_session_calls,
     is_llm_available,
     verify_grounding,
 )
@@ -163,7 +162,6 @@ def _render_investering_llm(
         sys_p, usr_p = build_investering_explanation_prompt(method, inputs, outputs)
         with st.spinner("Genererar förklaring..."):
             raw = cached_chat(sys_p, usr_p)
-            increment_session_calls()
         result = humanize(raw, required_sections=["Antagande", "Berakning", "Tolkning", "Kallor och forbehall"])
         st.markdown(result.text)
 
@@ -210,7 +208,6 @@ def _render_investering_llm(
             with st.chat_message("assistant"):
                 with st.spinner("Tanker..."):
                     raw = cached_chat(sys_p, usr_p)
-                    increment_session_calls()
                 result = humanize(raw)
                 st.markdown(result.text)
                 expected = {k: v for k, v in outputs.items() if isinstance(v, (int, float)) and v is not None}
@@ -297,8 +294,6 @@ with tab1:
             scenario = generate_scenario(
                 "investering", _DIFFICULTY_MAP[inv_difficulty_label]
             )
-            if is_llm_available():
-                increment_session_calls()
         try:
             cash_flows_gen = list(scenario.get("arliga_kassaflon") or [])
             livslangd_gen = int(scenario.get("livslangd") or len(cash_flows_gen) or _DEFAULT_YEARS)
@@ -336,55 +331,57 @@ with tab1:
     with col_in:
         st.markdown("**Investeringsparametrar**")
 
-        antal_ar = st.slider(
-            "Antal år",
-            min_value=1,
-            max_value=15,
-            value=st.session_state["inv_years"],
-            help="Investeringens ekonomiska livslängd i år (kapitel 10.2)",
-        )
+        with st.form("inv_basic_form"):
+            antal_ar = st.slider(
+                "Antal år",
+                min_value=1,
+                max_value=15,
+                value=st.session_state["inv_years"],
+                help="Investeringens ekonomiska livslängd i år (kapitel 10.2)",
+            )
 
-        grundinvestering = st.number_input(
-            "Grundinvestering (kr)",
-            min_value=0.0,
-            value=float(st.session_state["inv_initial"]),
-            step=10_000.0,
-            format="%.0f",
-            help="Investeringens initialkostnad vid tidpunkt 0 (kapitel 10.2)",
-        )
+            grundinvestering = st.number_input(
+                "Grundinvestering (kr)",
+                min_value=0.0,
+                value=float(st.session_state["inv_initial"]),
+                step=10_000.0,
+                format="%.0f",
+                help="Investeringens initialkostnad vid tidpunkt 0 (kapitel 10.2)",
+            )
 
-        kalkylranta = st.slider(
-            "Kalkylränta (%)",
-            min_value=0,
-            max_value=30,
-            value=int(st.session_state["inv_rate"]),
-            help="Avkastningskrav; används för att diskontera framtida kassaflöden (kapitel 10.4)",
-        )
+            kalkylranta = st.slider(
+                "Kalkylränta (%)",
+                min_value=0,
+                max_value=30,
+                value=int(st.session_state["inv_rate"]),
+                help="Avkastningskrav; används för att diskontera framtida kassaflöden (kapitel 10.4)",
+            )
 
-        # Sync year count — rebuild CF table if years changed
-        if antal_ar != st.session_state["inv_years"]:
-            st.session_state["inv_years"] = antal_ar
-            st.session_state["inv_cf_df"] = _init_cf_df(antal_ar)
+            # Sync year count — rebuild CF table if years changed
+            if antal_ar != st.session_state["inv_years"]:
+                st.session_state["inv_years"] = antal_ar
+                st.session_state["inv_cf_df"] = _init_cf_df(antal_ar)
 
-        st.session_state["inv_initial"] = grundinvestering
-        st.session_state["inv_rate"] = kalkylranta
+            st.session_state["inv_initial"] = grundinvestering
+            st.session_state["inv_rate"] = kalkylranta
 
-        st.markdown("**Kassaflöden per år**")
-        cf_df = st.data_editor(
-            st.session_state["inv_cf_df"],
-            use_container_width=True,
-            num_rows="fixed",
-            key="cf_editor_tab1",
-            column_config={
-                "År": st.column_config.NumberColumn("År", disabled=True, width="small"),
-                "Kassaflöde (kr)": st.column_config.NumberColumn(
-                    "Kassaflöde (kr)",
-                    format="%.0f",
-                    help="Nettokassaflöde för respektive år",
-                ),
-            },
-        )
-        st.session_state["inv_cf_df"] = cf_df
+            st.markdown("**Kassaflöden per år**")
+            cf_df = st.data_editor(
+                st.session_state["inv_cf_df"],
+                use_container_width=True,
+                num_rows="fixed",
+                key="cf_editor_tab1",
+                column_config={
+                    "År": st.column_config.NumberColumn("År", disabled=True, width="small"),
+                    "Kassaflöde (kr)": st.column_config.NumberColumn(
+                        "Kassaflöde (kr)",
+                        format="%.0f",
+                        help="Nettokassaflöde för respektive år",
+                    ),
+                },
+            )
+            st.session_state["inv_cf_df"] = cf_df
+            inv_basic_form_submit = st.form_submit_button("Uppdatera värden", type="primary")
 
         # Autosave Tab 1 inputs
         save_state(
@@ -605,32 +602,34 @@ with tab2:
 
     with col_sa_in:
         _sa_param_opts = ["cash_flows", "discount_rate", "initial_investment"]
-        sa_param = st.selectbox(
-            "Parameter att variera",
-            options=_sa_param_opts,
-            format_func=lambda x: {
-                "cash_flows": "Kassaflöden",
-                "discount_rate": "Kalkylränta",
-                "initial_investment": "Grundinvestering",
-            }[x],
-            help="Välj vilken parameter som skall varieras med alla andra fasta",
-            key="sa_param",
-        )
+        with st.form("inv_sens_form"):
+            sa_param = st.selectbox(
+                "Parameter att variera",
+                options=_sa_param_opts,
+                format_func=lambda x: {
+                    "cash_flows": "Kassaflöden",
+                    "discount_rate": "Kalkylränta",
+                    "initial_investment": "Grundinvestering",
+                }[x],
+                help="Välj vilken parameter som skall varieras med alla andra fasta",
+                key="sa_param",
+            )
 
-        sa_min = st.slider(
-            "Lägsta variation (%)",
-            min_value=-50,
-            max_value=0,
-            help="Nedre gräns för parametervariation",
-            key="sa_min",
-        )
-        sa_max = st.slider(
-            "Högsta variation (%)",
-            min_value=0,
-            max_value=100,
-            help="Övre gräns för parametervariation",
-            key="sa_max",
-        )
+            sa_min = st.slider(
+                "Lägsta variation (%)",
+                min_value=-50,
+                max_value=0,
+                help="Nedre gräns för parametervariation",
+                key="sa_min",
+            )
+            sa_max = st.slider(
+                "Högsta variation (%)",
+                min_value=0,
+                max_value=100,
+                help="Övre gräns för parametervariation",
+                key="sa_max",
+            )
+            inv_sens_form_submit = st.form_submit_button("Uppdatera värden", type="primary")
 
         # Autosave sensitivity inputs
         save_state(
@@ -773,55 +772,57 @@ with tab3:
 
     with col_it_in:
         st.markdown("**Nominella kassaflöden**")
-        it_cf_df = st.data_editor(
-            st.session_state["inv_cf_df"].copy(),
-            use_container_width=True,
-            num_rows="fixed",
-            key="cf_editor_tab3",
-            column_config={
-                "År": st.column_config.NumberColumn("År", disabled=True, width="small"),
-                "Kassaflöde (kr)": st.column_config.NumberColumn(
-                    "Nominellt kassaflöde (kr)",
-                    format="%.0f",
-                ),
-            },
-        )
+        with st.form("inv_inflation_form"):
+            it_cf_df = st.data_editor(
+                st.session_state["inv_cf_df"].copy(),
+                use_container_width=True,
+                num_rows="fixed",
+                key="cf_editor_tab3",
+                column_config={
+                    "År": st.column_config.NumberColumn("År", disabled=True, width="small"),
+                    "Kassaflöde (kr)": st.column_config.NumberColumn(
+                        "Nominellt kassaflöde (kr)",
+                        format="%.0f",
+                    ),
+                },
+            )
 
-        real_rate_pct = st.number_input(
-            "Real kalkylränta (%)",
-            min_value=0.0,
-            max_value=50.0,
-            step=0.5,
-            format="%.1f",
-            help="Avkastningskrav exklusive inflation (real kalkylränta, kapitel 10.11)",
-            key="it_real_rate_pct",
-        )
-        inflation_pct = st.number_input(
-            "Inflationstakt (%)",
-            min_value=0.0,
-            max_value=30.0,
-            step=0.5,
-            format="%.1f",
-            help="Förväntad genomsnittlig KPI-inflation per år",
-            key="it_inflation_pct",
-        )
-        tax_pct = st.number_input(
-            "Bolagsskattesats (%)",
-            min_value=0.0,
-            max_value=50.0,
-            step=0.1,
-            format="%.1f",
-            help="Aktuell svensk bolagsskattesats (20,6 %)",
-            key="it_tax_pct",
-        )
-        depreciation = st.number_input(
-            "Skattemässig avskrivning per ar (kr)",
-            min_value=0.0,
-            step=10_000.0,
-            format="%.0f",
-            help="Avskrivning som dras av frånskattepliktig inkomst (rak avskrivning)",
-            key="it_depreciation",
-        )
+            real_rate_pct = st.number_input(
+                "Real kalkylränta (%)",
+                min_value=0.0,
+                max_value=50.0,
+                step=0.5,
+                format="%.1f",
+                help="Avkastningskrav exklusive inflation (real kalkylränta, kapitel 10.11)",
+                key="it_real_rate_pct",
+            )
+            inflation_pct = st.number_input(
+                "Inflationstakt (%)",
+                min_value=0.0,
+                max_value=30.0,
+                step=0.5,
+                format="%.1f",
+                help="Förväntad genomsnittlig KPI-inflation per år",
+                key="it_inflation_pct",
+            )
+            tax_pct = st.number_input(
+                "Bolagsskattesats (%)",
+                min_value=0.0,
+                max_value=50.0,
+                step=0.1,
+                format="%.1f",
+                help="Aktuell svensk bolagsskattesats (20,6 %)",
+                key="it_tax_pct",
+            )
+            depreciation = st.number_input(
+                "Skattemässig avskrivning per ar (kr)",
+                min_value=0.0,
+                step=10_000.0,
+                format="%.0f",
+                help="Avskrivning som dras av frånskattepliktig inkomst (rak avskrivning)",
+                key="it_depreciation",
+            )
+            inv_inflation_form_submit = st.form_submit_button("Uppdatera värden", type="primary")
 
         # Autosave inflation tab inputs (parameter values only)
         save_state(

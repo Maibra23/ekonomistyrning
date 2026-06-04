@@ -23,7 +23,6 @@ from utils.llm import (
     cached_chat,
     get_llm_config,
     get_session_calls_remaining,
-    increment_session_calls,
     is_llm_available,
     verify_grounding,
 )
@@ -92,7 +91,6 @@ def _render_llm_section(
         # Use cached_chat for auto explanation
         with st.spinner("Genererar förklaring..."):
             raw_response = cached_chat(sys_p, usr_p)
-            increment_session_calls()
 
         result = humanize(
             raw_response,
@@ -137,7 +135,6 @@ def _render_llm_section(
             sys_p, usr_p = build_kalkyl_step_guide_prompt(calc_type, inputs, outputs)
             with st.spinner("Genererar steg-för-steg guide..."):
                 raw = cached_chat(sys_p, usr_p)
-                increment_session_calls()
             result = humanize(raw)
             with st.expander("Steg för steg guide", expanded=True):
                 st.markdown(result.text)
@@ -177,7 +174,6 @@ def _render_llm_section(
             with st.chat_message("assistant"):
                 with st.spinner("Tänker..."):
                     raw = cached_chat(sys_p, usr_p)
-                    increment_session_calls()
                 result = humanize(raw)
                 st.markdown(result.text)
 
@@ -352,8 +348,6 @@ with tab_sj:
             scenario = generate_scenario(
                 "kalkyl_sjalvkostnad", _DIFFICULTY_MAP[sj_difficulty_label]
             )
-            if is_llm_available():
-                increment_session_calls()
         st.session_state.sj_dm = float(scenario.get("direkt_material", 0))
         st.session_state.sj_dl = float(scenario.get("direkt_lon", 0))
         st.session_state.sj_mo = float(scenario.get("mo_pct", 0))
@@ -373,44 +367,46 @@ with tab_sj:
             f"**{sj_info['foretag_namn']}**\n\n{sj_info['bransch_beskrivning']}"
         )
 
-    c1, c2 = st.columns(2)
-    with c1:
-        dm = st.number_input(
-            "Direkt material (kr/styck)",
-            min_value=0.0, step=10.0, key="sj_dm",
-            help="Direkt materialkostnad per tillverkad enhet (kapitel 6.2)",
-        )
-        dl = st.number_input(
-            "Direkt lön (kr/styck)",
-            min_value=0.0, step=10.0, key="sj_dl",
-            help="Direkt lönekostnad per tillverkad enhet (kapitel 6.2)",
-        )
-        mo_pct = st.number_input(
-            "MO (Materialomkostnad) (%)",
-            min_value=0.0, max_value=500.0, step=1.0, key="sj_mo",
-            help="Pålägg på direkt material för indirekta materialkostnader (kapitel 6.3)",
-        )
-        to_pct = st.number_input(
-            "TO (Tillverkningsomkostnad) (%)",
-            min_value=0.0, max_value=500.0, step=1.0, key="sj_to",
-            help="Pålägg på direkt lön för tillverkningsomkostnader (kapitel 6.3)",
-        )
-    with c2:
-        ao_pct = st.number_input(
-            "AO (Administrationsomkostnad) (%)",
-            min_value=0.0, max_value=200.0, step=1.0, key="sj_ao",
-            help="Pålägg på tillverkningskostnad för administrationskostnader (kapitel 6.3)",
-        )
-        fo_pct = st.number_input(
-            "FO (Försäljningsomkostnad) (%)",
-            min_value=0.0, max_value=200.0, step=1.0, key="sj_fo",
-            help="Pålägg på tillverkningskostnad för försäljningskostnader (kapitel 6.3)",
-        )
-        units_sj = st.number_input(
-            "Antal enheter",
-            min_value=1.0, step=100.0, key="sj_units",
-            help="Produktionsvolym per period",
-        )
+    with st.form("kalkyl_sj_form"):
+        c1, c2 = st.columns(2)
+        with c1:
+            dm = st.number_input(
+                "Direkt material (kr/styck)",
+                min_value=0.0, step=10.0, key="sj_dm",
+                help="Direkt materialkostnad per tillverkad enhet (kapitel 6.2)",
+            )
+            dl = st.number_input(
+                "Direkt lön (kr/styck)",
+                min_value=0.0, step=10.0, key="sj_dl",
+                help="Direkt lönekostnad per tillverkad enhet (kapitel 6.2)",
+            )
+            mo_pct = st.number_input(
+                "MO (Materialomkostnad) (%)",
+                min_value=0.0, max_value=500.0, step=1.0, key="sj_mo",
+                help="Pålägg på direkt material för indirekta materialkostnader (kapitel 6.3)",
+            )
+            to_pct = st.number_input(
+                "TO (Tillverkningsomkostnad) (%)",
+                min_value=0.0, max_value=500.0, step=1.0, key="sj_to",
+                help="Pålägg på direkt lön för tillverkningsomkostnader (kapitel 6.3)",
+            )
+        with c2:
+            ao_pct = st.number_input(
+                "AO (Administrationsomkostnad) (%)",
+                min_value=0.0, max_value=200.0, step=1.0, key="sj_ao",
+                help="Pålägg på tillverkningskostnad för administrationskostnader (kapitel 6.3)",
+            )
+            fo_pct = st.number_input(
+                "FO (Försäljningsomkostnad) (%)",
+                min_value=0.0, max_value=200.0, step=1.0, key="sj_fo",
+                help="Pålägg på tillverkningskostnad för försäljningskostnader (kapitel 6.3)",
+            )
+            units_sj = st.number_input(
+                "Antal enheter",
+                min_value=1.0, step=100.0, key="sj_units",
+                help="Produktionsvolym per period",
+            )
+        kalkyl_sj_form_submit = st.form_submit_button("Uppdatera värden", type="primary")
 
     # Autosave current input values on every rerun (Streamlit rerun = keystroke commit)
     save_state(
@@ -585,8 +581,6 @@ with tab_bid:
             scenario = generate_scenario(
                 "kalkyl_bidrag", _DIFFICULTY_MAP[bid_difficulty_label]
             )
-            if is_llm_available():
-                increment_session_calls()
         st.session_state.bid_pris = float(scenario.get("pris_per_styck", 0))
         st.session_state.bid_rorlig = float(scenario.get("rorlig_kostnad_per_styck", 0))
         st.session_state.bid_fasta = float(scenario.get("fasta_kostnader", 0))
@@ -603,29 +597,31 @@ with tab_bid:
             f"**{bid_info['foretag_namn']}**\n\n{bid_info['bransch_beskrivning']}"
         )
 
-    c1, c2 = st.columns(2)
-    with c1:
-        pris = st.number_input(
-            "Försäljningspris (kr/styck)",
-            min_value=0.0, step=10.0, key="bid_pris",
-            help="Pris per såld enhet (kapitel 8.1)",
-        )
-        rorlig = st.number_input(
-            "Rörlig kostnad (kr/styck)",
-            min_value=0.0, step=10.0, key="bid_rorlig",
-            help="Total rörlig kostnad per enhet, inklusive inköp och distribution (kapitel 8.1)",
-        )
-    with c2:
-        fasta = st.number_input(
-            "Fasta kostnader (kr/period)",
-            min_value=0.0, step=50_000.0, key="bid_fasta",
-            help="Totala fasta kostnader som inte varierar med volymen (kapitel 8.1)",
-        )
-        units_bid = st.number_input(
-            "Volym (antal enheter)",
-            min_value=1.0, step=500.0, key="bid_units",
-            help="Antal sålda/producerade enheter per period",
-        )
+    with st.form("kalkyl_bid_form"):
+        c1, c2 = st.columns(2)
+        with c1:
+            pris = st.number_input(
+                "Försäljningspris (kr/styck)",
+                min_value=0.0, step=10.0, key="bid_pris",
+                help="Pris per såld enhet (kapitel 8.1)",
+            )
+            rorlig = st.number_input(
+                "Rörlig kostnad (kr/styck)",
+                min_value=0.0, step=10.0, key="bid_rorlig",
+                help="Total rörlig kostnad per enhet, inklusive inköp och distribution (kapitel 8.1)",
+            )
+        with c2:
+            fasta = st.number_input(
+                "Fasta kostnader (kr/period)",
+                min_value=0.0, step=50_000.0, key="bid_fasta",
+                help="Totala fasta kostnader som inte varierar med volymen (kapitel 8.1)",
+            )
+            units_bid = st.number_input(
+                "Volym (antal enheter)",
+                min_value=1.0, step=500.0, key="bid_units",
+                help="Antal sålda/producerade enheter per period",
+            )
+        kalkyl_bid_form_submit = st.form_submit_button("Uppdatera värden", type="primary")
 
     # Autosave current input values on every rerun
     save_state(
@@ -835,8 +831,6 @@ with tab_abc:
             scenario = generate_scenario(
                 "kalkyl_abc", _DIFFICULTY_MAP[abc_difficulty_label]
             )
-            if is_llm_available():
-                increment_session_calls()
         try:
             activities = scenario.get("activities", [])
             products = scenario.get("products", [])
@@ -856,38 +850,40 @@ with tab_abc:
             f"**{abc_info['foretag_namn']}**\n\n{abc_info['bransch_beskrivning']}"
         )
 
-    col_a, col_b = st.columns(2)
+    with st.form("kalkyl_abc_form"):
+        col_a, col_b = st.columns(2)
 
-    with col_a:
-        st.subheader("Aktiviteter")
-        act_df: pd.DataFrame = st.data_editor(
-            st.session_state.abc_act_df,
-            num_rows="dynamic",
-            use_container_width=True,
-            key="abc_act_de",
-            column_config={
-                "Aktivitet": st.column_config.TextColumn("Aktivitet", required=True),
-                "Total kostnad (kr)": st.column_config.NumberColumn("Total kostnad (kr)", min_value=0.0),
-                "Kostnadsdrivare": st.column_config.TextColumn("Kostnadsdrivare"),
-                "Total drivvolym": st.column_config.NumberColumn("Total drivvolym", min_value=0.01),
-            },
-        )
-        st.session_state.abc_act_df = act_df
+        with col_a:
+            st.subheader("Aktiviteter")
+            act_df: pd.DataFrame = st.data_editor(
+                st.session_state.abc_act_df,
+                num_rows="dynamic",
+                use_container_width=True,
+                key="abc_act_de",
+                column_config={
+                    "Aktivitet": st.column_config.TextColumn("Aktivitet", required=True),
+                    "Total kostnad (kr)": st.column_config.NumberColumn("Total kostnad (kr)", min_value=0.0),
+                    "Kostnadsdrivare": st.column_config.TextColumn("Kostnadsdrivare"),
+                    "Total drivvolym": st.column_config.NumberColumn("Total drivvolym", min_value=0.01),
+                },
+            )
+            st.session_state.abc_act_df = act_df
 
-    with col_b:
-        st.subheader("Produkter / tjänster")
-        prod_df: pd.DataFrame = st.data_editor(
-            st.session_state.abc_prod_df,
-            num_rows="dynamic",
-            use_container_width=True,
-            key="abc_prod_de",
-            column_config={
-                "Produkt": st.column_config.TextColumn("Produkt", required=True),
-                "Direkt kostnad (kr)": st.column_config.NumberColumn("Direkt kostnad (kr)", min_value=0.0),
-                "Enheter": st.column_config.NumberColumn("Enheter", min_value=0.01),
-            },
-        )
-        st.session_state.abc_prod_df = prod_df
+        with col_b:
+            st.subheader("Produkter / tjänster")
+            prod_df: pd.DataFrame = st.data_editor(
+                st.session_state.abc_prod_df,
+                num_rows="dynamic",
+                use_container_width=True,
+                key="abc_prod_de",
+                column_config={
+                    "Produkt": st.column_config.TextColumn("Produkt", required=True),
+                    "Direkt kostnad (kr)": st.column_config.NumberColumn("Direkt kostnad (kr)", min_value=0.0),
+                    "Enheter": st.column_config.NumberColumn("Enheter", min_value=0.01),
+                },
+            )
+            st.session_state.abc_prod_df = prod_df
+        kalkyl_abc_form_submit = st.form_submit_button("Uppdatera värden", type="primary")
 
     # Autosave ABC tables as JSON serializable record lists
     save_state(

@@ -28,8 +28,14 @@ Levererat efter tio dagars bygge och en day 10 hardening pass:
 - Quiz pedagogisk kvalitetsfilter (självvärdering på tre dimensioner)
 - IRR kantfall med svenska förklaringar
 - Vänlig UX för 50-anropsgränsen per session
+- Effektiv anropsräkning: varje unik prompt debiteras taket en gång per
+  session, så interaktion (cacheträffar, rerenderingar) inte tömmer budgeten
+- Bekräfta-formulär ("Uppdatera värden") per inmatningssektion så att
+  innehållet uppdateras vid bekräftelse i stället för vid varje ändring
+- Liggande balansbudgetdiagram och förklarande verktygstips
 - Svensk ordlista i systempromten
 - Begränsningssektion i README, full inventering i docs/LIMITATIONS.md
+- Samlad ändringslogg i docs/CHANGELOG.md
 
 ---
 
