@@ -115,11 +115,18 @@ session. Att slå i taket var tidigare ett kryptiskt fel.
 **Aktuell hantering:** Day 10 introducerade LLMSessionCapError och ett
 vänligt svenskt info-kort med en knapp för att uppdatera sidan.
 Autosparen säkerställer att inmatningar inte går förlorade vid
-uppdatering.
+uppdatering. Efter day 10 centraliserades dessutom anropsräkningen i
+`cached_chat`: varje unik prompt debiteras taket **en gång per session**,
+så cacheträffar och oavsiktliga rerenderingar (widget-ändring, chatt,
+flikbyte) är gratis. Inmatningssektionerna ligger nu i `st.form` med en
+"Uppdatera värden"-knapp, så tutorn avfyras bara vid bekräftelse i stället
+för vid varje tangenttryck. Tidigare räknades varje rerun mot taket, vilket
+tömde budgeten enbart genom att man experimenterade. Se
+[CHANGELOG.md](CHANGELOG.md) avsnitt C.
 
-**Kvarvarande risk:** En entusiastisk användare som kör många quiz på en
-gång kan fortfarande slå i taket mitt i en lärsession. Beräkningar och
-diagram fungerar normalt utan tutor.
+**Kvarvarande risk:** En entusiastisk användare som kör många quiz eller
+bekräftar många olika scenarier kan fortfarande slå i taket mitt i en
+lärsession. Beräkningar och diagram fungerar normalt utan tutor.
 
 ### Provider lock in 🟢
 

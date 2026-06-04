@@ -144,6 +144,9 @@ ekonomistyrning/
 │   ├── METHODOLOGY.md            # Formler och antaganden
 │   ├── CHECKLIST.md              # Terminologigranskning
 │   ├── DESIGN.md                 # Designbeslut
+│   ├── CHANGELOG.md              # Ändringar i grenen day-10-hardening
+│   ├── LIMITATIONS.md            # Kända begränsningar
+│   ├── ROADMAP.md                # Framåtblickande plan
 │   ├── LINKEDIN_POST.md          # LinkedIn-inlägg
 │   ├── CV_BLURB.md               # CV-punkt
 │   └── DEMO_SCRIPT.md            # Demomanus
@@ -160,6 +163,7 @@ ekonomistyrning/
 - [docs/METHODOLOGY.md](docs/METHODOLOGY.md) - Alla formler, antaganden och kapitelreferenser
 - [docs/CHECKLIST.md](docs/CHECKLIST.md) - Svensk terminologigranskning
 - [docs/DESIGN.md](docs/DESIGN.md) - Designbeslut och arkitektur
+- [docs/CHANGELOG.md](docs/CHANGELOG.md) - Samlade ändringar i grenen day-10-hardening (härdning, UI, interaktivitet)
 
 Läs PRD.md och METHODOLOGY.md innan du börjar utveckla en ny modul.
 

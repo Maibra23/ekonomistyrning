@@ -19,7 +19,6 @@ from utils.llm import (
     LLMUnavailableError,
     cached_chat,
     get_session_calls_remaining,
-    increment_session_calls,
     is_llm_available,
 )
 from utils.prompts import (
@@ -155,7 +154,6 @@ def _evaluate_quiz_quality(question: dict) -> dict | None:
     try:
         sys_p, usr_p = build_quiz_quality_check_prompt(question)
         raw = cached_chat(sys_p, usr_p, temperature=0.2)
-        increment_session_calls()
         clean = raw.strip()
         if clean.startswith("```"):
             clean = clean.split("\n", 1)[1] if "\n" in clean else clean[3:]
@@ -202,7 +200,6 @@ def _generate_question(kluster: str, diff: str, qtype: str) -> dict | None:
         try:
             sys_p, usr_p = build_quiz_generation_prompt(kluster, diff, qtype)
             raw = cached_chat(sys_p, usr_p, temperature=0.7)
-            increment_session_calls()
 
             # Parse JSON - strip markdown code blocks if present
             clean = raw.strip()
@@ -394,7 +391,6 @@ if q:
                     )
                     with st.spinner("Förklarar..."):
                         raw = cached_chat(sys_p, usr_p)
-                        increment_session_calls()
                     result = humanize(raw)
                     st.markdown(result.text)
                 except LLMUnavailableError:

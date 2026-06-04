@@ -18,7 +18,6 @@ from utils.llm import (
     LLMUnavailableError,
     cached_chat,
     get_session_calls_remaining,
-    increment_session_calls,
     is_llm_available,
     verify_grounding,
 )
@@ -110,8 +109,6 @@ with tab1:
             scenario = generate_scenario(
                 "standardkost", _DIFFICULTY_MAP[sk_difficulty_label]
             )
-            if is_llm_available():
-                increment_session_calls()
         st.session_state["std_volym"] = float(scenario.get("standard_volym", 1000.0))
         st.session_state["std_pris"] = float(scenario.get("standard_pris", 50.0))
         st.session_state["std_forbrukning"] = float(
@@ -136,67 +133,69 @@ with tab1:
             f"{sk_info['bransch_beskrivning']}"
         )
 
-    col_std, col_verk = st.columns(2, gap="large")
+    with st.form("sk_rorlig_form"):
+        col_std, col_verk = st.columns(2, gap="large")
 
-    with col_std:
-        st.markdown("**Standardvärden**")
-        std_volym = st.number_input(
-            "Standard volym (styck)",
-            min_value=0.0,
-            value=1000.0,
-            step=100.0,
-            format="%.0f",
-            key="std_volym",
-            help="Budgeterad produktionsvolym i antal enheter",
-        )
-        std_pris = st.number_input(
-            "Standard pris (kr/enhet)",
-            min_value=0.0,
-            value=50.0,
-            step=1.0,
-            format="%.2f",
-            key="std_pris",
-            help="Standardpris per insatsenhet (t.ex. kr/kg)",
-        )
-        std_forbrukning = st.number_input(
-            "Standard förbrukning (enheter/styck)",
-            min_value=0.0,
-            value=2.0,
-            step=0.1,
-            format="%.2f",
-            key="std_forbrukning",
-            help="Standard insatsförbrukning per producerad enhet",
-        )
+        with col_std:
+            st.markdown("**Standardvärden**")
+            std_volym = st.number_input(
+                "Standard volym (styck)",
+                min_value=0.0,
+                value=1000.0,
+                step=100.0,
+                format="%.0f",
+                key="std_volym",
+                help="Budgeterad produktionsvolym i antal enheter",
+            )
+            std_pris = st.number_input(
+                "Standard pris (kr/enhet)",
+                min_value=0.0,
+                value=50.0,
+                step=1.0,
+                format="%.2f",
+                key="std_pris",
+                help="Standardpris per insatsenhet (t.ex. kr/kg)",
+            )
+            std_forbrukning = st.number_input(
+                "Standard förbrukning (enheter/styck)",
+                min_value=0.0,
+                value=2.0,
+                step=0.1,
+                format="%.2f",
+                key="std_forbrukning",
+                help="Standard insatsförbrukning per producerad enhet",
+            )
 
-    with col_verk:
-        st.markdown("**Verkligt utfall**")
-        verk_volym = st.number_input(
-            "Verklig volym (styck)",
-            min_value=0.0,
-            value=1100.0,
-            step=100.0,
-            format="%.0f",
-            key="verk_volym",
-            help="Faktisk produktionsvolym i antal enheter",
-        )
-        verk_pris = st.number_input(
-            "Verkligt pris (kr/enhet)",
-            min_value=0.0,
-            value=55.0,
-            step=1.0,
-            format="%.2f",
-            key="verk_pris",
-            help="Faktiskt pris per insatsenhet",
-        )
-        verk_forbrukning = st.number_input(
-            "Verklig förbrukning (enheter/styck)",
-            min_value=0.0,
-            value=2.1,
-            step=0.1,
-            format="%.2f",
-            key="verk_forbrukning",
-            help="Faktisk insatsforbrukning per producerad enhet",
-        )
+        with col_verk:
+            st.markdown("**Verkligt utfall**")
+            verk_volym = st.number_input(
+                "Verklig volym (styck)",
+                min_value=0.0,
+                value=1100.0,
+                step=100.0,
+                format="%.0f",
+                key="verk_volym",
+                help="Faktisk produktionsvolym i antal enheter",
+            )
+            verk_pris = st.number_input(
+                "Verkligt pris (kr/enhet)",
+                min_value=0.0,
+                value=55.0,
+                step=1.0,
+                format="%.2f",
+                key="verk_pris",
+                help="Faktiskt pris per insatsenhet",
+            )
+            verk_forbrukning = st.number_input(
+                "Verklig förbrukning (enheter/styck)",
+                min_value=0.0,
+                value=2.1,
+                step=0.1,
+                format="%.2f",
+                key="verk_forbrukning",
+                help="Faktisk insatsforbrukning per producerad enhet",
+            )
+        sk_rorlig_form_submit = st.form_submit_button("Uppdatera värden", type="primary")
 
     # Edge case: all zeros
     all_zero = (
@@ -348,7 +347,6 @@ with tab1:
                 sys_p, usr_p = build_standardkost_interpretation_prompt(component_results)
                 with st.spinner("Analyserar avvikelser..."):
                     raw = cached_chat(sys_p, usr_p)
-                    increment_session_calls()
                 result = humanize(raw, required_sections=["Antagande", "Berakning", "Tolkning", "Kallor och forbehall"])
                 st.markdown(result.text)
 
@@ -390,25 +388,27 @@ with tab2:
     col_fix_in, col_fix_res = st.columns([1, 2], gap="large")
 
     with col_fix_in:
-        st.markdown("**Fasta omkostnader**")
-        budget_belopp = st.number_input(
-            "Budgeterat belopp (kr)",
-            min_value=0.0,
-            value=500_000.0,
-            step=10_000.0,
-            format="%.0f",
-            key="fast_budget",
-            help="Budgeterade fasta omkostnader för perioden",
-        )
-        verkligt_belopp = st.number_input(
-            "Verkligt belopp (kr)",
-            min_value=0.0,
-            value=550_000.0,
-            step=10_000.0,
-            format="%.0f",
-            key="fast_verkligt",
-            help="Verkliga fasta omkostnader för perioden",
-        )
+        with st.form("sk_fast_form"):
+            st.markdown("**Fasta omkostnader**")
+            budget_belopp = st.number_input(
+                "Budgeterat belopp (kr)",
+                min_value=0.0,
+                value=500_000.0,
+                step=10_000.0,
+                format="%.0f",
+                key="fast_budget",
+                help="Budgeterade fasta omkostnader för perioden",
+            )
+            verkligt_belopp = st.number_input(
+                "Verkligt belopp (kr)",
+                min_value=0.0,
+                value=550_000.0,
+                step=10_000.0,
+                format="%.0f",
+                key="fast_verkligt",
+                help="Verkliga fasta omkostnader för perioden",
+            )
+            sk_fast_form_submit = st.form_submit_button("Uppdatera värden", type="primary")
 
     with col_fix_res:
         # Calculate fixed overhead variance
@@ -487,7 +487,6 @@ with tab2:
             sys_p, usr_p = build_standardkost_interpretation_prompt(component_results)
             with st.spinner("Analyserar..."):
                 raw = cached_chat(sys_p, usr_p)
-                increment_session_calls()
             result = humanize(raw)
             st.markdown(result.text)
 
@@ -678,7 +677,6 @@ with tab3:
             sys_p, usr_p = build_standardkost_interpretation_prompt(all_components)
             with st.spinner("Analyserar sammanställning..."):
                 raw = cached_chat(sys_p, usr_p)
-                increment_session_calls()
             result = humanize(raw)
             st.markdown(result.text)
 
@@ -716,7 +714,6 @@ with tab3:
             with st.chat_message("assistant"):
                 with st.spinner("Tänker..."):
                     raw = cached_chat(sys_p, usr_p)
-                    increment_session_calls()
                 result = humanize(raw)
                 st.markdown(result.text)
             st.session_state["sk_chat_history"].append(("assistant", result.text))

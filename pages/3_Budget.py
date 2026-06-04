@@ -24,7 +24,6 @@ from utils.llm import (
     LLMUnavailableError,
     cached_chat,
     get_session_calls_remaining,
-    increment_session_calls,
     is_llm_available,
     verify_grounding,
 )
@@ -210,8 +209,6 @@ if bud_generate_clicked:
         scenario = generate_scenario(
             "budget", _DIFFICULTY_MAP[bud_difficulty_label]
         )
-        if is_llm_available():
-            increment_session_calls()
     intakter = scenario.get("intakter") or {}
     kostnader = scenario.get("kostnader") or {}
     balansposter = scenario.get("balansposter") or {}
@@ -249,96 +246,98 @@ with st.expander("Steg 1: Resultatbudget", expanded=True):
     col_in1, col_res1 = st.columns([1, 2], gap="large")
 
     with col_in1:
-        st.markdown("**Intakter**")
-        forsaljning = st.number_input(
-            "Försäljning (kr)",
-            min_value=0.0,
-            value=float(st.session_state["bud_forsaljning"]),
-            step=100_000.0,
-            format="%.0f",
-            key="inp_forsaljning",
-            help="Budgeterad total försäljning för perioden",
-        )
-        st.session_state["bud_forsaljning"] = forsaljning
+        with st.form("bud_step1_form"):
+            st.markdown("**Intakter**")
+            forsaljning = st.number_input(
+                "Försäljning (kr)",
+                min_value=0.0,
+                value=float(st.session_state["bud_forsaljning"]),
+                step=100_000.0,
+                format="%.0f",
+                key="inp_forsaljning",
+                help="Budgeterad total försäljning för perioden",
+            )
+            st.session_state["bud_forsaljning"] = forsaljning
 
-        st.markdown("**Kostnader**")
-        rorliga = st.number_input(
-            "Rörliga kostnader (kr)",
-            min_value=0.0,
-            value=float(st.session_state["bud_rorliga"]),
-            step=100_000.0,
-            format="%.0f",
-            key="inp_rorliga",
-            help="Rörliga kostnader (material, varor, etc.)",
-        )
-        st.session_state["bud_rorliga"] = rorliga
+            st.markdown("**Kostnader**")
+            rorliga = st.number_input(
+                "Rörliga kostnader (kr)",
+                min_value=0.0,
+                value=float(st.session_state["bud_rorliga"]),
+                step=100_000.0,
+                format="%.0f",
+                key="inp_rorliga",
+                help="Rörliga kostnader (material, varor, etc.)",
+            )
+            st.session_state["bud_rorliga"] = rorliga
 
-        personal = st.number_input(
-            "Personalkostnader (kr)",
-            min_value=0.0,
-            value=float(st.session_state["bud_personal"]),
-            step=100_000.0,
-            format="%.0f",
-            key="inp_personal",
-            help="Löner, sociala avgifter, pensioner",
-        )
-        st.session_state["bud_personal"] = personal
+            personal = st.number_input(
+                "Personalkostnader (kr)",
+                min_value=0.0,
+                value=float(st.session_state["bud_personal"]),
+                step=100_000.0,
+                format="%.0f",
+                key="inp_personal",
+                help="Löner, sociala avgifter, pensioner",
+            )
+            st.session_state["bud_personal"] = personal
 
-        lokal = st.number_input(
-            "Lokalkostnader (kr)",
-            min_value=0.0,
-            value=float(st.session_state["bud_lokal"]),
-            step=50_000.0,
-            format="%.0f",
-            key="inp_lokal",
-            help="Hyra, el, uppvärmning",
-        )
-        st.session_state["bud_lokal"] = lokal
+            lokal = st.number_input(
+                "Lokalkostnader (kr)",
+                min_value=0.0,
+                value=float(st.session_state["bud_lokal"]),
+                step=50_000.0,
+                format="%.0f",
+                key="inp_lokal",
+                help="Hyra, el, uppvärmning",
+            )
+            st.session_state["bud_lokal"] = lokal
 
-        avskrivningar = st.number_input(
-            "Avskrivningar (kr)",
-            min_value=0.0,
-            value=float(st.session_state["bud_avskrivningar"]),
-            step=50_000.0,
-            format="%.0f",
-            key="inp_avskrivningar",
-            help="Planmässiga avskrivningar på anläggningstillgångar",
-        )
-        st.session_state["bud_avskrivningar"] = avskrivningar
+            avskrivningar = st.number_input(
+                "Avskrivningar (kr)",
+                min_value=0.0,
+                value=float(st.session_state["bud_avskrivningar"]),
+                step=50_000.0,
+                format="%.0f",
+                key="inp_avskrivningar",
+                help="Planmässiga avskrivningar på anläggningstillgångar",
+            )
+            st.session_state["bud_avskrivningar"] = avskrivningar
 
-        ovriga = st.number_input(
-            "Övriga kostnader (kr)",
-            min_value=0.0,
-            value=float(st.session_state["bud_ovriga"]),
-            step=50_000.0,
-            format="%.0f",
-            key="inp_ovriga",
-            help="Övriga externa kostnader",
-        )
-        st.session_state["bud_ovriga"] = ovriga
+            ovriga = st.number_input(
+                "Övriga kostnader (kr)",
+                min_value=0.0,
+                value=float(st.session_state["bud_ovriga"]),
+                step=50_000.0,
+                format="%.0f",
+                key="inp_ovriga",
+                help="Övriga externa kostnader",
+            )
+            st.session_state["bud_ovriga"] = ovriga
 
-        finansiella = st.number_input(
-            "Finansiella kostnader (kr)",
-            min_value=0.0,
-            value=float(st.session_state["bud_finansiella"]),
-            step=10_000.0,
-            format="%.0f",
-            key="inp_finansiella",
-            help="Räntor på lån och krediter",
-        )
-        st.session_state["bud_finansiella"] = finansiella
+            finansiella = st.number_input(
+                "Finansiella kostnader (kr)",
+                min_value=0.0,
+                value=float(st.session_state["bud_finansiella"]),
+                step=10_000.0,
+                format="%.0f",
+                key="inp_finansiella",
+                help="Räntor på lån och krediter",
+            )
+            st.session_state["bud_finansiella"] = finansiella
 
-        skattesats = st.number_input(
-            "Skattesats (%)",
-            min_value=0.0,
-            max_value=100.0,
-            value=float(st.session_state["bud_skattesats"]),
-            step=0.1,
-            format="%.1f",
-            key="inp_skattesats",
-            help="Bolagsskattesats (standard 20,6 %)",
-        )
-        st.session_state["bud_skattesats"] = skattesats
+            skattesats = st.number_input(
+                "Skattesats (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=float(st.session_state["bud_skattesats"]),
+                step=0.1,
+                format="%.1f",
+                key="inp_skattesats",
+                help="Bolagsskattesats (standard 20,6 %)",
+            )
+            st.session_state["bud_skattesats"] = skattesats
+            bud_step1_form_submit = st.form_submit_button("Uppdatera värden", type="primary")
 
     with col_res1:
         # Build resultatbudget
@@ -432,76 +431,78 @@ with st.expander("Steg 2: Likviditetsbudget", expanded=True):
     col_in2, col_res2 = st.columns([1, 2], gap="large")
 
     with col_in2:
-        st.markdown("**Likvida medel**")
-        opening_cash = st.number_input(
-            "Likvida medel IB (kr)",
-            min_value=0.0,
-            value=float(st.session_state["bud_opening_cash"]),
-            step=50_000.0,
-            format="%.0f",
-            key="inp_opening_cash",
-            help="Ingående balans för likvida medel",
-        )
-        st.session_state["bud_opening_cash"] = opening_cash
+        with st.form("bud_step2_form"):
+            st.markdown("**Likvida medel**")
+            opening_cash = st.number_input(
+                "Likvida medel IB (kr)",
+                min_value=0.0,
+                value=float(st.session_state["bud_opening_cash"]),
+                step=50_000.0,
+                format="%.0f",
+                key="inp_opening_cash",
+                help="Ingående balans för likvida medel",
+            )
+            st.session_state["bud_opening_cash"] = opening_cash
 
-        st.markdown("**Rörelsekapital (dagar)**")
-        kf_dagar = st.number_input(
-            "Kundfordringar (dagar)",
-            min_value=0.0,
-            max_value=365.0,
-            value=float(st.session_state["bud_kf_dagar"]),
-            step=1.0,
-            format="%.0f",
-            key="inp_kf_dagar",
-            help="Genomsnittlig kredittid till kunder i dagar",
-        )
-        st.session_state["bud_kf_dagar"] = kf_dagar
+            st.markdown("**Rörelsekapital (dagar)**")
+            kf_dagar = st.number_input(
+                "Kundfordringar (dagar)",
+                min_value=0.0,
+                max_value=365.0,
+                value=float(st.session_state["bud_kf_dagar"]),
+                step=1.0,
+                format="%.0f",
+                key="inp_kf_dagar",
+                help="Genomsnittlig kredittid till kunder i dagar",
+            )
+            st.session_state["bud_kf_dagar"] = kf_dagar
 
-        ls_dagar = st.number_input(
-            "Leverantörsskulder (dagar)",
-            min_value=0.0,
-            max_value=365.0,
-            value=float(st.session_state["bud_ls_dagar"]),
-            step=1.0,
-            format="%.0f",
-            key="inp_ls_dagar",
-            help="Genomsnittlig betaltid till leverantörer i dagar",
-        )
-        st.session_state["bud_ls_dagar"] = ls_dagar
+            ls_dagar = st.number_input(
+                "Leverantörsskulder (dagar)",
+                min_value=0.0,
+                max_value=365.0,
+                value=float(st.session_state["bud_ls_dagar"]),
+                step=1.0,
+                format="%.0f",
+                key="inp_ls_dagar",
+                help="Genomsnittlig betaltid till leverantörer i dagar",
+            )
+            st.session_state["bud_ls_dagar"] = ls_dagar
 
-        lager_dagar = st.number_input(
-            "Lagertid (dagar)",
-            min_value=0.0,
-            max_value=365.0,
-            value=float(st.session_state["bud_lager_dagar"]),
-            step=1.0,
-            format="%.0f",
-            key="inp_lager_dagar",
-            help="Genomsnittlig liggtid för lager i dagar",
-        )
-        st.session_state["bud_lager_dagar"] = lager_dagar
+            lager_dagar = st.number_input(
+                "Lagertid (dagar)",
+                min_value=0.0,
+                max_value=365.0,
+                value=float(st.session_state["bud_lager_dagar"]),
+                step=1.0,
+                format="%.0f",
+                key="inp_lager_dagar",
+                help="Genomsnittlig liggtid för lager i dagar",
+            )
+            st.session_state["bud_lager_dagar"] = lager_dagar
 
-        st.markdown("**Investeringar och finansiering**")
-        investeringar_belopp = st.number_input(
-            "Investeringar (kr)",
-            min_value=0.0,
-            value=float(st.session_state["bud_investeringar"]),
-            step=50_000.0,
-            format="%.0f",
-            key="inp_investeringar",
-            help="Planerade investeringar i anläggningstillgångar (utflöde)",
-        )
-        st.session_state["bud_investeringar"] = investeringar_belopp
+            st.markdown("**Investeringar och finansiering**")
+            investeringar_belopp = st.number_input(
+                "Investeringar (kr)",
+                min_value=0.0,
+                value=float(st.session_state["bud_investeringar"]),
+                step=50_000.0,
+                format="%.0f",
+                key="inp_investeringar",
+                help="Planerade investeringar i anläggningstillgångar (utflöde)",
+            )
+            st.session_state["bud_investeringar"] = investeringar_belopp
 
-        finansiering_belopp = st.number_input(
-            "Finansiering (kr)",
-            value=float(st.session_state["bud_finansiering"]),
-            step=50_000.0,
-            format="%.0f",
-            key="inp_finansiering",
-            help="Nettoupplåning av lån (positivt = inflöde, negativt = amortering)",
-        )
-        st.session_state["bud_finansiering"] = finansiering_belopp
+            finansiering_belopp = st.number_input(
+                "Finansiering (kr)",
+                value=float(st.session_state["bud_finansiering"]),
+                step=50_000.0,
+                format="%.0f",
+                key="inp_finansiering",
+                help="Nettoupplåning av lån (positivt = inflöde, negativt = amortering)",
+            )
+            st.session_state["bud_finansiering"] = finansiering_belopp
+            bud_step2_form_submit = st.form_submit_button("Uppdatera värden", type="primary")
 
     with col_res2:
         # Build likviditetsbudget
@@ -605,108 +606,110 @@ with st.expander("Steg 3: Balansbudget", expanded=True):
     col_in3, col_res3 = st.columns([1, 2], gap="large")
 
     with col_in3:
-        st.markdown("**Ingående balansposter - Tillgångar**")
-        ob_anlaggning = st.number_input(
-            "Anläggningstillgångar IB (kr)",
-            min_value=0.0,
-            value=float(st.session_state["bud_ob_anlaggning"]),
-            step=100_000.0,
-            format="%.0f",
-            key="inp_ob_anlaggning",
-            help="Ingående balans för anläggningstillgångar",
-        )
-        st.session_state["bud_ob_anlaggning"] = ob_anlaggning
+        with st.form("bud_step3_form"):
+            st.markdown("**Ingående balansposter - Tillgångar**")
+            ob_anlaggning = st.number_input(
+                "Anläggningstillgångar IB (kr)",
+                min_value=0.0,
+                value=float(st.session_state["bud_ob_anlaggning"]),
+                step=100_000.0,
+                format="%.0f",
+                key="inp_ob_anlaggning",
+                help="Ingående balans för anläggningstillgångar",
+            )
+            st.session_state["bud_ob_anlaggning"] = ob_anlaggning
 
-        ob_lager = st.number_input(
-            "Lager IB (kr)",
-            min_value=0.0,
-            value=float(st.session_state["bud_ob_lager"]),
-            step=50_000.0,
-            format="%.0f",
-            key="inp_ob_lager",
-            help="Ingående balans för lager",
-        )
-        st.session_state["bud_ob_lager"] = ob_lager
+            ob_lager = st.number_input(
+                "Lager IB (kr)",
+                min_value=0.0,
+                value=float(st.session_state["bud_ob_lager"]),
+                step=50_000.0,
+                format="%.0f",
+                key="inp_ob_lager",
+                help="Ingående balans för lager",
+            )
+            st.session_state["bud_ob_lager"] = ob_lager
 
-        ob_kundfordringar = st.number_input(
-            "Kundfordringar IB (kr)",
-            min_value=0.0,
-            value=float(st.session_state["bud_ob_kundfordringar"]),
-            step=50_000.0,
-            format="%.0f",
-            key="inp_ob_kundfordringar",
-            help="Ingående balans för kundfordringar",
-        )
-        st.session_state["bud_ob_kundfordringar"] = ob_kundfordringar
+            ob_kundfordringar = st.number_input(
+                "Kundfordringar IB (kr)",
+                min_value=0.0,
+                value=float(st.session_state["bud_ob_kundfordringar"]),
+                step=50_000.0,
+                format="%.0f",
+                key="inp_ob_kundfordringar",
+                help="Ingående balans för kundfordringar",
+            )
+            st.session_state["bud_ob_kundfordringar"] = ob_kundfordringar
 
-        # Sync likvida medel IB from Step 2 opening cash to avoid mismatches
-        ob_likvida = float(st.session_state["bud_opening_cash"])
-        st.session_state["bud_ob_likvida"] = ob_likvida
-        st.number_input(
-            "Likvida medel IB (kr)",
-            value=ob_likvida,
-            format="%.0f",
-            key="inp_ob_likvida",
-            help="Synkroniserad från Steg 2 (Ingående likvida medel)",
-            disabled=True,
-        )
+            # Sync likvida medel IB from Step 2 opening cash to avoid mismatches
+            ob_likvida = float(st.session_state["bud_opening_cash"])
+            st.session_state["bud_ob_likvida"] = ob_likvida
+            st.number_input(
+                "Likvida medel IB (kr)",
+                value=ob_likvida,
+                format="%.0f",
+                key="inp_ob_likvida",
+                help="Synkroniserad från Steg 2 (Ingående likvida medel)",
+                disabled=True,
+            )
 
-        st.markdown("**Ingående balansposter - Skulder och EK**")
-        ob_eget_kapital = st.number_input(
-            "Eget kapital IB (kr)",
-            min_value=0.0,
-            value=float(st.session_state["bud_ob_eget_kapital"]),
-            step=100_000.0,
-            format="%.0f",
-            key="inp_ob_eget_kapital",
-            help="Ingående balans för eget kapital",
-        )
-        st.session_state["bud_ob_eget_kapital"] = ob_eget_kapital
+            st.markdown("**Ingående balansposter - Skulder och EK**")
+            ob_eget_kapital = st.number_input(
+                "Eget kapital IB (kr)",
+                min_value=0.0,
+                value=float(st.session_state["bud_ob_eget_kapital"]),
+                step=100_000.0,
+                format="%.0f",
+                key="inp_ob_eget_kapital",
+                help="Ingående balans för eget kapital",
+            )
+            st.session_state["bud_ob_eget_kapital"] = ob_eget_kapital
 
-        ob_langsiktiga = st.number_input(
-            "Långsiktiga skulder IB (kr)",
-            min_value=0.0,
-            value=float(st.session_state["bud_ob_langsiktiga"]),
-            step=100_000.0,
-            format="%.0f",
-            key="inp_ob_langsiktiga",
-            help="Ingående balans för långsiktiga skulder (banklån etc.)",
-        )
-        st.session_state["bud_ob_langsiktiga"] = ob_langsiktiga
+            ob_langsiktiga = st.number_input(
+                "Långsiktiga skulder IB (kr)",
+                min_value=0.0,
+                value=float(st.session_state["bud_ob_langsiktiga"]),
+                step=100_000.0,
+                format="%.0f",
+                key="inp_ob_langsiktiga",
+                help="Ingående balans för långsiktiga skulder (banklån etc.)",
+            )
+            st.session_state["bud_ob_langsiktiga"] = ob_langsiktiga
 
-        ob_leverantorsskulder = st.number_input(
-            "Leverantörsskulder IB (kr)",
-            min_value=0.0,
-            value=float(st.session_state["bud_ob_leverantorsskulder"]),
-            step=50_000.0,
-            format="%.0f",
-            key="inp_ob_leverantorsskulder",
-            help="Ingående balans för leverantörsskulder",
-        )
-        st.session_state["bud_ob_leverantorsskulder"] = ob_leverantorsskulder
+            ob_leverantorsskulder = st.number_input(
+                "Leverantörsskulder IB (kr)",
+                min_value=0.0,
+                value=float(st.session_state["bud_ob_leverantorsskulder"]),
+                step=50_000.0,
+                format="%.0f",
+                key="inp_ob_leverantorsskulder",
+                help="Ingående balans för leverantörsskulder",
+            )
+            st.session_state["bud_ob_leverantorsskulder"] = ob_leverantorsskulder
 
-        st.markdown("**Investeringar (balansbudget)**")
-        nyanskaffning = st.number_input(
-            "Nyanskaffning (kr)",
-            min_value=0.0,
-            value=float(st.session_state["bud_nyanskaffning"]),
-            step=50_000.0,
-            format="%.0f",
-            key="inp_nyanskaffning",
-            help="Nyanskaffade anläggningstillgångar under perioden",
-        )
-        st.session_state["bud_nyanskaffning"] = nyanskaffning
+            st.markdown("**Investeringar (balansbudget)**")
+            nyanskaffning = st.number_input(
+                "Nyanskaffning (kr)",
+                min_value=0.0,
+                value=float(st.session_state["bud_nyanskaffning"]),
+                step=50_000.0,
+                format="%.0f",
+                key="inp_nyanskaffning",
+                help="Nyanskaffade anläggningstillgångar under perioden",
+            )
+            st.session_state["bud_nyanskaffning"] = nyanskaffning
 
-        avskrivningar_balans = st.number_input(
-            "Avskrivningar (balans) (kr)",
-            min_value=0.0,
-            value=float(st.session_state["bud_avskrivningar_balans"]),
-            step=50_000.0,
-            format="%.0f",
-            key="inp_avskrivningar_balans",
-            help="Periodens avskrivningar (bör stämma med resultatbudgetens avskrivningar)",
-        )
-        st.session_state["bud_avskrivningar_balans"] = avskrivningar_balans
+            avskrivningar_balans = st.number_input(
+                "Avskrivningar (balans) (kr)",
+                min_value=0.0,
+                value=float(st.session_state["bud_avskrivningar_balans"]),
+                step=50_000.0,
+                format="%.0f",
+                key="inp_avskrivningar_balans",
+                help="Periodens avskrivningar (bör stämma med resultatbudgetens avskrivningar)",
+            )
+            st.session_state["bud_avskrivningar_balans"] = avskrivningar_balans
+            bud_step3_form_submit = st.form_submit_button("Uppdatera värden", type="primary")
 
     with col_res3:
         # Build balansbudget
@@ -870,7 +873,6 @@ if True:
         )
         with st.spinner("Analyserar budgetkonsistens..."):
             raw = cached_chat(sys_p, usr_p)
-            increment_session_calls()
         result = humanize(raw, required_sections=["Antagande", "Beräkning", "Tolkning", "Källor och förbehåll"])
         st.markdown(result.text)
 
@@ -933,7 +935,6 @@ if user_q:
         with st.chat_message("assistant"):
             with st.spinner("Tänker..."):
                 raw = cached_chat(sys_p, usr_p)
-                increment_session_calls()
             result = humanize(raw)
             st.markdown(result.text)
         st.session_state["budget_chat_history"].append(("assistant", result.text))
