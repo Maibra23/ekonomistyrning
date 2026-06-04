@@ -1,6 +1,11 @@
 """Kunskapstest - Dynamic quiz with LLM generation and deterministic verification.
 
 Kapitel 4-17 i Andersson, Ekonomistyrning: beslut och handling.
+
+The quiz uses a single combined LLM call per question (generation + self
+rating in one JSON envelope) instead of two sequential calls, with a hard
+retry cap of 2 attempts. Worst case is 2 LLM calls per "Generera fråga"
+click instead of the previous 10.
 """
 from __future__ import annotations
 
@@ -12,7 +17,6 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from utils.charts import COLORS, apply_layout
-from utils.export import export_to_excel
 from utils.humanizer import humanize
 from utils.llm import (
     LLMSessionCapError,
@@ -23,17 +27,33 @@ from utils.llm import (
 )
 from utils.prompts import (
     build_qa_prompt,
-    build_quiz_generation_prompt,
-    build_quiz_quality_check_prompt,
+    build_quiz_combined_prompt,
+    contains_forbidden_terms,
+    validate_kapitel_referens,
+)
+from utils.ui import (
+    footer_note,
+    inject_css,
+    kpi_card,
+    page_title,
+    render_kpi_row,
+    render_session_cap_card,
+    render_sidebar,
 )
 
-# Minimum acceptable total score (sum of 3 dimensions, each 1-5) for the
-# quiz quality check loop introduced in Task 10.7.
-_QUIZ_QUALITY_MIN_TOTAL = 12
-_QUIZ_QUALITY_MAX_RETRIES = 2
-from utils.ui import footer_note, inject_css, kpi_card, page_title, render_kpi_row, render_session_cap_card, render_sidebar
 
-# Page config
+# Tighter token budget for quiz generation: the JSON envelope rarely needs
+# more than 800-1000 output tokens, so 1200 leaves headroom without paying
+# for unused reservation.
+_QUIZ_MAX_TOKENS = 1200
+# Lower temperature than 0.7 so the model adheres more reliably to schema
+# and stays within the requested chapter scope.
+_QUIZ_TEMPERATURE = 0.5
+# Hard cap on attempts per "Generera fråga" click. The combined prompt
+# already self-rates, so one well-formed attempt is normally enough.
+_QUIZ_MAX_ATTEMPTS = 2
+
+
 st.set_page_config(
     page_title="Kunskapstest, Ekonomistyrning",
     layout="wide",
@@ -42,7 +62,101 @@ st.set_page_config(
 inject_css()
 render_sidebar("quiz")
 
-# Load fallback bank
+# ---------------------------------------------------------------------------
+# Quiz-specific styling
+# ---------------------------------------------------------------------------
+
+_QUIZ_CSS = """
+<style>
+.eks-quiz-card {
+    background: #FFFFFF;
+    border: 1px solid #E5E7EB;
+    border-radius: 6px;
+    padding: 22px 26px;
+    margin: 18px 0;
+    box-shadow: 0 1px 2px rgba(17,24,39,0.04);
+}
+.eks-quiz-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+.eks-quiz-badge {
+    font-family: Inter, sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    color: #1E40AF;
+    background: rgba(30,64,175,0.08);
+    border: 1px solid rgba(30,64,175,0.18);
+    padding: 3px 10px;
+    border-radius: 999px;
+    text-transform: uppercase;
+}
+.eks-quiz-badge.diff-latt   { color: #059669; background: rgba(5,150,105,0.08);   border-color: rgba(5,150,105,0.20); }
+.eks-quiz-badge.diff-medel  { color: #D97706; background: rgba(217,119,6,0.08);   border-color: rgba(217,119,6,0.20); }
+.eks-quiz-badge.diff-svar   { color: #DC2626; background: rgba(220,38,38,0.08);   border-color: rgba(220,38,38,0.22); }
+.eks-quiz-scenario {
+    font-family: Inter, sans-serif;
+    font-size: 13px;
+    color: #4B5563;
+    background: #F9FAFB;
+    border-left: 3px solid #3B82F6;
+    padding: 10px 14px;
+    border-radius: 0 4px 4px 0;
+    margin-bottom: 16px;
+    line-height: 1.55;
+}
+.eks-quiz-question {
+    font-family: Inter, sans-serif;
+    font-size: 17px;
+    font-weight: 600;
+    color: #111827;
+    line-height: 1.45;
+    margin-bottom: 16px;
+}
+.eks-quiz-given {
+    background: #F3F4F6;
+    border-radius: 4px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+}
+.eks-quiz-given-title {
+    font-family: Inter, sans-serif;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.7px;
+    text-transform: uppercase;
+    color: #6B7280;
+    margin-bottom: 8px;
+}
+.eks-quiz-given ul {
+    margin: 0;
+    padding-left: 18px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12.5px;
+    color: #111827;
+}
+.eks-quiz-given li { margin: 2px 0; }
+.eks-quiz-chip {
+    display: inline-block;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+    color: #6B7280;
+    background: #F3F4F6;
+    border: 1px solid #E5E7EB;
+    padding: 2px 9px;
+    border-radius: 999px;
+}
+</style>
+"""
+st.html(_QUIZ_CSS)
+
+# ---------------------------------------------------------------------------
+# Fallback bank
+# ---------------------------------------------------------------------------
+
 _FALLBACK_PATH = Path(__file__).resolve().parent.parent / "data" / "quiz_fallback.json"
 
 
@@ -57,12 +171,19 @@ def _load_fallback() -> list[dict]:
 
 FALLBACK_BANK = _load_fallback()
 
+
+# ---------------------------------------------------------------------------
 # Page header
+# ---------------------------------------------------------------------------
+
 st.html(
     page_title(
         eyebrow="KAPITEL 4-17",
         title="Kunskapstest",
-        subtitle="Testa dina kunskaper med AI-genererade frågor. Välj ämnesområde, svårighetsgrad och frågetyp.",
+        subtitle=(
+            "Testa dina kunskaper med AI-genererade frågor. "
+            "Välj ämnesområde, svårighetsgrad och frågetyp."
+        ),
     )
 )
 
@@ -75,44 +196,49 @@ if "quiz_answered" not in st.session_state:
     st.session_state["quiz_answered"] = False
 
 # Controls
+_CLUSTER_LABELS = {
+    "kalkyl": "Kalkylering (kap. 4-8)",
+    "investering": "Investering (kap. 10)",
+    "budget": "Budget (kap. 13-15)",
+    "standardkost": "Standardkostnad (kap. 17)",
+}
+_DIFFICULTY_LABELS = {"latt": "Lätt", "medel": "Medel", "svar": "Svår"}
+_QTYPE_LABELS = {"flerval": "Flerval (4 alternativ)", "numerisk": "Numerisk"}
+
 col1, col2, col3 = st.columns(3)
 with col1:
     kapitelkluster = st.selectbox(
         "Ämnesområde",
-        ["kalkyl", "investering", "budget", "standardkost"],
-        format_func=lambda x: {
-            "kalkyl": "Kalkylering (kap. 4-8)",
-            "investering": "Investering (kap. 10)",
-            "budget": "Budget (kap. 13-15)",
-            "standardkost": "Standardkostnad (kap. 17)",
-        }[x],
+        list(_CLUSTER_LABELS.keys()),
+        format_func=lambda x: _CLUSTER_LABELS[x],
     )
 with col2:
     difficulty = st.selectbox(
         "Svårighetsgrad",
-        ["latt", "medel", "svar"],
-        format_func=lambda x: {"latt": "Lätt", "medel": "Medel", "svar": "Svår"}[x],
+        list(_DIFFICULTY_LABELS.keys()),
+        format_func=lambda x: _DIFFICULTY_LABELS[x],
         index=1,
     )
 with col3:
     question_type = st.selectbox(
         "Frågetyp",
-        ["flerval", "numerisk"],
-        format_func=lambda x: {"flerval": "Flerval (4 alternativ)", "numerisk": "Numerisk"}[x],
+        list(_QTYPE_LABELS.keys()),
+        format_func=lambda x: _QTYPE_LABELS[x],
     )
 
 
-def _verify_numeric_answer(question: dict) -> bool:
-    """Verify a numeric question by running through basic sanity checks.
+# ---------------------------------------------------------------------------
+# Generation pipeline
+# ---------------------------------------------------------------------------
 
-    Returns True if the question's ratt_svar is a reasonable numeric value.
-    """
+def _verify_numeric_answer(question: dict) -> bool:
+    """Sanity check the numeric answer: must be a finite, reasonably-sized number."""
     try:
-        given = question.get("given_data", {})
         expected = question.get("ratt_svar")
         if not isinstance(expected, (int, float)):
             return False
-        # Basic sanity: answer should be a reasonable number
+        if expected != expected:  # NaN
+            return False
         if abs(expected) > 1e12:
             return False
         return True
@@ -121,229 +247,332 @@ def _verify_numeric_answer(question: dict) -> bool:
 
 
 def _get_fallback_question(kluster: str, diff: str, qtype: str) -> dict | None:
-    """Pick a random matching question from the fallback bank."""
+    """Pick a random matching question from the static fallback bank."""
     matches = [
-        q
-        for q in FALLBACK_BANK
+        q for q in FALLBACK_BANK
         if q.get("kapitelkluster") == kluster
         and q.get("difficulty", "medel") == diff
         and q.get("question_type", "flerval") == qtype
     ]
     if not matches:
-        # Broaden search: just match cluster and type
         matches = [
-            q
-            for q in FALLBACK_BANK
+            q for q in FALLBACK_BANK
             if q.get("kapitelkluster") == kluster
             and q.get("question_type", "flerval") == qtype
         ]
     if not matches:
-        # Even broader: just cluster
         matches = [q for q in FALLBACK_BANK if q.get("kapitelkluster") == kluster]
     return random.choice(matches) if matches else None
 
 
-def _evaluate_quiz_quality(question: dict) -> dict | None:
-    """Ask the LLM to rate the pedagogical quality of ``question``.
+def _parse_quiz_json(raw: str) -> dict | None:
+    """Parse the LLM response, tolerating markdown code fences."""
+    clean = raw.strip()
+    if clean.startswith("```"):
+        clean = clean.split("\n", 1)[1] if "\n" in clean else clean[3:]
+        if clean.endswith("```"):
+            clean = clean[:-3]
+        clean = clean.strip()
+    try:
+        data = json.loads(clean)
+    except json.JSONDecodeError:
+        return None
+    return data if isinstance(data, dict) else None
 
-    Returns a dict with keys pedagogiskt_varde, tydlighet, realism, total,
-    motivering on success, or None if the call or parsing fails.
-    """
-    if not is_llm_available() or get_session_calls_remaining() <= 0:
+
+def _normalize_quality(question: dict) -> dict | None:
+    """Coerce the self-rated quality block into a stable shape, or None."""
+    quality = question.get("kvalitet")
+    if not isinstance(quality, dict):
         return None
     try:
-        sys_p, usr_p = build_quiz_quality_check_prompt(question)
-        raw = cached_chat(sys_p, usr_p, temperature=0.2)
-        clean = raw.strip()
-        if clean.startswith("```"):
-            clean = clean.split("\n", 1)[1] if "\n" in clean else clean[3:]
-            if clean.endswith("```"):
-                clean = clean[:-3]
-            clean = clean.strip()
-        data = json.loads(clean)
-        if not all(
-            key in data
-            for key in ("pedagogiskt_varde", "tydlighet", "realism")
-        ):
-            return None
-        # Coerce ints and clamp to 1-5
-        for key in ("pedagogiskt_varde", "tydlighet", "realism"):
-            data[key] = max(1, min(5, int(data[key])))
-        data["total"] = (
-            data["pedagogiskt_varde"]
-            + data["tydlighet"]
-            + data["realism"]
-        )
-        data["motivering"] = str(data.get("motivering", ""))
-        return data
-    except (json.JSONDecodeError, LLMUnavailableError, KeyError, ValueError, TypeError):
+        ped = max(1, min(5, int(quality.get("pedagogiskt_varde", 0))))
+        tyd = max(1, min(5, int(quality.get("tydlighet", 0))))
+        rea = max(1, min(5, int(quality.get("realism", 0))))
+    except (TypeError, ValueError):
         return None
+    return {
+        "pedagogiskt_varde": ped,
+        "tydlighet": tyd,
+        "realism": rea,
+        "total": ped + tyd + rea,
+        "motivering": str(quality.get("motivering", "")),
+    }
+
+
+def _is_question_in_scope(question: dict, cluster: str) -> tuple[bool, str]:
+    """Return (in_scope, reason) for the generated question.
+
+    Checks chapter reference + forbidden term guard against question text,
+    explanation, and given_data labels.
+    """
+    ref = question.get("kapitel_referens")
+    if not validate_kapitel_referens(ref, cluster):
+        return False, f"kapitel_referens utanför scope: {ref!r}"
+    text_blob = " ".join(
+        [
+            str(question.get("fraga", "")),
+            str(question.get("forklaring", "")),
+            str(question.get("berakning_steg", "")),
+            str(question.get("scenario", "")),
+        ]
+    )
+    bad = contains_forbidden_terms(text_blob, cluster)
+    if bad:
+        return False, f"otillåtna termer: {bad}"
+    return True, ""
 
 
 def _generate_question(kluster: str, diff: str, qtype: str) -> dict | None:
-    """Generate a question via LLM with verification, fallback to static bank.
+    """Generate one quiz item via the combined LLM call.
 
-    Task 10.7 adds a pedagogical quality self-check loop after numeric
-    verification succeeds. If the LLM rates the question below the
-    accepted threshold we regenerate, up to a small retry budget.
+    Single call per attempt (generation + self-rating bundled). Up to
+    ``_QUIZ_MAX_ATTEMPTS`` attempts total; retries only on structural,
+    numeric, or chapter-scope failures.
+
+    Returns the validated question dict or a fallback bank item if every
+    attempt failed and LLM is unavailable.
     """
     if not is_llm_available() or get_session_calls_remaining() <= 0:
         return _get_fallback_question(kluster, diff, qtype)
 
-    max_attempts = 3
-    # Persistent log of quality scores so users can inspect later.
     quality_log = st.session_state.setdefault("quiz_quality_log", [])
-    last_question: dict | None = None
-    last_quality: dict | None = None
+    last_candidate: dict | None = None
 
-    for attempt in range(max_attempts + _QUIZ_QUALITY_MAX_RETRIES):
+    for attempt in range(_QUIZ_MAX_ATTEMPTS):
         try:
-            sys_p, usr_p = build_quiz_generation_prompt(kluster, diff, qtype)
-            raw = cached_chat(sys_p, usr_p, temperature=0.7)
+            sys_p, usr_p = build_quiz_combined_prompt(kluster, diff, qtype)
+            raw = cached_chat(
+                sys_p,
+                usr_p,
+                max_new_tokens=_QUIZ_MAX_TOKENS,
+                temperature=_QUIZ_TEMPERATURE,
+            )
+        except LLMUnavailableError:
+            break
 
-            # Parse JSON - strip markdown code blocks if present
-            clean = raw.strip()
-            if clean.startswith("```"):
-                clean = clean.split("\n", 1)[1] if "\n" in clean else clean[3:]
-                if clean.endswith("```"):
-                    clean = clean[:-3]
-                clean = clean.strip()
-
-            question = json.loads(clean)
-
-            # Validate structure
-            required_keys = {"fraga", "ratt_svar", "forklaring"}
-            if not required_keys.issubset(question.keys()):
-                continue
-
-            # For numerisk: verify answer
-            if qtype == "numerisk":
-                if not _verify_numeric_answer(question):
-                    continue
-
-            # Quality check (Task 10.7)
-            quality = _evaluate_quiz_quality(question)
-            last_question = question
-            last_quality = quality
-            if quality is not None and quality["total"] < _QUIZ_QUALITY_MIN_TOTAL:
-                quality_log.append(
-                    {"accepted": False, "kluster": kluster, "diff": diff, **quality}
-                )
-                # Keep retrying until budget is exhausted
-                continue
-
-            # Accept this question
-            question["kapitelkluster"] = kluster
-            question["difficulty"] = diff
-            question["question_type"] = qtype
-            if quality is not None:
-                question["quality"] = quality
-                quality_log.append(
-                    {"accepted": True, "kluster": kluster, "diff": diff, **quality}
-                )
-            return question
-
-        except (json.JSONDecodeError, LLMUnavailableError, KeyError):
+        question = _parse_quiz_json(raw)
+        if question is None:
             continue
 
-    # Quality retries exhausted: accept the last valid candidate rather
-    # than blocking the user indefinitely.
-    if last_question is not None:
-        last_question["kapitelkluster"] = kluster
-        last_question["difficulty"] = diff
-        last_question["question_type"] = qtype
-        if last_quality is not None:
-            last_question["quality"] = last_quality
-        return last_question
+        # Structural validation
+        required_keys = {"fraga", "ratt_svar", "forklaring"}
+        if not required_keys.issubset(question.keys()):
+            continue
 
-    # All attempts failed, use fallback
+        # Numeric correctness check
+        if qtype == "numerisk" and not _verify_numeric_answer(question):
+            continue
+
+        # Chapter scope + forbidden term guard
+        in_scope, reason = _is_question_in_scope(question, kluster)
+        last_candidate = question
+        if not in_scope:
+            quality_log.append(
+                {"accepted": False, "kluster": kluster, "diff": diff, "reason": reason}
+            )
+            continue
+
+        # Normalize and stamp metadata
+        question["kapitelkluster"] = kluster
+        question["difficulty"] = diff
+        question["question_type"] = qtype
+        quality = _normalize_quality(question)
+        if quality is not None:
+            question["quality"] = quality
+            quality_log.append(
+                {"accepted": True, "kluster": kluster, "diff": diff, **quality}
+            )
+        return question
+
+    # All attempts failed: use last structurally-valid candidate if any,
+    # otherwise fall back to the static bank.
+    if last_candidate is not None:
+        last_candidate["kapitelkluster"] = kluster
+        last_candidate["difficulty"] = diff
+        last_candidate["question_type"] = qtype
+        quality = _normalize_quality(last_candidate)
+        if quality is not None:
+            last_candidate["quality"] = quality
+        return last_candidate
+
     return _get_fallback_question(kluster, diff, qtype)
 
 
+# ---------------------------------------------------------------------------
 # Generate button
+# ---------------------------------------------------------------------------
+
 if st.button("Generera fråga", type="primary", use_container_width=True):
     with st.spinner("Genererar fråga..."):
-        q = _generate_question(kapitelkluster, difficulty, question_type)
+        try:
+            q = _generate_question(kapitelkluster, difficulty, question_type)
+        except LLMSessionCapError:
+            q = None
+            render_session_cap_card()
     if q:
         st.session_state["quiz_current"] = q
         st.session_state["quiz_answered"] = False
-    else:
+        # Reset the previous radio selection so the new question starts blank.
+        st.session_state.pop("quiz_answer_radio", None)
+        st.session_state.pop("quiz_answer_num", None)
+    elif "quiz_current" not in st.session_state or st.session_state.get("quiz_current") is None:
         st.error("Kunde inte generera en fråga. Försök igen.")
 
-# Display current question
+
+# ---------------------------------------------------------------------------
+# Render current question (quiz card)
+# ---------------------------------------------------------------------------
+
+def _difficulty_class(diff: str) -> str:
+    return {"latt": "diff-latt", "medel": "diff-medel", "svar": "diff-svar"}.get(
+        diff, "diff-medel"
+    )
+
+
+def _render_question_card(q: dict) -> None:
+    """Render the quiz card: badges + scenario + question + given data."""
+    cluster_label = _CLUSTER_LABELS.get(q.get("kapitelkluster", ""), q.get("kapitelkluster", ""))
+    diff = q.get("difficulty", "medel")
+    diff_label = _DIFFICULTY_LABELS.get(diff, diff)
+    qtype = q.get("question_type", "flerval")
+    qtype_label = _QTYPE_LABELS.get(qtype, qtype)
+
+    badges_html = (
+        f'<div class="eks-quiz-badges">'
+        f'<span class="eks-quiz-badge">{cluster_label}</span>'
+        f'<span class="eks-quiz-badge {_difficulty_class(diff)}">{diff_label}</span>'
+        f'<span class="eks-quiz-badge">{qtype_label}</span>'
+        f"</div>"
+    )
+
+    scenario_html = ""
+    if q.get("scenario"):
+        scenario_html = (
+            f'<div class="eks-quiz-scenario"><strong>Scenario:</strong> '
+            f"{q['scenario']}</div>"
+        )
+
+    question_html = f'<div class="eks-quiz-question">{q.get("fraga", "")}</div>'
+
+    given_html = ""
+    given = q.get("given_data") or {}
+    if given:
+        items = "".join(f"<li><strong>{k}:</strong> {v}</li>" for k, v in given.items())
+        given_html = (
+            f'<div class="eks-quiz-given">'
+            f'<div class="eks-quiz-given-title">Givna uppgifter</div>'
+            f"<ul>{items}</ul>"
+            f"</div>"
+        )
+
+    ref = q.get("kapitel_referens")
+    ref_html = (
+        f'<span class="eks-quiz-chip">Referens: {ref}</span>' if ref else ""
+    )
+
+    st.html(
+        f'<div class="eks-quiz-card">'
+        f"{badges_html}{scenario_html}{question_html}{given_html}{ref_html}"
+        f"</div>"
+    )
+
+
 q = st.session_state.get("quiz_current")
 if q:
-    st.divider()
-
-    # Show scenario
-    if q.get("scenario"):
-        st.markdown(f"**Scenario:** {q['scenario']}")
-
-    # Show question
-    st.markdown(f"### {q['fraga']}")
-
-    # Show given data
-    if q.get("given_data"):
-        with st.expander("Givna uppgifter", expanded=True):
-            for k, v in q["given_data"].items():
-                st.markdown(f"- **{k}:** {v}")
+    _render_question_card(q)
 
     # Answer input
-    if q.get("question_type") == "flerval" and q.get("alternativ"):
+    qtype = q.get("question_type", "flerval")
+    if qtype == "flerval" and q.get("alternativ"):
+        alt_list: list[str] = list(q["alternativ"])
+        letters = ["A", "B", "C", "D", "E", "F"]
         user_answer = st.radio(
             "Välj svar:",
-            options=list(range(len(q["alternativ"]))),
-            format_func=lambda i: q["alternativ"][i],
+            options=list(range(len(alt_list))),
+            format_func=lambda i: f"{letters[i]}. {alt_list[i]}",
             key="quiz_answer_radio",
+            index=None,
         )
     else:
+        enhet = q.get("enhet") or ""
+        enhet_hint = f"Svaret anges i {enhet}." if enhet else None
         user_answer = st.number_input(
             "Ditt svar:",
             format="%.2f",
             key="quiz_answer_num",
+            help=enhet_hint,
         )
+        if enhet:
+            st.caption(f"Förväntad enhet: {enhet}")
 
-    # Check answer
-    if st.button("Svara", key="quiz_submit") and not st.session_state["quiz_answered"]:
+    # Submit
+    can_submit = (qtype != "flerval") or (
+        st.session_state.get("quiz_answer_radio") is not None
+    )
+    submit_label = (
+        "Svara" if can_submit else "Välj ett alternativ för att svara"
+    )
+    if st.button(
+        submit_label,
+        key="quiz_submit",
+        disabled=(not can_submit) or st.session_state["quiz_answered"],
+        type="primary",
+    ):
         st.session_state["quiz_answered"] = True
         st.session_state["quiz_score"]["total"] += 1
 
         correct = False
-        if q.get("question_type") == "flerval":
+        if qtype == "flerval":
             correct = user_answer == q.get("ratt_svar")
         else:
-            expected = float(q.get("ratt_svar", 0))
-            tolerance = max(abs(expected) * 0.01, 0.5)
-            correct = abs(float(user_answer) - expected) <= tolerance
+            try:
+                expected = float(q.get("ratt_svar", 0))
+                tolerance = max(abs(expected) * 0.01, 0.5)
+                correct = abs(float(user_answer) - expected) <= tolerance
+            except (TypeError, ValueError):
+                correct = False
 
         if correct:
             st.session_state["quiz_score"]["correct"] += 1
             st.success("Rätt svar!")
         else:
-            if q.get("question_type") == "flerval" and q.get("alternativ"):
+            if qtype == "flerval" and q.get("alternativ"):
                 correct_idx = q.get("ratt_svar", 0)
                 if isinstance(correct_idx, int) and 0 <= correct_idx < len(q["alternativ"]):
-                    st.error(f"Fel svar. Rätt svar: {q['alternativ'][correct_idx]}")
+                    st.error(
+                        f"Fel svar. Rätt svar: "
+                        f"{letters[correct_idx]}. {q['alternativ'][correct_idx]}"
+                    )
                 else:
                     st.error("Fel svar.")
             else:
-                st.error(f"Fel svar. Rätt svar: {q.get('ratt_svar')}")
+                enhet = q.get("enhet") or ""
+                suffix = f" {enhet}" if enhet else ""
+                st.error(f"Fel svar. Rätt svar: {q.get('ratt_svar')}{suffix}")
 
-        # Show explanation
-        if q.get("berakning_steg"):
-            with st.expander("Beräkningssteg", expanded=True):
-                humanized = humanize(q["berakning_steg"])
-                st.markdown(humanized.text)
-
-        if q.get("forklaring"):
-            with st.expander("Förklaring", expanded=True):
-                humanized = humanize(q["forklaring"])
-                st.markdown(humanized.text)
+    # After answer, show explanation side-by-side
+    if st.session_state["quiz_answered"]:
+        st.markdown("#### Lösning och förklaring")
+        explain_col, steps_col = st.columns(2)
+        with steps_col:
+            steps_text = q.get("berakning_steg")
+            st.markdown("**Beräkningssteg**")
+            if steps_text:
+                st.markdown(humanize(str(steps_text)).text)
+            else:
+                st.caption("Inga separata beräkningssteg angavs.")
+        with explain_col:
+            st.markdown("**Förklaring**")
+            forklaring = q.get("forklaring")
+            if forklaring:
+                st.markdown(humanize(str(forklaring)).text)
+            else:
+                st.caption("Ingen förklaring angavs.")
 
         if q.get("kapitel_referens"):
             st.caption(f"Referens: {q['kapitel_referens']}")
 
-        # Quality scores (Task 10.7) -- transparency expander
         quality = q.get("quality")
         if quality:
             with st.expander("Frågekvalitet (självvärdering)"):
@@ -356,16 +585,21 @@ if q:
                 if quality.get("motivering"):
                     st.caption(quality["motivering"])
 
-    # Action buttons after answering
-    if st.session_state["quiz_answered"]:
+        # Action buttons
         bcol1, bcol2, bcol3 = st.columns(3)
         with bcol1:
             if st.button("Ny fråga", key="quiz_new"):
                 with st.spinner("Genererar ny fråga..."):
-                    new_q = _generate_question(kapitelkluster, difficulty, question_type)
+                    try:
+                        new_q = _generate_question(kapitelkluster, difficulty, question_type)
+                    except LLMSessionCapError:
+                        new_q = None
+                        render_session_cap_card()
                 if new_q:
                     st.session_state["quiz_current"] = new_q
                     st.session_state["quiz_answered"] = False
+                    st.session_state.pop("quiz_answer_radio", None)
+                    st.session_state.pop("quiz_answer_num", None)
                     st.rerun()
         with bcol2:
             harder_diff = {"latt": "medel", "medel": "svar", "svar": "svar"}.get(
@@ -373,10 +607,16 @@ if q:
             )
             if st.button("Liknande fråga men svårare", key="quiz_harder"):
                 with st.spinner("Genererar svårare fråga..."):
-                    new_q = _generate_question(kapitelkluster, harder_diff, question_type)
+                    try:
+                        new_q = _generate_question(kapitelkluster, harder_diff, question_type)
+                    except LLMSessionCapError:
+                        new_q = None
+                        render_session_cap_card()
                 if new_q:
                     st.session_state["quiz_current"] = new_q
                     st.session_state["quiz_answered"] = False
+                    st.session_state.pop("quiz_answer_radio", None)
+                    st.session_state.pop("quiz_answer_num", None)
                     st.rerun()
         with bcol3:
             if st.button("Förklara djupare", key="quiz_explain"):
@@ -395,8 +635,14 @@ if q:
                     st.markdown(result.text)
                 except LLMUnavailableError:
                     st.info("LLM ej tillgänglig för djupare förklaring.")
+                except LLMSessionCapError:
+                    render_session_cap_card()
 
+
+# ---------------------------------------------------------------------------
 # Score tracker
+# ---------------------------------------------------------------------------
+
 st.divider()
 score = st.session_state["quiz_score"]
 if score["total"] > 0:
@@ -414,7 +660,6 @@ if score["total"] > 0:
         ]
     )
 
-    # Plotly gauge chart for score visualization
     fig_gauge = go.Figure(
         go.Indicator(
             mode="gauge+number",
@@ -442,4 +687,4 @@ if score["total"] > 0:
 else:
     st.info("Inga frågor besvarade ännu. Tryck 'Generera fråga' för att börja.")
 
-st.html(footer_note(updated="2026-05-07"))
+st.html(footer_note(updated="2026-06-04"))

@@ -14,12 +14,9 @@ from utils.export import export_to_excel
 from utils.formatting import format_sek
 from utils.grounding_ui import show_grounding_warning
 from utils.llm import (
-    LLMSessionCapError,
     LLMUnavailableError,
     cached_chat,
-    get_session_calls_remaining,
     is_llm_available,
-    verify_grounding,
 )
 from utils.humanizer import humanize
 from utils.prompts import (
@@ -32,7 +29,8 @@ from utils.standardkost import (
     variance_decomposition_rorlig,
     variance_fixed_overhead,
 )
-from utils.ui import SCENARIO_DIFFICULTY_HELP, footer_note, inject_css, kpi_card, page_title, render_kpi_row, render_session_cap_card, render_sidebar
+from utils.tutor import render_tutor_explanation
+from utils.ui import SCENARIO_DIFFICULTY_HELP, footer_note, inject_css, kpi_card, page_title, render_kpi_row, render_sidebar
 
 # Difficulty label mapping for the scenario generator dropdown
 _DIFFICULTY_OPTIONS = ("Lätt", "Medel", "Svår")
@@ -330,47 +328,41 @@ with tab1:
                 "Kontrollera inmatade värden."
             )
 
-        # LLM interpretation
-        st.markdown("### Tolkning")
-        remaining = get_session_calls_remaining()
-        if remaining > 0:
-            try:
-                if not is_llm_available():
-                    raise LLMUnavailableError("Ingen token")
-                component_results = [{
-                    "typ": "Rorlig kostnad",
-                    "volymavvikelse": rorlig_result["volymavvikelse"],
-                    "prisavvikelse": rorlig_result["prisavvikelse"],
-                    "effektivitetsavvikelse": rorlig_result["effektivitetsavvikelse"],
-                    "total": rorlig_result["total"],
-                }]
-                sys_p, usr_p = build_standardkost_interpretation_prompt(component_results)
-                with st.spinner("Analyserar avvikelser..."):
-                    raw = cached_chat(sys_p, usr_p)
-                result = humanize(raw, required_sections=["Antagande", "Berakning", "Tolkning", "Kallor och forbehall"])
-                st.markdown(result.text)
-
-                expected = {
-                    "total_avvikelse": rorlig_result["total"],
-                    "volymavvikelse": rorlig_result["volymavvikelse"],
-                    "prisavvikelse": rorlig_result["prisavvikelse"],
-                    "effektivitetsavvikelse": rorlig_result["effektivitetsavvikelse"],
-                }
-                grounding = verify_grounding(result.text, expected)
-                if grounding["missing"]:
-                    st.html(
-                        '<div class="eks-grounding-warn">'
-                        "OBS: Tutorn kan ha refererat fel siffra."
-                        "</div>"
-                    )
-                show_grounding_warning(grounding)
-            except LLMSessionCapError:
-                render_session_cap_card()
-            except LLMUnavailableError:
-                st.html('<div class="eks-offline-badge">LLM offline, visar grundförklaring</div>')
-                sk_inputs = {"standard_volym": std_volym, "verklig_volym": verk_volym}
-                sk_outputs = {"total_avvikelse": rorlig_result["total"]}
-                st.markdown(FALLBACK_TEMPLATES["standardkost"]("standardkost", sk_inputs, sk_outputs))
+        # LLM interpretation (on-demand)
+        _rorlig_components = [{
+            "typ": "Rorlig kostnad",
+            "volymavvikelse": rorlig_result["volymavvikelse"],
+            "prisavvikelse": rorlig_result["prisavvikelse"],
+            "effektivitetsavvikelse": rorlig_result["effektivitetsavvikelse"],
+            "total": rorlig_result["total"],
+        }]
+        render_tutor_explanation(
+            state_key="sk_rorlig_llm",
+            inputs={"standard_volym": std_volym, "verklig_volym": verk_volym},
+            outputs={
+                "total_avvikelse": rorlig_result["total"],
+                "volymavvikelse": rorlig_result["volymavvikelse"],
+                "prisavvikelse": rorlig_result["prisavvikelse"],
+                "effektivitetsavvikelse": rorlig_result["effektivitetsavvikelse"],
+            },
+            build_prompt=lambda: build_standardkost_interpretation_prompt(
+                _rorlig_components
+            ),
+            fallback_text=lambda: FALLBACK_TEMPLATES["standardkost"](
+                "standardkost",
+                {"standard_volym": std_volym, "verklig_volym": verk_volym},
+                {"total_avvikelse": rorlig_result["total"]},
+            ),
+            required_sections=["Antagande", "Berakning", "Tolkning", "Kallor och forbehall"],
+            expected_numbers={
+                "total_avvikelse": rorlig_result["total"],
+                "volymavvikelse": rorlig_result["volymavvikelse"],
+                "prisavvikelse": rorlig_result["prisavvikelse"],
+                "effektivitetsavvikelse": rorlig_result["effektivitetsavvikelse"],
+            },
+            heading="### Tolkning",
+            spinner_label="Analyserar avvikelser...",
+        )
 
     st.html(footer_note(updated="2026-05-06"))
 
@@ -471,37 +463,30 @@ with tab2:
 
         st.caption("Kapitel 17.7: Fasta omkostnadsavvikelser.")
 
-    # LLM interpretation for fixed overhead
-    st.markdown("### Tolkning")
-    if get_session_calls_remaining() > 0:
-        try:
-            if not is_llm_available():
-                raise LLMUnavailableError("Ingen token")
-            component_results = [{
-                "typ": "Fast omkostnad",
-                "budgeterat": fast_result["standard_belopp"],
-                "verkligt": fast_result["verkligt_belopp"],
-                "avvikelse": fast_result["avvikelse"],
-                "fordelaktig": fast_result["favorable"],
-            }]
-            sys_p, usr_p = build_standardkost_interpretation_prompt(component_results)
-            with st.spinner("Analyserar..."):
-                raw = cached_chat(sys_p, usr_p)
-            result = humanize(raw)
-            st.markdown(result.text)
-
-            expected = {
-                "total_avvikelse": fast_result["avvikelse"],
-            }
-            grounding = verify_grounding(result.text, expected)
-            show_grounding_warning(grounding)
-        except LLMUnavailableError:
-            st.html('<div class="eks-offline-badge">LLM offline, visar grundförklaring</div>')
-            st.markdown(FALLBACK_TEMPLATES["standardkost"](
-                "standardkost",
-                {"budgeterat": budget_belopp, "verkligt": verkligt_belopp},
-                {"avvikelse": fast_result["avvikelse"]},
-            ))
+    # LLM interpretation for fixed overhead (on-demand)
+    _fast_components = [{
+        "typ": "Fast omkostnad",
+        "budgeterat": fast_result["standard_belopp"],
+        "verkligt": fast_result["verkligt_belopp"],
+        "avvikelse": fast_result["avvikelse"],
+        "fordelaktig": fast_result["favorable"],
+    }]
+    render_tutor_explanation(
+        state_key="sk_fast_llm",
+        inputs={"budgeterat": budget_belopp, "verkligt": verkligt_belopp},
+        outputs={"avvikelse": fast_result["avvikelse"]},
+        build_prompt=lambda: build_standardkost_interpretation_prompt(
+            _fast_components
+        ),
+        fallback_text=lambda: FALLBACK_TEMPLATES["standardkost"](
+            "standardkost",
+            {"budgeterat": budget_belopp, "verkligt": verkligt_belopp},
+            {"avvikelse": fast_result["avvikelse"]},
+        ),
+        expected_numbers={"total_avvikelse": fast_result["avvikelse"]},
+        heading="### Tolkning",
+        spinner_label="Analyserar...",
+    )
 
     st.html(footer_note(updated="2026-05-06"))
 
@@ -655,45 +640,45 @@ with tab3:
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
-    # LLM interpretation
-    st.markdown("### Tolkning")
-    if get_session_calls_remaining() > 0 and bar_values:
-        try:
-            if not is_llm_available():
-                raise LLMUnavailableError("Ingen token")
-            all_components = []
-            if rorlig_res:
-                all_components.append({
-                    "typ": "Rorlig",
-                    "volymavvikelse": rorlig_res["volymavvikelse"],
-                    "prisavvikelse": rorlig_res["prisavvikelse"],
-                    "effektivitetsavvikelse": rorlig_res["effektivitetsavvikelse"],
-                })
-            if fast_res:
-                all_components.append({
-                    "typ": "Fast",
-                    "avvikelse": fast_res["avvikelse"],
-                })
-            sys_p, usr_p = build_standardkost_interpretation_prompt(all_components)
-            with st.spinner("Analyserar sammanställning..."):
-                raw = cached_chat(sys_p, usr_p)
-            result = humanize(raw)
-            st.markdown(result.text)
-
-            expected = {"total_avvikelse": total_all}
-            if rorlig_res:
-                expected["volymavvikelse"] = rorlig_res["volymavvikelse"]
-                expected["prisavvikelse"] = rorlig_res["prisavvikelse"]
-                expected["effektivitetsavvikelse"] = rorlig_res["effektivitetsavvikelse"]
-            grounding = verify_grounding(result.text, expected)
-            show_grounding_warning(grounding)
-        except LLMUnavailableError:
-            st.html('<div class="eks-offline-badge">LLM offline, visar grundförklaring</div>')
-            st.markdown(FALLBACK_TEMPLATES["standardkost"](
+    # LLM interpretation (on-demand) -- only when there is at least one variance
+    if bar_values:
+        _all_components: list[dict] = []
+        if rorlig_res:
+            _all_components.append({
+                "typ": "Rorlig",
+                "volymavvikelse": rorlig_res["volymavvikelse"],
+                "prisavvikelse": rorlig_res["prisavvikelse"],
+                "effektivitetsavvikelse": rorlig_res["effektivitetsavvikelse"],
+            })
+        if fast_res:
+            _all_components.append({
+                "typ": "Fast",
+                "avvikelse": fast_res["avvikelse"],
+            })
+        _expected: dict[str, float] = {"total_avvikelse": total_all}
+        if rorlig_res:
+            _expected["volymavvikelse"] = rorlig_res["volymavvikelse"]
+            _expected["prisavvikelse"] = rorlig_res["prisavvikelse"]
+            _expected["effektivitetsavvikelse"] = rorlig_res["effektivitetsavvikelse"]
+        render_tutor_explanation(
+            state_key="sk_summary_llm",
+            inputs={
+                "rorlig_total": rorlig_total,
+                "fast_avvikelse": fast_avvikelse,
+            },
+            outputs=_expected,
+            build_prompt=lambda: build_standardkost_interpretation_prompt(
+                _all_components
+            ),
+            fallback_text=lambda: FALLBACK_TEMPLATES["standardkost"](
                 "standardkost",
                 {"rorlig_total": rorlig_total, "fast_avvikelse": fast_avvikelse},
                 {"total_avvikelse": total_all},
-            ))
+            ),
+            expected_numbers=_expected,
+            heading="### Tolkning",
+            spinner_label="Analyserar sammanställning...",
+        )
 
     # Q&A chat
     if "sk_chat_history" not in st.session_state:
