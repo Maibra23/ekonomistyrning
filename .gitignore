@@ -28,6 +28,7 @@ Thumbs.db
 # Environment variables (NEVER commit)
 .env
 
+
 # Project specific
 tests/output/
 *.xlsx
