@@ -28,6 +28,9 @@ Thumbs.db
 # Environment variables (NEVER commit)
 .env
 
+# MCP / agent debug logs
+.playwright-mcp/
+
 # Project specific
 tests/output/
 *.xlsx
