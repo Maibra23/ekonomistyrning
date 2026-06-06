@@ -189,6 +189,123 @@ class TestGenerateScenario:
         assert "MEDEL" in up
 
 
+class TestDifficultyAwareFallback:
+    """Fallback variation must shift its scale with the difficulty hint so
+    the offline placeholder reflects the requested complexity."""
+
+    def test_latt_yields_smaller_amounts_than_svar_on_average(self):
+        # Compare median grundinvestering across many draws so randomness
+        # doesn't make a single sample misleading. Lätt window peaks below
+        # 1.0x, svår window starts above 1.3x, so medians must separate.
+        rng_iters = 25
+        latt_vals = [
+            _fallback_for("investering", "latt")["grundinvestering"]
+            for _ in range(rng_iters)
+        ]
+        svar_vals = [
+            _fallback_for("investering", "svar")["grundinvestering"]
+            for _ in range(rng_iters)
+        ]
+        latt_vals.sort()
+        svar_vals.sort()
+        latt_median = latt_vals[len(latt_vals) // 2]
+        svar_median = svar_vals[len(svar_vals) // 2]
+        assert latt_median < svar_median, (
+            f"Expected lätt median ({latt_median}) below svår median "
+            f"({svar_median}) so difficulty visibly scales the fallback."
+        )
+
+    def test_unknown_difficulty_defaults_to_medel_window(self):
+        # An unrecognised difficulty must not crash; it should silently
+        # fall back to the medel window so the page still gets a scenario.
+        scenario = _fallback_for("kalkyl_sjalvkostnad", "garbage")
+        assert scenario["direkt_material"] > 0
+
+
+class TestCurrentScenarioTracker:
+    """The app-wide current scenario is read by the sidebar so every page
+    knows which company the student is currently exploring."""
+
+    def _fake_streamlit(self, monkeypatch):
+        import sys
+        import types
+
+        class _Session(dict):
+            def __getattr__(self, item):
+                try:
+                    return self[item]
+                except KeyError as exc:
+                    raise AttributeError(item) from exc
+
+            def __setattr__(self, key, value):
+                self[key] = value
+
+        fake_st = types.ModuleType("streamlit")
+        fake_st.session_state = _Session()
+        monkeypatch.setitem(sys.modules, "streamlit", fake_st)
+        return fake_st
+
+    def test_set_then_get_round_trip(self, monkeypatch):
+        fake_st = self._fake_streamlit(monkeypatch)
+        from utils.scenarios import (
+            get_current_scenario,
+            set_current_scenario,
+        )
+
+        scenario = {
+            "foretag_namn": "Testbolaget AB",
+            "bransch_beskrivning": "En liten testverksamhet.",
+        }
+        published = set_current_scenario("kalkyl_sjalvkostnad", scenario, "latt")
+        assert published["foretag_namn"] == "Testbolaget AB"
+        assert published["source_module"] == "kalkyl_sjalvkostnad"
+        assert published["source_label"] == "Självkostnadskalkyl"
+        assert published["difficulty"] == "latt"
+        assert "Testbolaget" in fake_st.session_state["current_scenario"]["foretag_namn"]
+
+        loaded = get_current_scenario()
+        assert loaded == published
+
+    def test_set_overwrites_previous_company(self, monkeypatch):
+        self._fake_streamlit(monkeypatch)
+        from utils.scenarios import (
+            get_current_scenario,
+            set_current_scenario,
+        )
+
+        set_current_scenario(
+            "investering",
+            {"foretag_namn": "Första AB", "projekt_beskrivning": "Projekt A"},
+            "medel",
+        )
+        set_current_scenario(
+            "budget",
+            {"foretag_namn": "Andra AB", "bransch_beskrivning": "Bransch B"},
+            "svar",
+        )
+        loaded = get_current_scenario()
+        assert loaded["foretag_namn"] == "Andra AB"
+        assert loaded["source_module"] == "budget"
+        assert loaded["difficulty"] == "svar"
+
+    def test_clear_removes_current_scenario(self, monkeypatch):
+        fake_st = self._fake_streamlit(monkeypatch)
+        from utils.scenarios import (
+            clear_current_scenario,
+            get_current_scenario,
+            set_current_scenario,
+        )
+
+        set_current_scenario(
+            "kalkyl_bidrag",
+            {"foretag_namn": "AB", "bransch_beskrivning": "x"},
+            "medel",
+        )
+        clear_current_scenario()
+        assert get_current_scenario() is None
+        assert "current_scenario" not in fake_st.session_state
+
+
 class TestValidateGeneratedScenario:
     """Backwards compatibility: legacy validator still works."""
 

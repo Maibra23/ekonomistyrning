@@ -262,10 +262,34 @@ _COMPANY_NAMES: tuple[str, ...] = (
 )
 
 
-def _vary_number(key: str | None, value: float, factor: float, rng: random.Random) -> float:
+# Difficulty-driven monetary scaling. Each tier picks its factor uniformly
+# from its own range so a "lätt" company looks markedly smaller than a "svår"
+# company even when both fall back to the offline templates.
+_DIFFICULTY_FACTOR_RANGES: dict[str, tuple[float, float]] = {
+    "latt": (0.45, 0.85),
+    "medel": (0.85, 1.35),
+    "svar": (1.30, 2.40),
+}
+
+# Rate nudging widens with difficulty so "svår" scenarios introduce more
+# stress on ratios (e.g. higher overhead pålägg, sharper kalkylränta).
+_DIFFICULTY_RATE_RANGES: dict[str, tuple[float, float]] = {
+    "latt": (0.92, 1.08),
+    "medel": (0.85, 1.20),
+    "svar": (0.70, 1.55),
+}
+
+
+def _vary_number(
+    key: str | None,
+    value: float,
+    factor: float,
+    rng: random.Random,
+    rate_range: tuple[float, float] = (0.85, 1.15),
+) -> float:
     """Vary a single numeric leaf, keeping the result plausible."""
     if key in _RATE_KEYS:
-        nudged = value * rng.uniform(0.85, 1.15)
+        nudged = value * rng.uniform(*rate_range)
         return round(nudged, 4) if abs(value) < 1 else round(nudged, 1)
     scaled = value * factor
     if isinstance(value, bool):  # pragma: no cover - defensive
@@ -277,41 +301,59 @@ def _vary_number(key: str | None, value: float, factor: float, rng: random.Rando
     return round(scaled, 2)
 
 
-def _vary(obj: Any, factor: float, rng: random.Random, key: str | None = None) -> Any:
+def _vary(
+    obj: Any,
+    factor: float,
+    rng: random.Random,
+    rate_range: tuple[float, float],
+    key: str | None = None,
+) -> Any:
     """Recursively scale numeric values while leaving text fields untouched."""
     if isinstance(obj, dict):
-        return {k: _vary(v, factor, rng, k) for k, v in obj.items()}
+        return {k: _vary(v, factor, rng, rate_range, k) for k, v in obj.items()}
     if isinstance(obj, list):
-        return [_vary(v, factor, rng, key) for v in obj]
+        return [_vary(v, factor, rng, rate_range, key) for v in obj]
     if isinstance(obj, bool):
         return obj
     if isinstance(obj, (int, float)):
         if key in _TEXT_KEYS:
             return obj
-        return _vary_number(key, obj, factor, rng)
+        return _vary_number(key, obj, factor, rng, rate_range)
     return obj
 
 
-def _apply_variation(module: str, base: dict[str, Any]) -> dict[str, Any]:
-    """Return a varied copy of ``base`` with a fresh company name."""
+def _apply_variation(
+    module: str, base: dict[str, Any], difficulty: str = "medel"
+) -> dict[str, Any]:
+    """Return a varied copy of ``base`` with a fresh company name.
+
+    ``difficulty`` selects the monetary scaling and rate nudge windows so
+    a "lätt" fallback is visibly smaller and rounder than a "svår" one.
+    """
     if not base:
         return base
     rng = random.Random()  # unseeded: a genuinely different draw each call
-    factor = rng.uniform(0.7, 1.45)
-    varied = _vary(base, factor, rng)
+    factor_range = _DIFFICULTY_FACTOR_RANGES.get(
+        difficulty, _DIFFICULTY_FACTOR_RANGES["medel"]
+    )
+    rate_range = _DIFFICULTY_RATE_RANGES.get(
+        difficulty, _DIFFICULTY_RATE_RANGES["medel"]
+    )
+    factor = rng.uniform(*factor_range)
+    varied = _vary(base, factor, rng, rate_range)
     varied["foretag_namn"] = rng.choice(_COMPANY_NAMES)
     return varied
 
 
-def _fallback_for(module: str) -> dict[str, Any]:
+def _fallback_for(module: str, difficulty: str = "medel") -> dict[str, Any]:
     """Return a placeholder scenario for ``module`` with per-call variation.
 
     Used when the LLM is unavailable, returns invalid JSON, or returns a
-    JSON object missing required keys. Each call yields a different company
-    name and scaled numbers so the student never sees identical data for
-    every "generated" company, while internal ratios stay valid.
+    JSON object missing required keys. ``difficulty`` selects the scaling
+    window so the fallback for "lätt" looks materially different from
+    "svår" instead of all three sharing the same factor range.
     """
-    return _apply_variation(module, _fallback_base(module))
+    return _apply_variation(module, _fallback_base(module), difficulty)
 
 
 # ---------------------------------------------------------------------------
@@ -379,17 +421,99 @@ def generate_scenario(module: str, difficulty: str = "medel") -> dict[str, Any]:
         raw = cached_chat(system_prompt, user_prompt, temperature=0.7)
         parsed = _extract_json_object(raw)
     except LLMUnavailableError:
-        return _fallback_for(module)
+        return _fallback_for(module, difficulty)
     except (ValueError, json.JSONDecodeError):
-        return _fallback_for(module)
+        return _fallback_for(module, difficulty)
     except Exception:
         # Defensive: never let a scenario generator failure crash a page
-        return _fallback_for(module)
+        return _fallback_for(module, difficulty)
 
     required = _REQUIRED_KEYS[module]
     if not all(key in parsed for key in required):
-        return _fallback_for(module)
+        return _fallback_for(module, difficulty)
     return parsed
+
+
+# ---------------------------------------------------------------------------
+# Global "current company" tracker
+#
+# Every page used to keep its own ``<page>_scenario_info`` so the company
+# generated in Kalkyl never carried over to Investering or Budget. The
+# helpers below sit on top of those per-page stores so any page can publish
+# its just-generated company as the app-wide current scenario, and the
+# sidebar can surface it for cross-page continuity.
+# ---------------------------------------------------------------------------
+
+CURRENT_SCENARIO_KEY = "current_scenario"
+
+_MODULE_LABELS: dict[str, str] = {
+    "kalkyl_sjalvkostnad": "Självkostnadskalkyl",
+    "kalkyl_bidrag": "Bidragskalkyl",
+    "kalkyl_abc": "ABC-kalkyl",
+    "investering": "Investeringsbedömning",
+    "budget": "Budget",
+    "standardkost": "Standardkostnadsanalys",
+}
+
+
+def _description_from_scenario(scenario: dict[str, Any]) -> str:
+    """Extract the human-readable description from any module scenario."""
+    for key in ("bransch_beskrivning", "projekt_beskrivning"):
+        text = str(scenario.get(key, "")).strip()
+        if text:
+            return text
+    return ""
+
+
+def set_current_scenario(
+    module: str, scenario: dict[str, Any], difficulty: str
+) -> dict[str, Any]:
+    """Publish ``scenario`` as the app-wide current company.
+
+    Writes a compact dict (name, description, source module, difficulty) to
+    ``st.session_state[CURRENT_SCENARIO_KEY]`` so the sidebar and other
+    pages can show which company the student is currently exploring. Silent
+    no-op when Streamlit is not available (e.g. under pytest without the
+    runtime).
+    """
+    info = {
+        "foretag_namn": str(scenario.get("foretag_namn", "")).strip()
+            or "Exempelföretag",
+        "beskrivning": _description_from_scenario(scenario),
+        "source_module": module,
+        "source_label": _MODULE_LABELS.get(module, module),
+        "difficulty": difficulty,
+    }
+    try:
+        import streamlit as st  # local import keeps module test-friendly
+
+        st.session_state[CURRENT_SCENARIO_KEY] = info
+    except (ImportError, AttributeError, RuntimeError):
+        pass
+    return info
+
+
+def get_current_scenario() -> dict[str, Any] | None:
+    """Return the app-wide current company info, or None when unset."""
+    try:
+        import streamlit as st
+
+        value = st.session_state.get(CURRENT_SCENARIO_KEY)
+    except (ImportError, AttributeError, RuntimeError):
+        return None
+    if isinstance(value, dict) and value.get("foretag_namn"):
+        return value
+    return None
+
+
+def clear_current_scenario() -> None:
+    """Remove the app-wide current company info if present."""
+    try:
+        import streamlit as st
+
+        st.session_state.pop(CURRENT_SCENARIO_KEY, None)
+    except (ImportError, AttributeError, RuntimeError):
+        pass
 
 
 # ---------------------------------------------------------------------------

@@ -24,7 +24,7 @@ from utils.prompts import (
     build_qa_prompt,
     FALLBACK_TEMPLATES,
 )
-from utils.scenarios import generate_scenario
+from utils.scenarios import generate_scenario, set_current_scenario
 from utils.standardkost import (
     variance_decomposition_rorlig,
     variance_fixed_overhead,
@@ -103,10 +103,9 @@ with tab1:
             use_container_width=True,
         )
     if sk_generate_clicked:
+        _sk_difficulty_code = _DIFFICULTY_MAP[sk_difficulty_label]
         with st.spinner("Genererar exempelföretag..."):
-            scenario = generate_scenario(
-                "standardkost", _DIFFICULTY_MAP[sk_difficulty_label]
-            )
+            scenario = generate_scenario("standardkost", _sk_difficulty_code)
         st.session_state["std_volym"] = float(scenario.get("standard_volym", 1000.0))
         st.session_state["std_pris"] = float(scenario.get("standard_pris", 50.0))
         st.session_state["std_forbrukning"] = float(
@@ -122,6 +121,7 @@ with tab1:
             "bransch_beskrivning": scenario.get("bransch_beskrivning", ""),
             "kostnadsslag": scenario.get("kostnadsslag", "Direkt material"),
         }
+        set_current_scenario("standardkost", scenario, _sk_difficulty_code)
         st.rerun()
 
     sk_info = st.session_state.get("sk_scenario_info")

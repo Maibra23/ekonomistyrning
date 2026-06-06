@@ -31,7 +31,7 @@ from utils.prompts import (
     build_qa_prompt,
     FALLBACK_TEMPLATES,
 )
-from utils.scenarios import generate_scenario
+from utils.scenarios import generate_scenario, set_current_scenario
 from utils.tutor import render_tutor_explanation
 from utils.ui import (
     BUDGET_VS_RAKNING_HELP,
@@ -203,10 +203,9 @@ if bud_reset_clicked:
     st.rerun()
 
 if bud_generate_clicked:
+    _bud_difficulty_code = _DIFFICULTY_MAP[bud_difficulty_label]
     with st.spinner("Genererar exempelföretag..."):
-        scenario = generate_scenario(
-            "budget", _DIFFICULTY_MAP[bud_difficulty_label]
-        )
+        scenario = generate_scenario("budget", _bud_difficulty_code)
     intakter = scenario.get("intakter") or {}
     kostnader = scenario.get("kostnader") or {}
     balansposter = scenario.get("balansposter") or {}
@@ -228,6 +227,7 @@ if bud_generate_clicked:
         "foretag_namn": scenario.get("foretag_namn", "Exempelföretag"),
         "bransch_beskrivning": scenario.get("bransch_beskrivning", ""),
     }
+    set_current_scenario("budget", scenario, _bud_difficulty_code)
     st.rerun()
 
 bud_info = st.session_state.get("bud_scenario_info")

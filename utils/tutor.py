@@ -185,30 +185,33 @@ def render_step_guide(
 ) -> None:
     """Render the on-demand step-by-step guide for a section.
 
-    Fixes the prior bug where the expander only rendered on the click
-    rerun and disappeared on the next widget event. The text is now
-    stored in session state and re-rendered until the input hash changes
-    or the user dismisses it.
+    Generated text is stored in session state and re-rendered on every
+    rerun until the input hash changes or the user dismisses the guide.
+    All "is there a cached guide" decisions use a truthy check so an
+    empty LLM response or a whitespace-only humanized result is treated
+    as no cache instead of leaving the user with a relabeled button and
+    an invisible (empty) expander.
     """
     current_hash = _hash_payload(inputs, outputs)
     store = st.session_state.get(_store_key(state_key))
-    cached_text: str | None = None
+    cached_text: str = ""
     cached_hash: str | None = None
     if isinstance(store, dict):
-        cached_text = store.get("text")
+        cached_text = (store.get("text") or "").strip()
         cached_hash = store.get("hash")
 
-    has_fresh = cached_text is not None and cached_hash == current_hash
+    has_cache = bool(cached_text)
+    has_fresh = has_cache and cached_hash == current_hash
 
-    btn_label = update_label if cached_text is not None else button_label
-    cols = st.columns([1, 1, 2]) if cached_text else st.columns([1, 3])
+    btn_label = update_label if has_cache else button_label
+    cols = st.columns([1, 1, 2]) if has_cache else st.columns([1, 3])
     clicked = cols[0].button(
         btn_label,
         key=f"{state_key}__btn",
         use_container_width=True,
     )
     cleared = False
-    if cached_text:
+    if has_cache:
         cleared = cols[1].button(
             clear_label,
             key=f"{state_key}__clear",
@@ -226,12 +229,25 @@ def render_step_guide(
             sys_p, usr_p = build_prompt()
             with st.spinner(spinner_label):
                 raw = cached_chat(sys_p, usr_p)
-            text = humanize(raw).text
-            st.session_state[_store_key(state_key)] = {
-                "text": text,
-                "hash": current_hash,
-            }
-            st.rerun()
+            text = humanize(raw).text.strip()
+            if not text:
+                # Humanize occasionally strips a very short or
+                # boilerplate-only response down to nothing. Fall back to
+                # the raw LLM text so the user gets something to read,
+                # and if even the raw text is empty surface a clear error
+                # instead of leaving them with an invisible expander.
+                text = (raw or "").strip()
+            if not text:
+                st.warning(
+                    "LLM gav ett tomt svar. Försök igen, eller kontrollera "
+                    "att din input innehåller meningsfulla värden."
+                )
+            else:
+                st.session_state[_store_key(state_key)] = {
+                    "text": text,
+                    "hash": current_hash,
+                }
+                st.rerun()
         except LLMSessionCapError:
             render_session_cap_card()
         except LLMUnavailableError:
@@ -239,13 +255,18 @@ def render_step_guide(
                 "LLM ej tillgänglig. Steg-för-steg guide kräver aktiv "
                 "LLM-anslutning."
             )
+        except Exception as exc:  # pragma: no cover - defensive surface
+            # Without this catch any unexpected LLM/parse error silently
+            # ate the click and left the user staring at an unchanged
+            # button. Show the message so they know what happened.
+            st.error(f"Kunde inte generera steg-för-steg guide: {exc}")
 
-    if cached_text and not has_fresh:
+    if has_cache and not has_fresh:
         st.caption(
             "Indata har ändrats sedan guiden genererades. "
             "Tryck \"Uppdatera guiden\" för en ny."
         )
 
-    if cached_text:
+    if has_cache:
         with st.expander(expander_title, expanded=True):
             st.markdown(cached_text)
