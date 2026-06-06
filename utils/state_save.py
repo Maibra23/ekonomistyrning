@@ -55,16 +55,31 @@ def save_state(module_key: str, inputs: dict) -> None:
         return
 
 
+def _loaded_sentinel(module_key: str) -> str:
+    """Per-session sentinel key marking that ``module_key`` was already loaded."""
+    return f"_loaded_{module_key}"
+
+
 def load_state(module_key: str) -> dict | None:
     """Return the previously saved input dict for ``module_key``, or None.
 
-    Returns None when there is no saved state for this module or when
-    Streamlit is unavailable.
+    Returns the saved dict only on the *first* call per Streamlit session for
+    a given ``module_key``. Subsequent calls return None so that values
+    written into ``st.session_state`` by widget keys (e.g. via a form
+    submission) are not silently overwritten by stale autosaved data on the
+    next rerun.
+
+    Returns None when there is no saved state for this module, when it has
+    already been loaded this session, or when Streamlit is unavailable.
     """
     session = _get_session_state()
     if session is None:
         return None
+    sentinel = _loaded_sentinel(module_key)
     try:
+        if session.get(sentinel):
+            return None
+        session[sentinel] = True
         value = session.get(_saved_key(module_key))
     except (AttributeError, RuntimeError, TypeError):
         return None
@@ -76,16 +91,16 @@ def load_state(module_key: str) -> dict | None:
 
 
 def clear_state(module_key: str) -> None:
-    """Remove the saved state key for ``module_key`` if present.
+    """Remove the saved state and loaded sentinel for ``module_key`` if present.
 
-    Silent no-op when the key is absent or Streamlit is unavailable.
+    Silent no-op when the keys are absent or Streamlit is unavailable.
     """
     session = _get_session_state()
     if session is None:
         return
-    key = _saved_key(module_key)
-    try:
-        if key in session:
-            del session[key]
-    except (AttributeError, RuntimeError, TypeError, KeyError):
-        return
+    for key in (_saved_key(module_key), _loaded_sentinel(module_key)):
+        try:
+            if key in session:
+                del session[key]
+        except (AttributeError, RuntimeError, TypeError, KeyError):
+            continue

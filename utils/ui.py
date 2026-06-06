@@ -1093,6 +1093,71 @@ _NAV_PAGES: list[tuple[str, str, str]] = [
 ]
 
 
+_DIFFICULTY_DISPLAY = {"latt": "Lätt", "medel": "Medel", "svar": "Svår"}
+
+
+def _render_current_scenario_banner() -> None:
+    """Render an app-wide banner with the most recently generated company.
+
+    Reads ``current_scenario`` from session_state via
+    ``utils.scenarios.get_current_scenario`` so any page that generates an
+    example company is reflected here until another page generates a new one.
+    """
+    try:
+        from utils.scenarios import (
+            clear_current_scenario,
+            get_current_scenario,
+        )
+    except ImportError:  # pragma: no cover - defensive
+        return
+    info = get_current_scenario()
+    if not info:
+        return
+    name = str(info.get("foretag_namn", "")).strip()
+    if not name:
+        return
+    description = str(info.get("beskrivning", "")).strip()
+    source = str(info.get("source_label", "")).strip()
+    difficulty_code = str(info.get("difficulty", "")).strip()
+    difficulty_label = _DIFFICULTY_DISPLAY.get(difficulty_code, difficulty_code)
+
+    st.html('<span class="eks-sidebar-section-label">AKTUELLT FÖRETAG</span>')
+    meta_bits: list[str] = []
+    if source:
+        meta_bits.append(source)
+    if difficulty_label:
+        meta_bits.append(difficulty_label)
+    meta_html = (
+        f'<div style="font-size:10px;color:#6B7280;margin-top:2px;">'
+        f"{' • '.join(meta_bits)}</div>"
+        if meta_bits
+        else ""
+    )
+    desc_html = ""
+    if description:
+        # Truncate long descriptions for a tidy sidebar; full text remains
+        # available on each page's per-module info banner.
+        snippet = description if len(description) <= 140 else description[:137] + "..."
+        desc_html = (
+            f'<div style="font-size:11px;color:#374151;margin-top:6px;'
+            f'line-height:1.35;">{snippet}</div>'
+        )
+    st.html(
+        '<div style="padding:8px 16px 4px 16px;">'
+        '<div style="font-size:12px;font-weight:600;color:#111827;">'
+        f"{name}</div>"
+        f"{meta_html}{desc_html}"
+        "</div>"
+    )
+    if st.button(
+        "Rensa aktuellt företag",
+        key="eks_clear_current_scenario",
+        use_container_width=True,
+    ):
+        clear_current_scenario()
+        st.rerun()
+
+
 def render_sidebar(active_page: str) -> None:
     """Render the full sidebar with brand, navigation, LLM status, and session info.
 
@@ -1113,6 +1178,8 @@ def render_sidebar(active_page: str) -> None:
         st.html('<span class="eks-sidebar-section-label">MODULER</span>')
         for _key, label, path in _NAV_PAGES:
             st.page_link(path, label=label)
+
+        _render_current_scenario_banner()
 
         # LLM status badge in sidebar
         try:

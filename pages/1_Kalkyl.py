@@ -28,7 +28,7 @@ from utils.prompts import (
     build_kalkyl_step_guide_prompt,
     build_qa_prompt,
 )
-from utils.scenarios import generate_scenario
+from utils.scenarios import generate_scenario, set_current_scenario
 from utils.state_save import clear_state, load_state, save_state
 from utils.tutor import (
     get_cached_tutor_text,
@@ -315,10 +315,9 @@ with tab_sj:
             "Generera ett exempelföretag", key="sj_gen_scenario", use_container_width=True
         )
     if sj_generate_clicked:
+        _sj_difficulty_code = _DIFFICULTY_MAP[sj_difficulty_label]
         with st.spinner("Genererar exempelföretag..."):
-            scenario = generate_scenario(
-                "kalkyl_sjalvkostnad", _DIFFICULTY_MAP[sj_difficulty_label]
-            )
+            scenario = generate_scenario("kalkyl_sjalvkostnad", _sj_difficulty_code)
         st.session_state.sj_dm = float(scenario.get("direkt_material", 0))
         st.session_state.sj_dl = float(scenario.get("direkt_lon", 0))
         st.session_state.sj_mo = float(scenario.get("mo_pct", 0))
@@ -330,6 +329,7 @@ with tab_sj:
             "foretag_namn": scenario.get("foretag_namn", "Exempelföretag"),
             "bransch_beskrivning": scenario.get("bransch_beskrivning", ""),
         }
+        set_current_scenario("kalkyl_sjalvkostnad", scenario, _sj_difficulty_code)
         st.rerun()
 
     sj_info = st.session_state.get("sj_scenario_info")
@@ -548,10 +548,9 @@ with tab_bid:
             "Generera ett exempelföretag", key="bid_gen_scenario", use_container_width=True
         )
     if bid_generate_clicked:
+        _bid_difficulty_code = _DIFFICULTY_MAP[bid_difficulty_label]
         with st.spinner("Genererar exempelföretag..."):
-            scenario = generate_scenario(
-                "kalkyl_bidrag", _DIFFICULTY_MAP[bid_difficulty_label]
-            )
+            scenario = generate_scenario("kalkyl_bidrag", _bid_difficulty_code)
         st.session_state.bid_pris = float(scenario.get("pris_per_styck", 0))
         st.session_state.bid_rorlig = float(scenario.get("rorlig_kostnad_per_styck", 0))
         st.session_state.bid_fasta = float(scenario.get("fasta_kostnader", 0))
@@ -560,6 +559,7 @@ with tab_bid:
             "foretag_namn": scenario.get("foretag_namn", "Exempelföretag"),
             "bransch_beskrivning": scenario.get("bransch_beskrivning", ""),
         }
+        set_current_scenario("kalkyl_bidrag", scenario, _bid_difficulty_code)
         st.rerun()
 
     bid_info = st.session_state.get("bid_scenario_info")
@@ -798,10 +798,9 @@ with tab_abc:
             "Generera ett exempelföretag", key="abc_gen_scenario", use_container_width=True
         )
     if abc_generate_clicked:
+        _abc_difficulty_code = _DIFFICULTY_MAP[abc_difficulty_label]
         with st.spinner("Genererar exempelföretag..."):
-            scenario = generate_scenario(
-                "kalkyl_abc", _DIFFICULTY_MAP[abc_difficulty_label]
-            )
+            scenario = generate_scenario("kalkyl_abc", _abc_difficulty_code)
         try:
             activities = scenario.get("activities", [])
             products = scenario.get("products", [])
@@ -813,6 +812,7 @@ with tab_abc:
             "foretag_namn": scenario.get("foretag_namn", "Exempelföretag"),
             "bransch_beskrivning": scenario.get("bransch_beskrivning", ""),
         }
+        set_current_scenario("kalkyl_abc", scenario, _abc_difficulty_code)
         st.rerun()
 
     abc_info = st.session_state.get("abc_scenario_info")

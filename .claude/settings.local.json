@@ -63,7 +63,12 @@
       "Bash(sed -n '495,506p' pages/3_Budget.py)",
       "Bash(sed -n '706,723p' pages/3_Budget.py)",
       "Bash(sed -n '1,25p' docs/ROADMAP.md)",
-      "Bash(sed -n '1,18p' docs/LIMITATIONS.md)"
+      "Bash(sed -n '1,18p' docs/LIMITATIONS.md)",
+      "Bash(export CLAUDE_CODE_TMPDIR=/Users/Brook/Downloads/ekonomistyrning-sandbox/.claude-tmp)",
+      "Bash(echo set *)",
+      "Bash(tee .claude-tmp/o.txt)",
+      "Bash(tee .claude-tmp/p.out)",
+      "Bash(CLAUDE_CODE_TMPDIR=/Users/Brook/Downloads grep *)"
     ]
   }
 }

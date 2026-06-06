@@ -34,7 +34,7 @@ from utils.prompts import (
     build_qa_prompt,
     FALLBACK_TEMPLATES,
 )
-from utils.scenarios import generate_scenario
+from utils.scenarios import generate_scenario, set_current_scenario
 from utils.state_save import clear_state, load_state, save_state
 from utils.tutor import render_tutor_explanation
 from utils.ui import SCENARIO_DIFFICULTY_HELP, footer_note, inject_css, kpi_card, page_title, render_kpi_row, render_sidebar
@@ -277,10 +277,10 @@ with tab1:
             "Generera ett exempelföretag", key="inv_gen_scenario", use_container_width=True
         )
     if inv_generate_clicked:
+        _inv_difficulty_code = _DIFFICULTY_MAP[inv_difficulty_label]
         with st.spinner("Genererar exempelföretag..."):
-            scenario = generate_scenario(
-                "investering", _DIFFICULTY_MAP[inv_difficulty_label]
-            )
+            scenario = generate_scenario("investering", _inv_difficulty_code)
+        set_current_scenario("investering", scenario, _inv_difficulty_code)
         try:
             cash_flows_gen = list(scenario.get("arliga_kassaflon") or [])
             livslangd_gen = int(scenario.get("livslangd") or len(cash_flows_gen) or _DEFAULT_YEARS)
@@ -318,21 +318,22 @@ with tab1:
     with col_in:
         st.markdown("**Investeringsparametrar**")
 
+        _prev_years = int(st.session_state["inv_years"])
         with st.form("inv_basic_form"):
             antal_ar = st.slider(
                 "Antal år",
                 min_value=1,
                 max_value=15,
-                value=st.session_state["inv_years"],
+                key="inv_years",
                 help="Investeringens ekonomiska livslängd i år (kapitel 10.2)",
             )
 
             grundinvestering = st.number_input(
                 "Grundinvestering (kr)",
                 min_value=0.0,
-                value=float(st.session_state["inv_initial"]),
                 step=10_000.0,
                 format="%.0f",
+                key="inv_initial",
                 help="Investeringens initialkostnad vid tidpunkt 0 (kapitel 10.2)",
             )
 
@@ -340,17 +341,14 @@ with tab1:
                 "Kalkylränta (%)",
                 min_value=0,
                 max_value=30,
-                value=int(st.session_state["inv_rate"]),
+                key="inv_rate",
                 help="Avkastningskrav; används för att diskontera framtida kassaflöden (kapitel 10.4)",
             )
 
-            # Sync year count — rebuild CF table if years changed
-            if antal_ar != st.session_state["inv_years"]:
-                st.session_state["inv_years"] = antal_ar
+            # Rebuild the cash-flow table when the year count changes so the
+            # number of rows matches the new horizon.
+            if antal_ar != _prev_years:
                 st.session_state["inv_cf_df"] = _init_cf_df(antal_ar)
-
-            st.session_state["inv_initial"] = grundinvestering
-            st.session_state["inv_rate"] = kalkylranta
 
             st.markdown("**Kassaflöden per år**")
             cf_df = st.data_editor(
@@ -585,6 +583,14 @@ with tab2:
     base_rate = st.session_state["inv_rate"] / 100.0
     base_inv = float(st.session_state["inv_initial"])
 
+    st.caption(
+        "Basparametrar från **Grundläggande metoder**: "
+        f"grundinvestering {format_sek(base_inv)} • "
+        f"kalkylränta {format_percent(base_rate)} • "
+        f"livslängd {st.session_state['inv_years']} år. "
+        "Ändra dem i den första fliken för att uppdatera känslighetsanalysen."
+    )
+
     col_sa_in, col_sa_res = st.columns([1, 3], gap="large")
 
     with col_sa_in:
@@ -759,21 +765,20 @@ with tab3:
 
     with col_it_in:
         st.markdown("**Nominella kassaflöden**")
+        st.caption(
+            "Synkat från fliken **Grundläggande metoder**. Ändra kassaflöden "
+            "där så uppdateras inflations- och skattekalkylen automatiskt."
+        )
+        _tab3_display_cf = st.session_state["inv_cf_df"].rename(
+            columns={"Kassaflöde (kr)": "Nominellt kassaflöde (kr)"}
+        )
+        st.dataframe(
+            _tab3_display_cf,
+            use_container_width=True,
+            hide_index=True,
+        )
+        it_cf_df = st.session_state["inv_cf_df"]
         with st.form("inv_inflation_form"):
-            it_cf_df = st.data_editor(
-                st.session_state["inv_cf_df"].copy(),
-                use_container_width=True,
-                num_rows="fixed",
-                key="cf_editor_tab3",
-                column_config={
-                    "År": st.column_config.NumberColumn("År", disabled=True, width="small"),
-                    "Kassaflöde (kr)": st.column_config.NumberColumn(
-                        "Nominellt kassaflöde (kr)",
-                        format="%.0f",
-                    ),
-                },
-            )
-
             real_rate_pct = st.number_input(
                 "Real kalkylränta (%)",
                 min_value=0.0,
@@ -1103,7 +1108,9 @@ with tab4:
                 unsafe_allow_html=True,
             )
 
-            # Histogram with vertical reference lines
+            # Histogram with vertical reference lines. Annotations are placed
+            # at staggered y positions (yref="paper") so the four labels don't
+            # collide with each other or the chart title.
             npvs_list = mc_result["npvs"].tolist()
             fig4 = go.Figure()
             fig4.add_trace(go.Histogram(
@@ -1113,21 +1120,32 @@ with tab4:
                 marker_color=COLORS["primary_light"],
                 opacity=0.75,
             ))
-            for val, color, label in [
-                (0, COLORS["danger"], "NPV = 0"),
-                (mc_result["p5"], "#F97316", f"P5: {format_sek(mc_result['p5'])}"),
-                (mc_result["median"], COLORS["primary"], f"Median: {format_sek(mc_result['median'])}"),
-                (mc_result["mean"], "#7C3AED", f"Medel: {format_sek(mc_result['mean'])}"),
-            ]:
-                fig4.add_vline(
+            vline_specs = [
+                (0, COLORS["danger"], "NPV = 0", 0.96),
+                (mc_result["p5"], "#F97316", f"P5: {format_sek(mc_result['p5'])}", 0.84),
+                (mc_result["median"], COLORS["primary"], f"Median: {format_sek(mc_result['median'])}", 0.72),
+                (mc_result["mean"], "#7C3AED", f"Medel: {format_sek(mc_result['mean'])}", 0.60),
+            ]
+            for val, color, _label, _y in vline_specs:
+                fig4.add_vline(x=val, line_dash="dash", line_color=color)
+            for val, color, label, y_paper in vline_specs:
+                fig4.add_annotation(
                     x=val,
-                    line_dash="dash",
-                    line_color=color,
-                    annotation_text=label,
-                    annotation_position="top right" if val >= 0 else "top left",
+                    y=y_paper,
+                    yref="paper",
+                    text=label,
+                    showarrow=False,
+                    font=dict(color=color, size=11),
+                    bgcolor="rgba(255,255,255,0.88)",
+                    bordercolor=color,
+                    borderwidth=1,
+                    borderpad=3,
+                    xanchor="left" if val >= 0 else "right",
+                    xshift=4 if val >= 0 else -4,
                 )
 
-            apply_layout(fig4, title="NPV-fördelning (Monte Carlo-histogram)", height=360)
+            apply_layout(fig4, title="NPV-fördelning (Monte Carlo-histogram)", height=420)
+            fig4.update_layout(margin={"t": 80})
             st.plotly_chart(fig4, use_container_width=True)
 
             # Box plot

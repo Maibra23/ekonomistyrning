@@ -286,7 +286,13 @@ def build_kalkyl_explanation_prompt(
 def build_kalkyl_step_guide_prompt(
     calc_type: str, inputs: dict[str, Any], outputs: dict[str, Any]
 ) -> tuple[str, str]:
-    """Build the step by step tutor guide prompt."""
+    """Build the step by step tutor guide prompt.
+
+    The trailing ``/no_think`` directive disables Qwen3's reasoning mode so
+    the full ``max_new_tokens`` budget goes to the actual walkthrough instead
+    of being spent inside ``<think>...</think>`` (which the post-processor
+    strips, leaving the user with an empty response).
+    """
     extra_rules = (
         "\nMODULSPECIFIKT\n"
         "Visa kalkylen som en lärare som går igenom uppgiften vid tavlan. "
@@ -296,7 +302,8 @@ def build_kalkyl_step_guide_prompt(
     user_prompt = (
         f"Indata:\n{_format_inputs_block(inputs)}\n\n"
         f"Resultat:\n{_format_inputs_block(outputs)}\n\n"
-        f"Förklara steg för steg hur denna {calc_type} kalkyl byggs upp."
+        f"Förklara steg för steg hur denna {calc_type} kalkyl byggs upp.\n"
+        f"/no_think"
     )
     return system_prompt, user_prompt
 
