@@ -906,7 +906,7 @@ for role, msg in st.session_state["budget_chat_history"]:
     with st.chat_message(role):
         st.markdown(msg)
 
-user_q = st.chat_input("Fråga tutorn om budgeten")
+user_q = st.chat_input("Fråga om budgeten")
 if user_q:
     st.session_state["budget_chat_history"].append(("user", user_q))
     with st.chat_message("user"):
@@ -927,7 +927,7 @@ if user_q:
             st.markdown(result.text)
         st.session_state["budget_chat_history"].append(("assistant", result.text))
     except LLMUnavailableError:
-        msg = "LLM ej tillgänglig."
+        msg = "Tjänsten är tillfälligt otillgänglig. Försök igen senare."
         with st.chat_message("assistant"):
             st.info(msg)
         st.session_state["budget_chat_history"].append(("assistant", msg))

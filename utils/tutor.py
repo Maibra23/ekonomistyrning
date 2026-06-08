@@ -65,14 +65,11 @@ def render_tutor_explanation(
     fallback_text: Callable[[], str] | None = None,
     required_sections: list[str] | None = None,
     expected_numbers: dict | None = None,
-    button_label: str = "Generera tutor förklaring",
+    button_label: str = "Visa förklaring",
     update_label: str = "Uppdatera förklaringen",
     spinner_label: str = "Genererar förklaring...",
-    heading: str | None = "### Tutor förklaring",
-    help_text: str | None = (
-        "LLM körs först när du trycker på knappen. "
-        "Tutorn använder ditt sessionsanslag (max 50 anrop)."
-    ),
+    heading: str | None = "### Förklaring",
+    help_text: str | None = None,
 ) -> None:
     """Render the on-demand tutor block for one section.
 
@@ -102,7 +99,7 @@ def render_tutor_explanation(
         if cached_grounding and cached_grounding.get("missing"):
             st.html(
                 '<div class="eks-grounding-warn">'
-                "OBS: Tutorn kan ha refererat fel siffra, "
+                "OBS: Förklaringen kan ha refererat fel siffra, "
                 "verifiera mot beräkningen ovan."
                 "</div>"
             )
@@ -160,7 +157,7 @@ def render_tutor_explanation(
     except LLMUnavailableError:
         st.html(
             '<div class="eks-offline-badge">'
-            "LLM offline, visar grundförklaring</div>"
+            "Visar grundförklaring (offline-läge)</div>"
         )
         text = fallback_text() if fallback_text else "Förklaring ej tillgänglig."
         st.session_state[_store_key(state_key)] = {
@@ -239,8 +236,8 @@ def render_step_guide(
                 text = (raw or "").strip()
             if not text:
                 st.warning(
-                    "LLM gav ett tomt svar. Försök igen, eller kontrollera "
-                    "att din input innehåller meningsfulla värden."
+                    "Tomt svar. Försök igen, eller kontrollera att din "
+                    "input innehåller meningsfulla värden."
                 )
             else:
                 st.session_state[_store_key(state_key)] = {
@@ -252,8 +249,8 @@ def render_step_guide(
             render_session_cap_card()
         except LLMUnavailableError:
             st.info(
-                "LLM ej tillgänglig. Steg-för-steg guide kräver aktiv "
-                "LLM-anslutning."
+                "Steg-för-steg guide är inte tillgänglig just nu. "
+                "Försök igen senare."
             )
         except Exception as exc:  # pragma: no cover - defensive surface
             # Without this catch any unexpected LLM/parse error silently

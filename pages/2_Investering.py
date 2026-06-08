@@ -180,7 +180,7 @@ def _render_investering_llm(
         with st.chat_message(role):
             st.markdown(msg)
 
-    user_q = st.chat_input("Fraga tutorn om denna investering", key=f"{tab_key}_chat_input")
+    user_q = st.chat_input("Fråga om denna investering", key=f"{tab_key}_chat_input")
     if user_q:
         st.session_state[chat_key].append(("user", user_q))
         with st.chat_message("user"):
@@ -193,7 +193,7 @@ def _render_investering_llm(
                 chat_history=st.session_state[chat_key],
             )
             with st.chat_message("assistant"):
-                with st.spinner("Tanker..."):
+                with st.spinner("Tänker..."):
                     raw = cached_chat(sys_p, usr_p)
                 result = humanize(raw)
                 st.markdown(result.text)
@@ -203,13 +203,13 @@ def _render_investering_llm(
                     if grounding["missing"]:
                         st.html(
                             '<div class="eks-grounding-warn">'
-                            "OBS: Tutorn kan ha refererat fel siffra, verifiera mot beräkningen ovan."
+                            "OBS: Förklaringen kan ha refererat fel siffra, verifiera mot beräkningen ovan."
                             "</div>"
                         )
                     show_grounding_warning(grounding)
             st.session_state[chat_key].append(("assistant", result.text))
         except LLMUnavailableError:
-            msg = "LLM ej tillganglig."
+            msg = "Tjänsten är tillfälligt otillgänglig. Försök igen senare."
             with st.chat_message("assistant"):
                 st.info(msg)
             st.session_state[chat_key].append(("assistant", msg))

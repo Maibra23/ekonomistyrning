@@ -125,7 +125,7 @@ def _render_llm_section(
             st.markdown(msg)
 
     user_question = st.chat_input(
-        "Fråga tutorn om denna kalkyl", key=f"{tab_key}_chat_input"
+        "Fråga om denna kalkyl", key=f"{tab_key}_chat_input"
     )
     if user_question:
         st.session_state[chat_key].append(("user", user_question))
@@ -157,14 +157,14 @@ def _render_llm_section(
                     if grounding["missing"]:
                         st.html(
                             '<div class="eks-grounding-warn">'
-                            "OBS: Tutorn kan ha refererat fel siffra, "
+                            "OBS: Förklaringen kan ha refererat fel siffra, "
                             "verifiera mot beräkningen ovan."
                             "</div>"
                         )
                     show_grounding_warning(grounding)
             st.session_state[chat_key].append(("assistant", result.text))
         except LLMUnavailableError:
-            fallback_msg = "LLM ej tillgänglig. Försöket misslyckades."
+            fallback_msg = "Tjänsten är tillfälligt otillgänglig. Försök igen senare."
             with st.chat_message("assistant"):
                 st.info(fallback_msg)
             st.session_state[chat_key].append(("assistant", fallback_msg))
@@ -475,8 +475,8 @@ with tab_sj:
     # Build export sheets
     sj_export_sheets = {"Sjalvkostnad": sj_df}
     if "sj_llm_text" in st.session_state:
-        llm_df = pd.DataFrame({"Tutor förklaring": [st.session_state["sj_llm_text"]]})
-        sj_export_sheets["Tutor förklaring"] = llm_df
+        llm_df = pd.DataFrame({"Förklaring": [st.session_state["sj_llm_text"]]})
+        sj_export_sheets["Förklaring"] = llm_df
     sj_info_export = st.session_state.get("sj_scenario_info")
     sj_header_lines = _scenario_header_lines(sj_info_export)
     # Column chart of the four primary cost components (Task 10.9).

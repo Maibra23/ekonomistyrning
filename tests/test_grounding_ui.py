@@ -62,8 +62,9 @@ def test_warning_text_contains_required_phrases(mock_st):
     )
     assert mock_st.caption.call_count == 1
     rendered_text = mock_st.caption.call_args.args[0]
-    assert "Tutorn refererade" in rendered_text
+    assert "Förklaringen refererade" in rendered_text
     assert "Lita alltid" in rendered_text
+    assert "Tutorn" not in rendered_text
 
 
 def test_non_dict_input_is_ignored(mock_st):

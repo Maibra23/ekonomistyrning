@@ -22,30 +22,6 @@ APP_VERSION = "0.2.0"
 APP_UPDATED = "2026-06-02"
 
 
-def model_display_name() -> str:
-    """Return the configured LLM model name without its provider prefix.
-
-    Reads the live config so the UI always reflects the model the code
-    actually uses, falling back to the package default. Example:
-    ``"Qwen/Qwen3-8B"`` becomes ``"Qwen3-8B"``.
-    """
-    model = ""
-    try:
-        from utils.llm import get_llm_config
-
-        model = get_llm_config().model or ""
-    except Exception:
-        model = ""
-    if not model:
-        try:
-            from utils.llm import DEFAULT_MODEL
-
-            model = DEFAULT_MODEL
-        except Exception:
-            model = "Qwen3-8B"
-    return model.split("/")[-1]
-
-
 # ---------------------------------------------------------------------------
 # Design tokens
 # ---------------------------------------------------------------------------
@@ -129,13 +105,13 @@ LABELS: dict[str, str] = {
     "llm_forklaring": "Förklaring",
     "llm_steg": "Steg-för-steg-guide",
     "llm_fraga": "Ställ en fråga...",
-    "llm_offline": "LLM offline, visar grundförklaring",
+    "llm_offline": "Visar grundförklaring (offline-läge)",
     "llm_cap_warn": (
-        "Du har nått sessionsgränsen (50 LLM-anrop). "
+        "Sessionens gräns för förklaringar är uppnådd. "
         "Ladda om sidan för att fortsätta."
     ),
     "scenario_egna": "Egna värden",
-    "scenario_ai": "Generera nytt scenario med AI",
+    "scenario_ai": "Generera nytt exempelföretag",
 }
 
 # ---------------------------------------------------------------------------
@@ -149,7 +125,7 @@ LABELS: dict[str, str] = {
 # drives the AI scenario generator (Kalkyl, Investering, Budget,
 # Standardkostnadsanalys). Explains that the scale is shared across modules.
 SCENARIO_DIFFICULTY_HELP: str = (
-    "Styr hur avancerat det AI-genererade exempelföretaget blir. "
+    "Styr hur avancerat det genererade exempelföretaget blir. "
     "Lätt ger rena, runda tal som är lätta att följa, Medel liknar ett "
     "vanligt företag och Svår lägger till mer realistiska siffror och fler "
     "komplicerande faktorer. Samma skala används i alla moduler – välj en "
@@ -1050,28 +1026,17 @@ def footer_note(version: str = "1.0", updated: str = "") -> str:
     )
 
 
-def llm_badge(online: bool) -> str:
-    """Inline LLM status badge (green/red dot + text)."""
-    color = COLORS["success"] if online else COLORS["danger"]
-    status = "LLM online" if online else "LLM offline"
-    return (
-        f'<span class="eks-llm-badge" style="color:{color}">'
-        f"&#9679; {status}"
-        f"</span>"
-    )
-
-
 def offline_badge() -> str:
-    """Warning badge shown when LLM is unavailable."""
+    """Warning badge shown when the explanation service is unavailable."""
     return f'<div class="eks-offline-badge">{LABELS["llm_offline"]}</div>'
 
 
-def grounding_warning(llm_value: float, calc_value: float) -> str:
-    """Warning when LLM-cited number deviates from calculator output."""
+def grounding_warning(cited_value: float, calc_value: float) -> str:
+    """Warning when a cited number deviates from calculator output."""
     return (
         f'<div class="eks-grounding-warn">'
-        f"OBS: LLM angav {llm_value:,.0f} men kalkylatorn ger {calc_value:,.0f}. "
-        f"Lita på kalkylatorns värde."
+        f"OBS: Förklaringen angav {cited_value:,.0f} men kalkylatorn ger "
+        f"{calc_value:,.0f}. Lita på kalkylatorns värde."
         f"</div>"
     )
 
@@ -1178,58 +1143,8 @@ def render_sidebar(active_page: str) -> None:
 
         _render_current_scenario_banner()
 
-        # LLM status badge in sidebar
-        try:
-            from utils.llm import is_llm_available
-            _online = is_llm_available()
-        except Exception:
-            _online = False
-        _badge_color = COLORS["success"] if _online else COLORS["neutral"]
-        _badge_text = "LLM online" if _online else "LLM offline"
-        st.html(
-            f'<div style="padding:8px 16px;">'
-            f'<span class="eks-llm-badge" style="color:{_badge_color}">'
-            f"&#9679; {_badge_text}"
-            f"</span>"
-            f"</div>"
-        )
-
-        # Model selector: the app runs on Qwen3-8B (standard) or Qwen3-14B.
-        try:
-            from utils.llm import (
-                ALTERNATIVE_MODEL,
-                DEFAULT_MODEL,
-                MODEL_SESSION_KEY,
-                SUPPORTED_MODELS,
-            )
-
-            _model_labels = {
-                DEFAULT_MODEL: "Qwen3-8B (standard)",
-                ALTERNATIVE_MODEL: "Qwen3-14B (alternativ)",
-            }
-            st.selectbox(
-                "LLM-modell",
-                options=list(SUPPORTED_MODELS),
-                format_func=lambda m: _model_labels.get(m, m.split("/")[-1]),
-                key=MODEL_SESSION_KEY,
-            )
-        except Exception:
-            pass
-
         st.html('<span class="eks-sidebar-section-label">INFORMATION</span>')
         st.page_link("streamlit_app.py", label="Om appen")
-
-        llm_calls = st.session_state.get("llm_call_count", 0)
-        st.html(
-            f'<div class="eks-sidebar-footer">'
-            f"v{APP_VERSION} | uppdaterad {APP_UPDATED}<br>"
-            f"{model_display_name()} via HF Inference Providers<br>"
-            f"LLM-anrop: {llm_calls} / 50<br>"
-            f'<span style="font-size:9px;opacity:0.7;">'
-            f"Prompts behandlas av Hugging Face"
-            f"</span>"
-            f"</div>"
-        )
 
 
 def render_session_cap_card() -> None:
@@ -1250,4 +1165,4 @@ def render_session_cap_card() -> None:
         if "llm_calls_used" in st.session_state:
             del st.session_state["llm_calls_used"]
         st.rerun()
-    st.caption("Beräkningar och diagram fungerar normalt utan tutor.")
+    st.caption("Beräkningar och diagram fungerar normalt även utan förklaringar.")
