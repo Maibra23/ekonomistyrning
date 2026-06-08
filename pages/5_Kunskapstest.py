@@ -9,6 +9,7 @@ click instead of the previous 10.
 """
 from __future__ import annotations
 
+import html
 import json
 import random
 from pathlib import Path
@@ -181,7 +182,7 @@ st.html(
         eyebrow="KUNSKAPSTEST",
         title="Kunskapstest",
         subtitle=(
-            "Testa dina kunskaper med AI-genererade frågor. "
+            "Testa dina kunskaper med dynamiskt genererade frågor. "
             "Välj ämnesområde, svårighetsgrad och frågetyp."
         ),
     )
@@ -430,6 +431,33 @@ def _difficulty_class(diff: str) -> str:
     )
 
 
+_NBSP = " "
+
+
+def _given_label(key: str) -> str:
+    """Snake_case key to readable Swedish label (preserves å/ä/ö)."""
+    spaced = str(key).replace("_", " ").strip()
+    return spaced[:1].upper() + spaced[1:] if spaced else str(key)
+
+
+def _given_value(value: object) -> str:
+    """Render a given_data value with Swedish numeric conventions and HTML escaping."""
+    if isinstance(value, bool):
+        return "Ja" if value else "Nej"
+    if isinstance(value, int):
+        return f"{value:,}".replace(",", _NBSP)
+    if isinstance(value, float):
+        if abs(value - round(value)) < 1e-9:
+            return f"{int(round(value)):,}".replace(",", _NBSP)
+        return (
+            f"{value:,.2f}"
+            .replace(",", "\x00")
+            .replace(".", ",")
+            .replace("\x00", _NBSP)
+        )
+    return html.escape(str(value))
+
+
 def _render_question_card(q: dict) -> None:
     """Render the quiz card: badges + scenario + question + given data."""
     cluster_label = _CLUSTER_LABELS.get(q.get("kapitelkluster", ""), q.get("kapitelkluster", ""))
@@ -458,7 +486,11 @@ def _render_question_card(q: dict) -> None:
     given_html = ""
     given = q.get("given_data") or {}
     if given:
-        items = "".join(f"<li><strong>{k}:</strong> {v}</li>" for k, v in given.items())
+        items = "".join(
+            f"<li><strong>{html.escape(_given_label(k))}:</strong> "
+            f"{_given_value(v)}</li>"
+            for k, v in given.items()
+        )
         given_html = (
             f'<div class="eks-quiz-given">'
             f'<div class="eks-quiz-given-title">Givna uppgifter</div>'
@@ -626,7 +658,7 @@ if q:
                     result = humanize(raw)
                     st.markdown(result.text)
                 except LLMUnavailableError:
-                    st.info("LLM ej tillgänglig för djupare förklaring.")
+                    st.info("Djupare förklaring är inte tillgänglig just nu.")
                 except LLMSessionCapError:
                     render_session_cap_card()
 

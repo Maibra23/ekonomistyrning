@@ -224,12 +224,14 @@ def test_llm_session_cap_error_caught_as_unavailable():
         assert isinstance(exc, LLMSessionCapError)
 
 
-def test_session_cap_message_mentions_50_and_uppdatera():
+def test_session_cap_message_is_user_friendly_swedish():
     from utils.llm import SESSION_CAP_MESSAGE
 
-    assert "50" in SESSION_CAP_MESSAGE
-    assert "tutor anrop" in SESSION_CAP_MESSAGE
+    assert "förklaringar" in SESSION_CAP_MESSAGE.lower()
     assert "Uppdatera" in SESSION_CAP_MESSAGE
+    # User-facing copy must not leak the LLM/tutor abstraction.
+    assert "LLM" not in SESSION_CAP_MESSAGE
+    assert "tutor" not in SESSION_CAP_MESSAGE.lower()
 
 
 def test_cached_chat_raises_session_cap_when_used_up(monkeypatch):

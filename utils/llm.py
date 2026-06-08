@@ -81,8 +81,8 @@ class LLMSessionCapError(LLMUnavailableError):
 
 
 SESSION_CAP_MESSAGE = (
-    "Du har använt dina 50 tutor anrop denna session. Uppdatera sidan för "
-    "att fortsätta utan att förlora dina inmatningar (autosave är aktiv)."
+    "Sessionens gräns för förklaringar är uppnådd. Uppdatera sidan för att "
+    "fortsätta utan att förlora dina inmatningar (autosave är aktiv)."
 )
 
 

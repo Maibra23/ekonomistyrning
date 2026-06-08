@@ -1,7 +1,7 @@
 """Landing page for Ekonomistyrning Sandbox.
 
 Entry point for the Streamlit multipage app. Shows the hero block, module
-overview, pipeline steps, and LLM connectivity status.
+overview, and pipeline steps.
 """
 from __future__ import annotations
 
@@ -21,26 +21,16 @@ from utils.ui import (  # noqa: E402
     footer_note,
     hero,
     inject_css,
-    llm_badge,
     module_map,
     pipeline_steps,
     render_sidebar,
     section_heading,
     stat_strip,
     summary_box,
-    thread_band,
 )
 
 inject_css()
 render_sidebar("hem")
-
-
-def _llm_online() -> bool:
-    try:
-        from utils.llm import is_llm_available
-        return is_llm_available()
-    except Exception:
-        return False
 
 
 def render_landing() -> None:
@@ -51,8 +41,8 @@ def render_landing() -> None:
             lead=(
                 "Fem moduler tar dig genom ekonomistyrningens kretslopp, från "
                 "produktkalkyl till uppföljning av avvikelser. Mata in egna "
-                "siffror, se diagrammen växa fram och låt en svensk LLM-tutor "
-                "förklara varje resultat steg för steg, grundat i dina egna tal."
+                "siffror, se diagrammen växa fram och få varje resultat "
+                "förklarat steg för steg, grundat i dina egna tal."
             ),
         )
     )
@@ -65,10 +55,6 @@ def render_landing() -> None:
             ("100%", "svenska"),
         ])
     )
-
-    online = _llm_online()
-    col_badge, _ = st.columns([1, 5])
-    col_badge.html(llm_badge(online))
 
     # --- Interconnected module map ---------------------------------------
     st.html(section_heading("EKONOMISTYRNINGENS KRETSLOPP", "Så hänger modulerna ihop"))
@@ -120,14 +106,6 @@ def render_landing() -> None:
             },
         ])
     )
-    st.html(
-        thread_band(
-            "LLM-TUTOR",
-            "En gemensam tutor löper genom alla moduler. Den förklarar, vägleder "
-            "steg för steg och svarar på frågor, alltid grundat i dina egna siffror.",
-        )
-    )
-
     # --- How each module works ------------------------------------------
     st.html(section_heading("ARBETSGÅNG", "Så arbetar du i varje modul"))
     st.html(
@@ -137,13 +115,6 @@ def render_landing() -> None:
             "Beräkna och tolka",
             "Exportera",
         ])
-    )
-    st.html(
-        summary_box(
-            "Varje modul innehåller en deterministisk kalkylator, interaktiva "
-            "Plotly-diagram, en LLM-genererad förklaring med steg-för-steg-guide "
-            "och ett Q&amp;A-chattfönster. Excel-export finns i alla moduler."
-        )
     )
 
     with st.expander("Om appen", expanded=False):
@@ -158,8 +129,8 @@ def render_landing() -> None:
             Alla exempelföretag är fiktiva. Ingen koppling till boken eller
             förlaget.
 
-            **Integritet:** Hugging Face Inference Providers behandlar prompts
-            du skickar. Mata inte in känsliga personuppgifter.
+            **Integritet:** Mata inte in känsliga personuppgifter. Inmatade
+            uppgifter kan komma att behandlas av extern tjänsteleverantör.
             """
         )
 

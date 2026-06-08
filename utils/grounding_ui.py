@@ -10,8 +10,8 @@ from __future__ import annotations
 import streamlit as st
 
 GROUNDING_WARNING_TEXT = (
-    "⚠ Tutorn refererade siffror som inte exakt matchar beräkningen ovan. "
-    "Lita alltid på siffrorna i kalkylen, inte tutorns citationer."
+    "⚠ Förklaringen refererade siffror som inte exakt matchar beräkningen "
+    "ovan. Lita alltid på siffrorna i kalkylen."
 )
 
 
