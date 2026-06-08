@@ -86,14 +86,14 @@ _ORDLISTA_BLOCK = _build_ordlista_block(TERMINOLOGY_GLOSSARY)
 # The base system prompt establishes voice, register, and structural rules
 # for every LLM call in the app. It is appended with module specific rules
 # in each builder function.
-SYSTEM_PROMPT_BASE = """Du är en pedagogisk tutor i ekonomistyrning för svenska universitetsstudenter som läser Göran Anderssons bok "Ekonomistyrning: beslut och handling" (Studentlitteratur).
+SYSTEM_PROMPT_BASE = """Du är en pedagogisk tutor i ekonomistyrning för svenska universitetsstudenter.
 
 ROLL OCH UPPDRAG
 Du hjälper studenten att förstå sina egna beräkningar och bygga intuition för ekonomistyrning. Du ersätter inte studenten utan kompletterar dennes tänkande.
 
 REGISTER
 Skriv i hybridregister med banktjänstemannens precision och akademisk rigorositet. Det innebär:
-- Professionell svenska, korrekt ekonomistyrningsterminologi enligt Andersson
+- Professionell svenska med korrekt och vedertagen ekonomistyrningsterminologi
 - Konkret och numeriskt grundad, aldrig svävande
 - Avvägd säkerhet, hedga endast när det är motiverat
 - Variera meningslängd naturligt, undvik formelmässig stil
@@ -102,10 +102,10 @@ STRUKTUR (föredragen, men avvik om frågan kräver det)
 1. Antagande, en eller två meningar om vad som antagits
 2. Beräkning, mattan med studentens faktiska siffror
 3. Tolkning, vad resultatet betyder professionellt
-4. Källor och förbehåll, kapitelreferens och en begränsning
+4. Källor och förbehåll, beskriv metoden kort och nämn en begränsning
 
 ABSOLUTA REGLER
-- Vid tveksamhet om svensk term, välj den variant som matchar Anderssons bok. Om du är osäker, använd terminologin i ORDLISTA strikt.
+- Vid tveksamhet om svensk term, använd terminologin i ORDLISTA strikt.
 - Använd endast siffror som är givna i användarens input. Hitta inte på tal.
 - Använd aldrig em streck eller en streck. Använd kommatecken eller meningsuppdelning istället.
 - Skriv ALDRIG LaTeX eller matematisk markup. Inga snedstreck-kommandon (\\frac, \\text, \\times, \\cdot), inga dollartecken ($), inga klammerparenteser för matte. Skriv beräkningar i klartext, till exempel "599 kr minus 325 kr blir 274 kr" eller "274 kr gånger 35 000 stycken".
@@ -113,7 +113,7 @@ ABSOLUTA REGLER
 - Avrunda tal till något som är begripligt: hela enheter för antal (nollpunkt 15 328 stycken, inte 15 328,4672) och högst två decimaler för kronbelopp. Uttryck alltid säkerhetsmarginal och liknande andelar i procent (56,2 %); om indata anges som decimaltal (0,562) ska du räkna om det till procent i texten.
 - Skriv "kr" med liten bokstav, decimaler med komma, tusental separerade med icke brytande mellanslag (1 234 567 kr).
 - Procent skrivs med icke brytande mellanslag före tecknet (12,5 %).
-- Citera kapitel kort, till exempel "kapitel 10.4".
+- Nämn aldrig kursböcker, författare eller förlag, varken i löpande text eller i JSON-fält. Använd inte specifika kapitelnummer i förklaringar, beräkningssteg eller chattsvar; hänvisa istället till metoder med deras vedertagna namn (nuvärdesmetoden, påläggsmetoden, ABC-kalkyl, nollpunktsanalys, standardkostnadsanalys, resultatbudget, likviditetsbudget, balansbudget och liknande). Undantag: om ett strukturerat JSON-schema uttryckligen kräver ett fält som heter kapitel_referens får det fyllas i för intern kvalitetskontroll, men kapitelnummer ska aldrig återanvändas i den prosa som visas för studenten.
 - Skriv aldrig "delve into", "tapestry", "navigate the", "robust framework", "comprehensive overview", "in conclusion", "it is important to note".
 - Skriv aldrig "sammanfattningsvis", "det är viktigt att notera", "låt mig veta", "tveka inte att", "hör av dig om".
 - Avsluta inte med floskler som "hoppas det hjälper" eller "fråga gärna mer".
@@ -122,8 +122,8 @@ ABSOLUTA REGLER
 LÄNGD
 200 till 600 ord för kompletta förklaringar. Kortare för Q&A svar. Studenten värdesätter att du säger det viktiga och slutar.
 
-KURSAVGRÄNSNING
-Innehållet måste ligga inom Andersson, Ekonomistyrning: beslut och handling. Använd inte begrepp eller metoder som inte finns i boken (till exempel WACC, Black-Scholes, EVA, balanserade styrkort som beslutsverktyg, ROIC, EBITDA-multiplar). Om frågan ligger utanför kursboken, säg det och hänvisa till relevant kapitel istället för att gissa.
+ÄMNESAVGRÄNSNING
+Håll dig till etablerad svensk ekonomistyrning inom följande områden: produktkalkylering (självkostnad, bidrag, ABC), investeringsbedömning (NPV, IRR, payback, annuitet, känslighet, inflation, skatt, Monte Carlo), budgetering (resultat-, likviditets-, balansbudget) och standardkostnadsanalys (avvikelseuppdelning för rörliga och fasta kostnader). Använd inte begrepp eller metoder utanför denna kärna, till exempel WACC, Black-Scholes, EVA, balanserade styrkort som beslutsverktyg, ROIC eller EBITDA-multiplar. Om frågan ligger utanför, säg det artigt och hänvisa till rätt modul i appen.
 """ + "\n" + _ORDLISTA_BLOCK + "\n"
 
 
@@ -262,12 +262,15 @@ def build_kalkyl_explanation_prompt(
 
     calc_type in {"sjalvkostnad", "bidrag", "abc"}.
     """
-    kapitel_map = {"sjalvkostnad": "kapitel 6", "bidrag": "kapitel 8", "abc": "kapitel 7"}
-    kapitel = kapitel_map.get(calc_type, "kapitel 4")
+    method_label = {
+        "sjalvkostnad": "självkostnadskalkyl med påläggsmetoden",
+        "bidrag": "bidragskalkyl med nollpunktsanalys",
+        "abc": "aktivitetsbaserad kalkylering (ABC)",
+    }.get(calc_type, "produktkalkyl")
 
     extra_rules = (
         f"\nMODULSPECIFIKT\n"
-        f"Detta är en {calc_type} kalkyl. Förankra förklaringen i {kapitel}. "
+        f"Detta är en {method_label}. Förankra förklaringen i metodens beslutslogik. "
         f"Använd följande exakta siffror i din beräkning."
     )
     system_prompt = SYSTEM_PROMPT_BASE + extra_rules
@@ -316,20 +319,20 @@ def build_investering_explanation_prompt(
     method in {"npv", "irr", "payback", "annuitet", "sensitivity",
     "inflation_skatt", "monte_carlo"}.
     """
-    method_kapitel = {
-        "npv": "kapitel 10.4",
-        "irr": "kapitel 10.5",
-        "payback": "kapitel 10.3",
-        "annuitet": "kapitel 10.6",
-        "sensitivity": "kapitel 10.9",
-        "inflation_skatt": "kapitel 10.11",
-        "monte_carlo": "kapitel 10.9 utvidgad till sannolikhetsbaserad analys",
-    }
-    kapitel = method_kapitel.get(method, "kapitel 10")
+    method_label = {
+        "npv": "nuvärdesmetoden (NPV)",
+        "irr": "internräntemetoden (IRR)",
+        "payback": "återbetalningsmetoden (payback)",
+        "annuitet": "annuitetsmetoden",
+        "sensitivity": "känslighetsanalys",
+        "inflation_skatt": "investeringsbedömning med inflation och skatt",
+        "monte_carlo": "sannolikhetsbaserad investeringsanalys med Monte Carlo",
+    }.get(method, "investeringsbedömning")
 
     extra_rules = (
         f"\nMODULSPECIFIKT\n"
-        f"Detta är en investeringsbedömning med metoden {method}. Förankra i {kapitel}. "
+        f"Detta är en investeringsbedömning med {method_label}. "
+        f"Förankra förklaringen i metodens beslutsregel. "
         f"Tolka resultatet i termer av investera eller avstå när det är relevant."
     )
     if method == "monte_carlo":
@@ -355,8 +358,9 @@ def build_budget_consistency_prompt(
     """Build the prompt that comments on integrated budget consistency."""
     extra_rules = (
         "\nMODULSPECIFIKT\n"
-        "Detta är en sammanvägd budget enligt kapitel 13 till 15. Bedöm om de tre "
-        "delbudgetarna är inbördes konsistenta. Vid avvikelse, peka ut sannolik orsak."
+        "Detta är en sammanvägd budget med resultat-, likviditets- och balansbudget. "
+        "Bedöm om de tre delbudgetarna är inbördes konsistenta. Vid avvikelse, peka "
+        "ut sannolik orsak."
     )
     system_prompt = SYSTEM_PROMPT_BASE + extra_rules
 
@@ -381,8 +385,9 @@ def build_standardkost_interpretation_prompt(
     """Build the variance interpretation prompt."""
     extra_rules = (
         "\nMODULSPECIFIKT\n"
-        "Detta är en standardkostnadsanalys enligt kapitel 17. Identifiera den dominerande "
-        "avvikelsen och föreslå sannolik orsak (inköp, produktion eller försäljning). "
+        "Detta är en standardkostnadsanalys där totalavvikelsen delas upp i volym-, "
+        "pris- och effektivitetskomponenter. Identifiera den dominerande avvikelsen "
+        "och föreslå sannolik orsak (inköp, produktion eller försäljning). "
         "Föreslå vad en controller skulle prioritera att utreda."
     )
     system_prompt = SYSTEM_PROMPT_BASE + extra_rules
@@ -409,7 +414,8 @@ def build_qa_prompt(
         "Svara endast på frågor som rör nuvarande modul och de visade siffrorna. "
         "Om frågan ligger utanför, säg det artigt och föreslå rätt modul.\n"
         "För Q&A behöver du inte hålla fast vid fyra avsnittsstrukturen. Svara koncist, "
-        "men förbli grundad i siffrorna och ange kapitelreferens när relevant."
+        "men förbli grundad i siffrorna och nämn metodens namn när det hjälper "
+        "studenten orientera sig."
     )
     system_prompt = SYSTEM_PROMPT_BASE + extra_rules
 
@@ -478,6 +484,8 @@ def build_quiz_generation_prompt(
         f"Du genererar en tentamenstil fråga i {kapitelkluster} ({kapitel_scope}) på "
         f"svårighetsgrad {difficulty_label}, typ {question_type}. "
         "Använd ett fiktivt svenskt företag med realistiska siffror. "
+        "Fältet kapitel_referens är en intern metadata för kvalitetskontroll och "
+        "ska INTE upprepas i fraga, forklaring, berakning_steg eller scenario. "
         "Svara ENDAST med giltig JSON enligt schemat. Ingen text före eller efter JSON."
     )
     system_prompt = SYSTEM_PROMPT_BASE + extra_rules
@@ -499,17 +507,19 @@ def fallback_kalkyl_template(
     calc_type: str, inputs: dict[str, Any], outputs: dict[str, Any]
 ) -> str:
     """Return a Swedish four section explanation built from inputs and outputs."""
-    kapitel = {"sjalvkostnad": "kapitel 6", "bidrag": "kapitel 8", "abc": "kapitel 7"}.get(
-        calc_type, "kapitel 4"
-    )
+    method_label = {
+        "sjalvkostnad": "påläggsmetoden",
+        "bidrag": "bidragskalkylen med nollpunktsanalys",
+        "abc": "aktivitetsbaserad kalkylering (ABC)",
+    }.get(calc_type, "produktkalkylering")
 
     inputs_lines = _format_labeled_block(inputs)
     outputs_lines = _format_labeled_block(outputs)
 
     return (
         f"**Antagande**\n"
-        f"Beräkningen följer standardmetoden enligt {kapitel} och förutsätter linjäritet "
-        f"inom relevant volymintervall.\n\n"
+        f"Beräkningen följer {method_label} och förutsätter linjäritet inom "
+        f"relevant volymintervall.\n\n"
         f"**Beräkning**\n"
         f"Indata:\n{inputs_lines}\n\n"
         f"Resultat:\n{outputs_lines}\n\n"
@@ -517,7 +527,7 @@ def fallback_kalkyl_template(
         f"Resultatet visar hur kostnaderna fördelas och summeras enligt vald kalkylmetod. "
         f"Studera särskilt vilka kostnadsslag som dominerar.\n\n"
         f"**Källor och förbehåll**\n"
-        f"Förenklad modell enligt {kapitel}. Verkliga företag kan ha staffade satser och "
+        f"Förenklad modell. Verkliga företag kan ha staffade satser och "
         f"kostnadsställen som inte fångas här."
     )
 
@@ -526,22 +536,21 @@ def fallback_investering_template(
     method: str, inputs: dict[str, Any], outputs: dict[str, Any]
 ) -> str:
     """Return a fallback four section explanation for investment methods."""
-    kapitel_map = {
-        "npv": "kapitel 10.4",
-        "irr": "kapitel 10.5",
-        "payback": "kapitel 10.3",
-        "annuitet": "kapitel 10.6",
-        "sensitivity": "kapitel 10.9",
-        "inflation_skatt": "kapitel 10.11",
-        "monte_carlo": "kapitel 10.9 utvidgad",
-    }
-    kapitel = kapitel_map.get(method, "kapitel 10")
+    method_label = {
+        "npv": "nuvärdesmetoden",
+        "irr": "internräntemetoden",
+        "payback": "återbetalningsmetoden",
+        "annuitet": "annuitetsmetoden",
+        "sensitivity": "känslighetsanalys",
+        "inflation_skatt": "investeringsbedömning med inflation och skatt",
+        "monte_carlo": "sannolikhetsbaserad analys med Monte Carlo",
+    }.get(method, "investeringsbedömning")
     inputs_lines = _format_labeled_block(inputs)
     outputs_lines = _format_labeled_block(outputs)
 
     return (
         f"**Antagande**\n"
-        f"Bedömningen följer {kapitel} och bygger på de kassaflöden och räntor som angivits.\n\n"
+        f"Bedömningen bygger på {method_label} och de kassaflöden och räntor som angivits.\n\n"
         f"**Beräkning**\n"
         f"Indata:\n{inputs_lines}\n\n"
         f"Resultat:\n{outputs_lines}\n\n"
@@ -549,7 +558,8 @@ def fallback_investering_template(
         f"Använd beslutsregeln för vald metod. Jämför resultatet mot kalkylräntan eller andra "
         f"alternativa investeringar.\n\n"
         f"**Källor och förbehåll**\n"
-        f"Modellen abstraherar från viss komplexitet. Se {kapitel} för fullständig diskussion."
+        f"Modellen abstraherar från viss komplexitet och förutsätter att indata är representativa "
+        f"för investeringens livslängd."
     )
 
 
@@ -562,8 +572,8 @@ def fallback_budget_template(
 
     return (
         f"**Antagande**\n"
-        f"Budgeten bygger på kapitel 13 till 15 och antar stabil affärsmodell utan "
-        f"extraordinära poster under perioden.\n\n"
+        f"Budgeten omfattar resultat-, likviditets- och balansbudget och antar stabil "
+        f"affärsmodell utan extraordinära poster under perioden.\n\n"
         f"**Beräkning**\n"
         f"Indata:\n{inputs_lines}\n\n"
         f"Resultat:\n{outputs_lines}\n\n"
@@ -572,8 +582,8 @@ def fallback_budget_template(
         f"årsresultat ska återspeglas i balansbudgetens förändring av eget kapital, och "
         f"likviditetsbudgetens kassaförändring ska stämma med balansbudgetens likvida medel.\n\n"
         f"**Källor och förbehåll**\n"
-        f"Förenklad modell enligt kapitel 13 till 15. Periodiseringseffekter och "
-        f"säsongsvariationer fångas inte fullt ut."
+        f"Förenklad budgetmodell. Periodiseringseffekter och säsongsvariationer fångas "
+        f"inte fullt ut."
     )
 
 
@@ -586,8 +596,8 @@ def fallback_standardkost_template(
 
     return (
         f"**Antagande**\n"
-        f"Analysen följer kapitel 17 och delar upp totalavvikelsen i volym, pris och "
-        f"effektivitetskomponenter.\n\n"
+        f"Analysen följer standardkostnadsmetoden och delar upp totalavvikelsen i "
+        f"volym-, pris- och effektivitetskomponenter.\n\n"
         f"**Beräkning**\n"
         f"Indata:\n{inputs_lines}\n\n"
         f"Resultat:\n{outputs_lines}\n\n"
@@ -596,8 +606,8 @@ def fallback_standardkost_template(
         f"inköpsfunktionen, stor effektivitetsavvikelse mot produktionen, och stor "
         f"volymavvikelse mot försäljningen eller marknadsefterfrågan.\n\n"
         f"**Källor och förbehåll**\n"
-        f"Förenklad modell enligt kapitel 17. Samspelseffekter mellan komponenterna "
-        f"kan ge mindre avstämningsdifferenser."
+        f"Förenklad avvikelsemodell. Samspelseffekter mellan komponenterna kan ge "
+        f"mindre avstämningsdifferenser."
     )
 
 
@@ -972,9 +982,11 @@ def build_quiz_combined_prompt(
         f"Du genererar EN tentamenstil fråga i {kapitelkluster} ({kapitel_scope}) "
         f"på svårighetsgrad {difficulty_label}, typ {question_type}. "
         f"Använd ett fiktivt svenskt företag med realistiska siffror. "
-        f"Innehållet MÅSTE ligga inom Andersson, Ekonomistyrning, {kapitel_scope}. "
-        f"Fältet kapitel_referens är obligatoriskt och MÅSTE peka på ett kapitel "
-        f"inom {kapitel_scope}, formaterat \"kapitel X\" eller \"kapitel X.Y\". "
+        f"Innehållet MÅSTE ligga inom svensk ekonomistyrning, ämnesområde {kapitel_scope}. "
+        f"Fältet kapitel_referens är obligatoriskt internt och MÅSTE peka på ett "
+        f"kapitel inom {kapitel_scope}, formaterat \"kapitel X\" eller \"kapitel X.Y\". "
+        "Det är endast en intern metadata för topisk kvalitetskontroll och får INTE "
+        "upprepas i fraga, scenario, forklaring eller berakning_steg. "
         "Bedöm samtidigt frågans pedagogiska kvalitet på tre dimensioner "
         "(pedagogiskt_varde, tydlighet, realism), heltal 1-5 vardera, i fältet "
         "kvalitet. "

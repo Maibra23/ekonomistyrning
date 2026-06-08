@@ -25,8 +25,10 @@ from utils.prompts import (
 )
 
 
-def test_system_prompt_base_mentions_andersson():
-    assert "Andersson" in SYSTEM_PROMPT_BASE
+def test_system_prompt_base_no_book_attribution():
+    """Tutor must not name any specific kursbok, author, or publisher."""
+    assert "Andersson" not in SYSTEM_PROMPT_BASE
+    assert "Studentlitteratur" not in SYSTEM_PROMPT_BASE
     assert "ekonomistyrning" in SYSTEM_PROMPT_BASE.lower()
 
 
@@ -64,15 +66,15 @@ def test_build_kalkyl_explanation_includes_numbers():
     assert "1500" in up
 
 
-def test_build_kalkyl_explanation_kapitel_per_type():
+def test_build_kalkyl_explanation_method_label_per_type():
     inputs = {"x": 1}
     outputs = {"y": 2}
     sp_self, _ = build_kalkyl_explanation_prompt("sjalvkostnad", inputs, outputs)
     sp_bidrag, _ = build_kalkyl_explanation_prompt("bidrag", inputs, outputs)
     sp_abc, _ = build_kalkyl_explanation_prompt("abc", inputs, outputs)
-    assert "kapitel 6" in sp_self
-    assert "kapitel 8" in sp_bidrag
-    assert "kapitel 7" in sp_abc
+    assert "påläggsmetoden" in sp_self.lower()
+    assert "bidragskalkyl" in sp_bidrag.lower()
+    assert "abc" in sp_abc.lower()
 
 
 def test_build_kalkyl_step_guide_prompt():
@@ -122,7 +124,7 @@ def test_build_standardkost_interpretation_prompt():
         {"namn": "Material", "volymavvikelse": 1000, "prisavvikelse": -500},
     ]
     sp, up = build_standardkost_interpretation_prompt(components)
-    assert "kapitel 17" in sp
+    assert "standardkostnadsanalys" in sp.lower()
     assert "1000" in up
     assert "inköp" in sp.lower() or "produktion" in sp.lower()
 
@@ -193,7 +195,8 @@ def test_fallback_kalkyl_template():
     digits = _digits_only(out)
     assert "850" in digits
     assert "1500" in digits
-    assert "kapitel 6" in out
+    assert "påläggsmetoden" in out.lower()
+    assert "kapitel" not in out.lower()
 
 
 def test_fallback_investering_template():
@@ -201,7 +204,8 @@ def test_fallback_investering_template():
         "npv", {"grundinvestering": 100000}, {"npv": 12345}
     )
     assert "Antagande" in out
-    assert "kapitel 10.4" in out
+    assert "nuvärdesmetoden" in out.lower()
+    assert "kapitel" not in out.lower()
     digits = _digits_only(out)
     assert "100000" in digits
     assert "12345" in digits
@@ -218,7 +222,8 @@ def test_fallback_budget_template():
     digits = _digits_only(out)
     assert "5000000" in digits
     assert "350000" in digits
-    assert "kapitel 13" in out
+    assert "resultat-" in out.lower() or "likviditets-" in out.lower()
+    assert "kapitel" not in out.lower()
 
 
 def test_fallback_standardkost_template():
@@ -234,7 +239,8 @@ def test_fallback_standardkost_template():
     digits = _digits_only(out)
     assert "50" in digits
     assert "5000" in digits
-    assert "kapitel 17" in out
+    assert "standardkostnadsmetoden" in out.lower()
+    assert "kapitel" not in out.lower()
 
 
 def test_fallback_templates_dict():
@@ -261,7 +267,7 @@ def test_system_prompt_base_includes_ordlista_entry_examples():
 def test_system_prompt_base_has_ordlista_absolute_rule():
     """The new absolute rule pointing at ORDLISTA must be present."""
     assert "ORDLISTA strikt" in SYSTEM_PROMPT_BASE
-    assert "Anderssons bok" in SYSTEM_PROMPT_BASE
+    assert "Anderssons bok" not in SYSTEM_PROMPT_BASE
 
 
 def test_terminology_glossary_minimum_size():
@@ -435,7 +441,7 @@ def test_contains_forbidden_terms_passes_in_scope_text():
     )
 
 
-def test_system_prompt_base_mentions_kursavgransning():
-    """The strengthened textbook scope reminder must be in the base prompt."""
-    assert "KURSAVGRÄNSNING" in SYSTEM_PROMPT_BASE or "kursavgränsning" in SYSTEM_PROMPT_BASE.lower()
-    assert "Andersson" in SYSTEM_PROMPT_BASE
+def test_system_prompt_base_mentions_amnesavgransning():
+    """The topical scope reminder must be in the base prompt."""
+    assert "ÄMNESAVGRÄNSNING" in SYSTEM_PROMPT_BASE or "ämnesavgränsning" in SYSTEM_PROMPT_BASE.lower()
+    assert "Andersson" not in SYSTEM_PROMPT_BASE

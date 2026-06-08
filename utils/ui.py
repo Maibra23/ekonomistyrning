@@ -1040,14 +1040,11 @@ def info_tooltip(label: str, text: str) -> str:
 
 
 def footer_note(version: str = "1.0", updated: str = "") -> str:
-    """Footer with book reference and version badge."""
-    updated_html = f" &middot; Uppdaterad {updated}" if updated else ""
+    """Page footer with version badge and optional updated date."""
+    label = f"Uppdaterad {updated}" if updated else "Ekonomistyrning Sandbox"
     return (
         f'<div class="eks-footer">'
-        f'<span class="eks-footer-label">'
-        f"Andersson, Ekonomistyrning: beslut och handling &middot; Studentlitteratur"
-        f"{updated_html}"
-        f"</span>"
+        f'<span class="eks-footer-label">{label}</span>'
         f'<span class="eks-footer-version">v{version}</span>'
         f"</div>"
     )
@@ -1171,7 +1168,7 @@ def render_sidebar(active_page: str) -> None:
             '<div class="eks-brand-bar"></div>'
             '<span class="eks-brand-mark">EKS</span>'
             '<span class="eks-brand-title">Ekonomistyrning</span>'
-            '<span class="eks-brand-sub">Andersson kap. 4 till 17</span>'
+            '<span class="eks-brand-sub">Kalkyl &middot; Investering &middot; Budget &middot; Avvikelser</span>'
             "</div>"
         )
 

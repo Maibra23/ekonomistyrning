@@ -271,7 +271,7 @@ if "abc_prod_df" not in st.session_state:
 
 st.html(
     page_title(
-        eyebrow="KAPITEL 6 · 7 · 8",
+        eyebrow="KALKYLERING",
         title="Kalkylering",
         subtitle=(
             "Tre kalkyleringsmetoder: självkostnadskalkyl (påläggsmetoden), "
@@ -344,33 +344,33 @@ with tab_sj:
             dm = st.number_input(
                 "Direkt material (kr/styck)",
                 min_value=0.0, step=10.0, key="sj_dm",
-                help="Direkt materialkostnad per tillverkad enhet (kapitel 6.2)",
+                help="Direkt materialkostnad per tillverkad enhet",
             )
             dl = st.number_input(
                 "Direkt lön (kr/styck)",
                 min_value=0.0, step=10.0, key="sj_dl",
-                help="Direkt lönekostnad per tillverkad enhet (kapitel 6.2)",
+                help="Direkt lönekostnad per tillverkad enhet",
             )
             mo_pct = st.number_input(
                 "MO (Materialomkostnad) (%)",
                 min_value=0.0, max_value=500.0, step=1.0, key="sj_mo",
-                help="Pålägg på direkt material för indirekta materialkostnader (kapitel 6.3)",
+                help="Pålägg på direkt material för indirekta materialkostnader",
             )
             to_pct = st.number_input(
                 "TO (Tillverkningsomkostnad) (%)",
                 min_value=0.0, max_value=500.0, step=1.0, key="sj_to",
-                help="Pålägg på direkt lön för tillverkningsomkostnader (kapitel 6.3)",
+                help="Pålägg på direkt lön för tillverkningsomkostnader",
             )
         with c2:
             ao_pct = st.number_input(
                 "AO (Administrationsomkostnad) (%)",
                 min_value=0.0, max_value=200.0, step=1.0, key="sj_ao",
-                help="Pålägg på tillverkningskostnad för administrationskostnader (kapitel 6.3)",
+                help="Pålägg på tillverkningskostnad för administrationskostnader",
             )
             fo_pct = st.number_input(
                 "FO (Försäljningsomkostnad) (%)",
                 min_value=0.0, max_value=200.0, step=1.0, key="sj_fo",
-                help="Pålägg på tillverkningskostnad för försäljningskostnader (kapitel 6.3)",
+                help="Pålägg på tillverkningskostnad för försäljningskostnader",
             )
             units_sj = st.number_input(
                 "Antal enheter",
@@ -511,7 +511,7 @@ with tab_sj:
         key="sj_export",
     )
 
-    st.caption("Referens: Andersson, Ekonomistyrning kapitel 6, Självkostnadskalkylering med påläggsmetoden")
+    st.caption("Metod: Självkostnadskalkylering med påläggsmetoden")
 
     if st.button("Återställ till standardvärden", key="sj_reset_autosave"):
         clear_state("kalkyl_sjalvkostnad")
@@ -574,18 +574,18 @@ with tab_bid:
             pris = st.number_input(
                 "Försäljningspris (kr/styck)",
                 min_value=0.0, step=10.0, key="bid_pris",
-                help="Pris per såld enhet (kapitel 8.1)",
+                help="Pris per såld enhet",
             )
             rorlig = st.number_input(
                 "Rörlig kostnad (kr/styck)",
                 min_value=0.0, step=10.0, key="bid_rorlig",
-                help="Total rörlig kostnad per enhet, inklusive inköp och distribution (kapitel 8.1)",
+                help="Total rörlig kostnad per enhet, inklusive inköp och distribution",
             )
         with c2:
             fasta = st.number_input(
                 "Fasta kostnader (kr/period)",
                 min_value=0.0, step=50_000.0, key="bid_fasta",
-                help="Totala fasta kostnader som inte varierar med volymen (kapitel 8.1)",
+                help="Totala fasta kostnader som inte varierar med volymen",
             )
             units_bid = st.number_input(
                 "Volym (antal enheter)",
@@ -757,7 +757,7 @@ with tab_bid:
         key="bid_export",
     )
 
-    st.caption("Referens: Andersson, Ekonomistyrning kapitel 8, Bidragskalkyl och nollpunktsanalys")
+    st.caption("Metod: Bidragskalkyl och nollpunktsanalys")
 
     if st.button("Återställ till standardvärden", key="bid_reset_autosave"):
         clear_state("kalkyl_bidrag")
@@ -991,7 +991,7 @@ with tab_abc:
                 "produkttabellens kolumner matchar aktivitetsnamnen."
             )
 
-    st.caption("Referens: Andersson, Ekonomistyrning kapitel 7, Aktivitetsbaserad kalkylering (ABC)")
+    st.caption("Metod: Aktivitetsbaserad kalkylering (ABC)")
 
     if st.button("Återställ till standardvärden", key="abc_reset_autosave"):
         clear_state("kalkyl_abc")

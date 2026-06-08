@@ -131,7 +131,7 @@ if "bud_forsaljning" not in st.session_state:
 
 st.html(
     page_title(
-        eyebrow="KAPITEL 13-15",
+        eyebrow="BUDGETERING",
         title="Budget och budgetering",
         subtitle=(
             "Bygg resultatbudget, likviditetsbudget och balansbudget steg för steg. "

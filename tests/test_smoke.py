@@ -745,7 +745,7 @@ class TestPromptsSmoke:
 
         result = fallback_kalkyl_template("sjalvkostnad", {"dm": 850}, {"sk": 1500})
         assert "Antagande" in result
-        assert "kapitel 6" in result
+        assert "påläggsmetoden" in result.lower()
 
     def test_fallback_investering_template(self):
         from utils.prompts import fallback_investering_template
