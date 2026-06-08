@@ -178,7 +178,7 @@ FALLBACK_BANK = _load_fallback()
 
 st.html(
     page_title(
-        eyebrow="KAPITEL 4-17",
+        eyebrow="KUNSKAPSTEST",
         title="Kunskapstest",
         subtitle=(
             "Testa dina kunskaper med AI-genererade frågor. "
@@ -197,10 +197,10 @@ if "quiz_answered" not in st.session_state:
 
 # Controls
 _CLUSTER_LABELS = {
-    "kalkyl": "Kalkylering (kap. 4-8)",
-    "investering": "Investering (kap. 10)",
-    "budget": "Budget (kap. 13-15)",
-    "standardkost": "Standardkostnad (kap. 17)",
+    "kalkyl": "Kalkylering",
+    "investering": "Investering",
+    "budget": "Budget",
+    "standardkost": "Standardkostnad",
 }
 _DIFFICULTY_LABELS = {"latt": "Lätt", "medel": "Medel", "svar": "Svår"}
 _QTYPE_LABELS = {"flerval": "Flerval (4 alternativ)", "numerisk": "Numerisk"}
@@ -466,14 +466,9 @@ def _render_question_card(q: dict) -> None:
             f"</div>"
         )
 
-    ref = q.get("kapitel_referens")
-    ref_html = (
-        f'<span class="eks-quiz-chip">Referens: {ref}</span>' if ref else ""
-    )
-
     st.html(
         f'<div class="eks-quiz-card">'
-        f"{badges_html}{scenario_html}{question_html}{given_html}{ref_html}"
+        f"{badges_html}{scenario_html}{question_html}{given_html}"
         f"</div>"
     )
 
@@ -569,9 +564,6 @@ if q:
                 st.markdown(humanize(str(forklaring)).text)
             else:
                 st.caption("Ingen förklaring angavs.")
-
-        if q.get("kapitel_referens"):
-            st.caption(f"Referens: {q['kapitel_referens']}")
 
         quality = q.get("quality")
         if quality:

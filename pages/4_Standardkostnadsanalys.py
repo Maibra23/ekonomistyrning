@@ -54,7 +54,7 @@ render_sidebar("standardkostnad")
 
 st.html(
     page_title(
-        eyebrow="KAPITEL 17",
+        eyebrow="AVVIKELSEANALYS",
         title="Standardkostnadsanalys",
         subtitle=(
             "Analysera avvikelser mellan standardkostnad och verkligt utfall. "
@@ -81,7 +81,7 @@ tab1, tab2, tab3 = st.tabs([
 with tab1:
     st.markdown(
         "Ange standardvärden och verkligt utfall för en rörlig kostnadspost. "
-        "Avvikelsen bryts ner i tre komponenter: volym, pris och effektivitet. Kapitel 17.2-17.4."
+        "Avvikelsen bryts ner i tre komponenter: volym, pris och effektivitet."
     )
 
     # LLM driven scenario generator (Task 10.13)
@@ -320,7 +320,7 @@ with tab1:
         if rorlig_result["reconciliation_ok"]:
             st.caption(
                 "Avstämning OK: Volymavvikelse + Prisavvikelse + Effektivitetsavvikelse "
-                f"= {format_sek(rorlig_result['total'])} (total avvikelse). Kapitel 17.4."
+                f"= {format_sek(rorlig_result['total'])} (total avvikelse)."
             )
         else:
             st.warning(
@@ -373,8 +373,7 @@ with tab1:
 with tab2:
     st.markdown(
         "Jämför budgeterade fasta omkostnader med verkligt utfall. "
-        "En enkel differensanalys som visar om företaget överskridit eller underskridit budget. "
-        "Kapitel 17.7."
+        "En enkel differensanalys som visar om företaget överskridit eller underskridit budget."
     )
 
     col_fix_in, col_fix_res = st.columns([1, 2], gap="large")
@@ -461,7 +460,7 @@ with tab2:
         apply_layout(fig_fast, title="Fasta omkostnader: Budget vs Verkligt", height=380)
         st.plotly_chart(fig_fast, use_container_width=True)
 
-        st.caption("Kapitel 17.7: Fasta omkostnadsavvikelser.")
+        st.caption("Fasta omkostnadsavvikelser.")
 
     # LLM interpretation for fixed overhead (on-demand)
     _fast_components = [{

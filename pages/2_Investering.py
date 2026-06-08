@@ -221,7 +221,7 @@ def _render_investering_llm(
 
 st.html(
     page_title(
-        eyebrow="KAPITEL 10",
+        eyebrow="INVESTERINGSBEDÖMNING",
         title="Investeringsbedömning",
         subtitle=(
             "Analysera lönsamheten i en investering med NPV, IRR, "
@@ -325,7 +325,7 @@ with tab1:
                 min_value=1,
                 max_value=15,
                 key="inv_years",
-                help="Investeringens ekonomiska livslängd i år (kapitel 10.2)",
+                help="Investeringens ekonomiska livslängd i år",
             )
 
             grundinvestering = st.number_input(
@@ -334,7 +334,7 @@ with tab1:
                 step=10_000.0,
                 format="%.0f",
                 key="inv_initial",
-                help="Investeringens initialkostnad vid tidpunkt 0 (kapitel 10.2)",
+                help="Investeringens initialkostnad vid tidpunkt 0",
             )
 
             kalkylranta = st.slider(
@@ -342,7 +342,7 @@ with tab1:
                 min_value=0,
                 max_value=30,
                 key="inv_rate",
-                help="Avkastningskrav; används för att diskontera framtida kassaflöden (kapitel 10.4)",
+                help="Avkastningskrav; används för att diskontera framtida kassaflöden",
             )
 
             # Rebuild the cash-flow table when the year count changes so the
@@ -474,7 +474,7 @@ with tab1:
             if payback_disc_val is not None
             else "Diskonterad återbetalningstid: ej återbetald inom perioden"
         )
-        st.caption(f"{disc_pb_txt} | Kapitel 10.3")
+        st.caption(disc_pb_txt)
 
     # Excel export
     export_rows = pd.DataFrame({
@@ -556,7 +556,7 @@ with tab1:
 with tab2:
     st.markdown(
         "Analysera hur NPV förändras när en enskild parameter varieras, allt annat lika. "
-        "Identifiera kritisk variation och investeringens robusthet. Kapitel 10.9."
+        "Identifiera kritisk variation och investeringens robusthet."
     )
 
     # Autosave defaults for sensitivity tab
@@ -735,7 +735,7 @@ with tab2:
 with tab3:
     st.markdown(
         "Beräkna investeringsvärdet med hänsyn till inflation och bolagsskatt. "
-        "Den nominella kalkylräntan härleds via Fishers ekvation. Kapitel 10.11."
+        "Den nominella kalkylräntan härleds via Fishers ekvation."
     )
 
     # Autosave defaults for inflation tab
@@ -785,7 +785,7 @@ with tab3:
                 max_value=50.0,
                 step=0.5,
                 format="%.1f",
-                help="Avkastningskrav exklusive inflation (real kalkylränta, kapitel 10.11)",
+                help="Avkastningskrav exklusive inflation (real kalkylränta)",
                 key="it_real_rate_pct",
             )
             inflation_pct = st.number_input(
@@ -900,7 +900,7 @@ with tab3:
 
             st.caption(
                 f"Fishers ekvation: (1 + {real_rate_pct:.1f}%)(1 + {inflation_pct:.1f}%) - 1 "
-                f"= {nom_rate * 100:.2f}% | Kapitel 10.11"
+                f"= {nom_rate * 100:.2f}%"
             )
 
     # LLM explanation and Q&A for Tab 3
@@ -933,8 +933,7 @@ with tab4:
     st.markdown(
         "Monte Carlo-simulering skattar NPV-fördelningen genom att slumpmässigt dra "
         "grundinvestering, kassaflöden och kalkylränta frånnormala sannolikhetsfördelningar. "
-        "Resultatet visar riskprofilen och sannolikheten för positivt utfall. "
-        "Kapitel 10.9."
+        "Resultatet visar riskprofilen och sannolikheten för positivt utfall."
     )
 
     # Autosave defaults for Monte Carlo tab (parameters only, not results)
@@ -1178,7 +1177,7 @@ with tab4:
                 )
 
             st.caption(
-                f"Simulering baserad på{n_sims:,} iterationer, seed = 42 | Kapitel 10.9"
+                f"Simulering baserad på {n_sims:,} iterationer, seed = 42"
             )
         else:
             st.info("Tryck 'Kör simulering' för att starta Monte Carlo-analysen.")

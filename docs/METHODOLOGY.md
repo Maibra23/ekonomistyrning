@@ -1,12 +1,49 @@
 # METHODOLOGY: Theoretical Foundation and Documentation
 
-**Version:** 2.2
-**Last updated:** 2026-05-05
+**Version:** 2.3
+**Last updated:** 2026-06-08
 **Major change in v2:** Added section 6 on LLM design (prompt engineering, register, humanizer principles, evaluation).
 **Major change in v2.1:** Section 7.3 updated with LLM-generated scenarios on demand (Task 7.5).
 **Major change in v2.2:** Added section 8 on the UI design system (utils/ui.py, CSS architecture, color tokens, component catalog, interaction flow).
+**Major change in v2.3:** Added section 0 with explicit source attribution and the chapter-to-module mapping. All book citations, author and publisher names, and chapter numbers were removed from the running app's UI strings and from LLM tutor output; they are kept only in this document, in the landing-page "Om appen" expander, and in code-internal docstrings/comments that are not surfaced to end users.
 
-This document explains the theory behind every calculation in the app, links each method to the relevant kapitel in Göran Andersson's *Ekonomistyrning: beslut och handling*, and documents the assumptions, data choices, design rationale, and LLM tutor design.
+This document explains the theory behind every calculation in the app, names the academic source that informed the topical scope, and documents the assumptions, data choices, design rationale, and LLM tutor design.
+
+---
+
+## 0. Source attribution and copyright posture
+
+### 0.1 Source
+
+The topical scope of this educational sandbox is informed by Göran Andersson, *Ekonomistyrning: beslut och handling* (Studentlitteratur), a standard Swedish university textbook in management accounting. The book is **not bundled, reproduced, paraphrased, or quoted** by the app; only the names of well-established management accounting methods (självkostnadskalkyl, bidragskalkyl, ABC, NPV, IRR, payback, annuitet, känslighetsanalys, Monte Carlo, resultat-/likviditets-/balansbudget, standardkostnadsanalys) are used. Those method names belong to the field at large, not to any single author or publisher.
+
+### 0.2 Chapter-to-module mapping (informational only)
+
+This mapping documents which chapters informed each module's topical coverage. **It is intentionally kept out of the running app** and out of all LLM-generated text.
+
+| Module | Informed by | Topical coverage |
+|---|---|---|
+| Kalkyl | Chapters 4, 6, 7, 8 | Självkostnad (påläggsmetoden), bidragskalkyl, ABC, stegkalkyl |
+| Investering | Chapter 10 (all sections) | NPV, IRR, payback, annuitet, känslighetsanalys, inflation, skatt, Monte Carlo |
+| Budget | Chapters 13–15 | Resultatbudget, likviditetsbudget, balansbudget och deras integration |
+| Standardkostnadsanalys | Chapter 17 | Volym-, pris-, effektivitetsavvikelser samt fasta omkostnadsavvikelser |
+| Kunskapstest | Chapters 4–17 | Dynamiskt genererade frågor som validerar svar deterministiskt |
+
+Out of scope: chapter 18 (internprissättning), chapter 19 (projektstyrning), chapter 20 (benchmarking), chapter 21 (prestationsmätning), chapter 22 (sammanfattande perspektiv).
+
+### 0.3 Copyright mitigation in v2.3
+
+To remove any implied endorsement, affiliation, or reproduction risk:
+
+1. **No book attribution in the running app.** The page footer, the sidebar brand line, page eyebrows ("KAPITEL 10" → "INVESTERINGSBEDÖMNING" etc.), inline `(kapitel X.Y)` references in input help text, "Referens: Andersson, …" captions, and the trailing `| Kapitel X.Y` chapter tags were all removed.
+2. **No book attribution in LLM-generated text.** The system prompt no longer names the book, author, or publisher; an explicit absolute rule forbids the tutor from emitting chapter numbers in prose explanations (`Antagande`, `Beräkning`, `Tolkning`, `Källor och förbehåll`), step guides, or Q&A chat replies. The tutor is instructed to refer to methods by their established Swedish names instead.
+3. **Internal-only topical scope.** The quiz module retains an internal `kapitel_referens` JSON metadata field for topical-scope validation (`validate_kapitel_referens`) and the prompt builders retain an internal `cluster_kapitel` map. These are never surfaced to the user — the chip in the quiz card and the "Referens: …" caption that previously displayed them were removed.
+4. **Code-level references retained intentionally.** Module docstrings, function docstrings, comment headers, and variable/function names (`kapitelkluster`, `kapitel_referens`) still carry the chapter mapping. These are not visible to end users and help future maintainers trace the academic origin of each method.
+5. **Landing page exception.** The "Om appen" expander on the landing page (`streamlit_app.py`) is intentionally allowed to name the book once, as a single educational-context attribution.
+
+### 0.4 What the user sees
+
+The running app surfaces only method names, calculation results, and the user's own scenario data. A user who never opens `docs/` or the "Om appen" expander has no way to tell from the UI which textbook informed the topical scope.
 
 ---
 
