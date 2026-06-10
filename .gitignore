@@ -37,5 +37,6 @@ tests/output/
 !data/*.xlsx
 tests/eval_results_*.json
 
-# Claude harness scratch
+# Local agent harness scratch and settings
 .claude-tmp/
+.claude/

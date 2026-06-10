@@ -131,8 +131,9 @@ lärsession. Beräkningar och diagram fungerar normalt utan tutor.
 ### Provider lock in 🟢
 
 Appen är just nu hårdbunden till HF Inference Providers via
-huggingface_hub. Att byta till en annan provider (OpenRouter, Anthropic
-direkt, lokal Ollama) skulle kräva omarbetning av utils/llm.py.
+huggingface_hub. Att byta till en annan provider (OpenRouter, lokal
+Ollama, eller direktintegration mot en annan API-tjänst) skulle kräva
+omarbetning av utils/llm.py.
 
 **Aktuell hantering:** All providerlogik är isolerad i utils/llm.py
 bakom LLMClient-klassen. Ett provider-byte är arbete, men inte

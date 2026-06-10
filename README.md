@@ -142,7 +142,6 @@ ekonomistyrning/
 ├── docs/
 │   ├── PRD.md                    # Produktkrav
 │   ├── METHODOLOGY.md            # Formler och antaganden
-│   ├── TASKS.md                  # Byggplan med Claude Code-prompter
 │   ├── CHECKLIST.md              # Terminologigranskning
 │   ├── DESIGN.md                 # Designbeslut
 │   ├── CHANGELOG.md              # Ändringar i grenen day-10-hardening
@@ -162,7 +161,6 @@ ekonomistyrning/
 
 - [docs/PRD.md](docs/PRD.md) - Vision, målanvändare, scope, success metrics, risk register
 - [docs/METHODOLOGY.md](docs/METHODOLOGY.md) - Alla formler, antaganden och kapitelreferenser
-- [docs/TASKS.md](docs/TASKS.md) - 9 dagars byggplan med Claude Code-prompter per uppgift
 - [docs/CHECKLIST.md](docs/CHECKLIST.md) - Svensk terminologigranskning
 - [docs/DESIGN.md](docs/DESIGN.md) - Designbeslut och arkitektur
 - [docs/CHANGELOG.md](docs/CHANGELOG.md) - Samlade ändringar i grenen day-10-hardening (härdning, UI, interaktivitet)

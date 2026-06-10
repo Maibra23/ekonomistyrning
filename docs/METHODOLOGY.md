@@ -680,7 +680,6 @@ Chart series use `CHART_PALETTE` from `utils/ui.py` so color ordering is consist
 * numpy_financial dokumentation. https://numpy.org/numpy-financial/
 * Hugging Face Inference Providers. https://huggingface.co/docs/inference-providers
 * Qwen3 model card. https://huggingface.co/Qwen/Qwen3-14B
-* Humanizer skill (Claude Code skill for prompt engineering). https://github.com/blader/humanizer
 
 ---
 
