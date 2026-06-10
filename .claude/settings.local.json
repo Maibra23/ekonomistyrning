@@ -68,7 +68,8 @@
       "Bash(echo set *)",
       "Bash(tee .claude-tmp/o.txt)",
       "Bash(tee .claude-tmp/p.out)",
-      "Bash(CLAUDE_CODE_TMPDIR=/Users/Brook/Downloads grep *)"
+      "Bash(CLAUDE_CODE_TMPDIR=/Users/Brook/Downloads grep *)",
+      "Bash(/usr/local/bin/ruff check *)"
     ]
   }
 }

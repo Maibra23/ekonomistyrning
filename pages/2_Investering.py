@@ -423,10 +423,27 @@ with tab1:
                 f"vid kalkylräntan {kalkylranta} %. Investeringen skapar värde utöver avkastningskravet."
             )
         elif npv_val < 0:
-            st.error(
-                f"Investeringen rekommenderas inte. NPV = {format_sek(npv_val)}, vilket är negativt "
-                f"vid kalkylräntan {kalkylranta} %. Investeringen täcker inte avkastningskravet."
-            )
+            if irr_val is not None and irr_val < rate:
+                st.error(
+                    f"Investeringen rekommenderas inte. NPV = {format_sek(npv_val)}, "
+                    f"vilket är negativt vid kalkylräntan {kalkylranta} %. "
+                    f"De diskonterade kassaflödena täcker inte grundinvesteringen vid "
+                    f"detta avkastningskrav: kapitalet kostar mer än vad investeringen "
+                    f"genererar. Investeringens internränta är "
+                    f"{format_percent(irr_val)}, vilket är den högsta kalkylränta "
+                    f"investeringen klarar. Med en kalkylränta på högst "
+                    f"{format_percent(irr_val)} blir NPV noll, och en lägre kalkylränta "
+                    f"än så gör investeringen lönsam. Kan avkastningskravet inte "
+                    f"sänkas behöver kassaflödena förbättras eller grundinvesteringen minskas."
+                )
+            else:
+                st.error(
+                    f"Investeringen rekommenderas inte. NPV = {format_sek(npv_val)}, "
+                    f"vilket är negativt vid kalkylräntan {kalkylranta} %. "
+                    f"Kassaflödena räcker inte för att täcka grundinvesteringen oavsett "
+                    f"kalkylränta. En lönsam version kräver högre kassaflöden eller en "
+                    f"lägre grundinvestering."
+                )
         else:
             st.info("Investeringen är precis pågränsen (NPV = 0). Övriga faktorer avgör.")
 
