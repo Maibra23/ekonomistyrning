@@ -18,12 +18,10 @@ from utils.budget import (
 from utils.charts import COLORS, apply_layout
 from utils.export import export_to_excel
 from utils.formatting import format_sek
-from utils.grounding_ui import show_grounding_warning
 from utils.llm import (
     LLMUnavailableError,
     cached_chat,
     is_llm_available,
-    verify_grounding,
 )
 from utils.humanizer import humanize
 from utils.prompts import (
