@@ -745,7 +745,9 @@ _MODULE_SCHEMAS = {
 
 
 def build_scenario_generation_prompt(
-    module: str, difficulty: str = "medel"
+    module: str,
+    difficulty: str = "medel",
+    company: dict[str, str] | None = None,
 ) -> tuple[str, str]:
     """Build prompt for LLM generated fiktivt svenskt företag scenarios.
 
@@ -756,6 +758,10 @@ def build_scenario_generation_prompt(
             and complexity: latt yields round numbers and few cost
             items, medel yields realistic Swedish industry numbers,
             svar introduces edge cases like negative cash flows.
+        company: Optional already-chosen company ({"foretag_namn",
+            "beskrivning"}) for cross-module continuity: the LLM must
+            keep the exact name and stay consistent with the
+            description while generating fresh module-specific numbers.
 
     Returns:
         Tuple (system_prompt, user_prompt) ready for cached_chat.
@@ -790,8 +796,21 @@ def build_scenario_generation_prompt(
     schema = _MODULE_SCHEMAS[module]
     difficulty_hint = _DIFFICULTY_HINTS[difficulty]
 
+    company_block = ""
+    if company and str(company.get("foretag_namn", "")).strip():
+        name = str(company.get("foretag_namn", "")).strip()
+        desc = str(company.get("beskrivning", "")).strip()
+        desc_line = f" Beskrivning: {desc}" if desc else ""
+        company_block = (
+            f"Företaget är redan valt: {name}.{desc_line}\n"
+            "Använd EXAKT detta företagsnamn (foretag_namn) och håll "
+            "bransch och storlek konsistenta med beskrivningen. Generera "
+            "nya modulspecifika siffror som passar samma företag.\n\n"
+        )
+
     user_prompt = (
         f"Generera ett fiktivt svenskt företag för modulen {module}.\n\n"
+        f"{company_block}"
         f"{difficulty_hint}\n\n"
         f"Returnera GILTIG JSON som exakt följer detta schema (samma "
         f"nycklar, samma typer):\n{schema}\n\n"

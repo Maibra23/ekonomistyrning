@@ -30,6 +30,7 @@ from utils.prompts import (
     build_kalkyl_step_guide_prompt,
     build_qa_prompt,
 )
+from utils.scenario_continuity import render_adopt_button
 from utils.scenarios import generate_scenario, set_current_scenario
 from utils.state_save import clear_state, load_state, save_state
 from utils.tutor import (
@@ -322,10 +323,21 @@ with tab_sj:
         sj_generate_clicked = st.button(
             "Generera ett exempelföretag", key="sj_gen_scenario", use_container_width=True
         )
-    if sj_generate_clicked:
-        _sj_difficulty_code = _DIFFICULTY_MAP[sj_difficulty_label]
+    _sj_adopt = render_adopt_button("kalkyl_sjalvkostnad", "sj_adopt_scenario")
+    if sj_generate_clicked or _sj_adopt:
+        if _sj_adopt:
+            _sj_difficulty_code = _sj_adopt["difficulty"]
+            _sj_company = {
+                "foretag_namn": _sj_adopt["foretag_namn"],
+                "beskrivning": _sj_adopt["beskrivning"],
+            }
+        else:
+            _sj_difficulty_code = _DIFFICULTY_MAP[sj_difficulty_label]
+            _sj_company = None
         with st.spinner("Genererar exempelföretag..."):
-            scenario = generate_scenario("kalkyl_sjalvkostnad", _sj_difficulty_code)
+            scenario = generate_scenario(
+                "kalkyl_sjalvkostnad", _sj_difficulty_code, company=_sj_company
+            )
         st.session_state.sj_dm = float(scenario.get("direkt_material", 0))
         st.session_state.sj_dl = float(scenario.get("direkt_lon", 0))
         st.session_state.sj_mo = float(scenario.get("mo_pct", 0))
@@ -555,10 +567,21 @@ with tab_bid:
         bid_generate_clicked = st.button(
             "Generera ett exempelföretag", key="bid_gen_scenario", use_container_width=True
         )
-    if bid_generate_clicked:
-        _bid_difficulty_code = _DIFFICULTY_MAP[bid_difficulty_label]
+    _bid_adopt = render_adopt_button("kalkyl_bidrag", "bid_adopt_scenario")
+    if bid_generate_clicked or _bid_adopt:
+        if _bid_adopt:
+            _bid_difficulty_code = _bid_adopt["difficulty"]
+            _bid_company = {
+                "foretag_namn": _bid_adopt["foretag_namn"],
+                "beskrivning": _bid_adopt["beskrivning"],
+            }
+        else:
+            _bid_difficulty_code = _DIFFICULTY_MAP[bid_difficulty_label]
+            _bid_company = None
         with st.spinner("Genererar exempelföretag..."):
-            scenario = generate_scenario("kalkyl_bidrag", _bid_difficulty_code)
+            scenario = generate_scenario(
+                "kalkyl_bidrag", _bid_difficulty_code, company=_bid_company
+            )
         st.session_state.bid_pris = float(scenario.get("pris_per_styck", 0))
         st.session_state.bid_rorlig = float(scenario.get("rorlig_kostnad_per_styck", 0))
         st.session_state.bid_fasta = float(scenario.get("fasta_kostnader", 0))
@@ -805,10 +828,21 @@ with tab_abc:
         abc_generate_clicked = st.button(
             "Generera ett exempelföretag", key="abc_gen_scenario", use_container_width=True
         )
-    if abc_generate_clicked:
-        _abc_difficulty_code = _DIFFICULTY_MAP[abc_difficulty_label]
+    _abc_adopt = render_adopt_button("kalkyl_abc", "abc_adopt_scenario")
+    if abc_generate_clicked or _abc_adopt:
+        if _abc_adopt:
+            _abc_difficulty_code = _abc_adopt["difficulty"]
+            _abc_company = {
+                "foretag_namn": _abc_adopt["foretag_namn"],
+                "beskrivning": _abc_adopt["beskrivning"],
+            }
+        else:
+            _abc_difficulty_code = _DIFFICULTY_MAP[abc_difficulty_label]
+            _abc_company = None
         with st.spinner("Genererar exempelföretag..."):
-            scenario = generate_scenario("kalkyl_abc", _abc_difficulty_code)
+            scenario = generate_scenario(
+                "kalkyl_abc", _abc_difficulty_code, company=_abc_company
+            )
         try:
             activities = scenario.get("activities", [])
             products = scenario.get("products", [])

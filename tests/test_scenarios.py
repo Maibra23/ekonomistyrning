@@ -380,3 +380,82 @@ class TestValidateGeneratedScenario:
             validate_generated_scenario({"direct_material": 100}, "sjalvkostnad")
             is False
         )
+
+
+class TestCompanyContinuity:
+    """Cross-module company adoption (review gap 2): a generated company
+    can be carried into another module, which generates module-specific
+    numbers for the same company."""
+
+    def test_prompt_includes_company_when_given(self):
+        from utils.prompts import build_scenario_generation_prompt
+
+        sys_p, usr_p = build_scenario_generation_prompt(
+            "budget",
+            "medel",
+            company={
+                "foretag_namn": "Nordvik Industri AB",
+                "beskrivning": "Tillverkningsföretag som gör komponenter.",
+            },
+        )
+        assert "Nordvik Industri AB" in usr_p
+        assert "Tillverkningsföretag som gör komponenter." in usr_p
+
+    def test_prompt_without_company_unchanged(self):
+        from utils.prompts import build_scenario_generation_prompt
+
+        sys_p, usr_p = build_scenario_generation_prompt("budget", "medel")
+        assert "redan valt" not in usr_p
+
+    def test_fallback_keeps_company_name(self, monkeypatch):
+        from utils import scenarios as sc
+
+        def boom(*a, **kw):
+            from utils.llm import LLMUnavailableError
+
+            raise LLMUnavailableError("offline")
+
+        monkeypatch.setattr(sc, "cached_chat", boom)
+        result = sc.generate_scenario(
+            "investering",
+            "medel",
+            company={"foretag_namn": "Nordvik Industri AB", "beskrivning": ""},
+        )
+        assert result["foretag_namn"] == "Nordvik Industri AB"
+
+    def test_fallback_keeps_company_description_when_key_exists(self, monkeypatch):
+        from utils import scenarios as sc
+
+        def boom(*a, **kw):
+            from utils.llm import LLMUnavailableError
+
+            raise LLMUnavailableError("offline")
+
+        monkeypatch.setattr(sc, "cached_chat", boom)
+        result = sc.generate_scenario(
+            "budget",
+            "medel",
+            company={
+                "foretag_namn": "Nordvik Industri AB",
+                "beskrivning": "Tillverkningsföretag som gör komponenter.",
+            },
+        )
+        assert result["foretag_namn"] == "Nordvik Industri AB"
+        assert result["bransch_beskrivning"] == (
+            "Tillverkningsföretag som gör komponenter."
+        )
+
+    def test_llm_result_name_is_forced_to_company(self, monkeypatch):
+        import json
+
+        from utils import scenarios as sc
+
+        fake = dict(sc._fallback_base("budget"))
+        fake["foretag_namn"] = "Helt Annat Namn AB"
+        monkeypatch.setattr(sc, "cached_chat", lambda *a, **kw: json.dumps(fake))
+        result = sc.generate_scenario(
+            "budget",
+            "medel",
+            company={"foretag_namn": "Nordvik Industri AB", "beskrivning": ""},
+        )
+        assert result["foretag_namn"] == "Nordvik Industri AB"

@@ -31,6 +31,7 @@ from utils.prompts import (
     build_qa_prompt,
     FALLBACK_TEMPLATES,
 )
+from utils.scenario_continuity import render_adopt_button
 from utils.scenarios import generate_scenario, set_current_scenario
 from utils.state_save import clear_state, load_state, save_state
 from utils.tutor import render_tutor_explanation
@@ -224,10 +225,21 @@ if bud_reset_clicked:
     st.session_state.pop("bud_scenario_info", None)
     st.rerun()
 
-if bud_generate_clicked:
-    _bud_difficulty_code = _DIFFICULTY_MAP[bud_difficulty_label]
+_bud_adopt = render_adopt_button("budget", "bud_adopt_scenario")
+if bud_generate_clicked or _bud_adopt:
+    if _bud_adopt:
+        _bud_difficulty_code = _bud_adopt["difficulty"]
+        _bud_company = {
+            "foretag_namn": _bud_adopt["foretag_namn"],
+            "beskrivning": _bud_adopt["beskrivning"],
+        }
+    else:
+        _bud_difficulty_code = _DIFFICULTY_MAP[bud_difficulty_label]
+        _bud_company = None
     with st.spinner("Genererar exempelföretag..."):
-        scenario = generate_scenario("budget", _bud_difficulty_code)
+        scenario = generate_scenario(
+            "budget", _bud_difficulty_code, company=_bud_company
+        )
     intakter = scenario.get("intakter") or {}
     kostnader = scenario.get("kostnader") or {}
     balansposter = scenario.get("balansposter") or {}
