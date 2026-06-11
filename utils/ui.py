@@ -9,6 +9,8 @@ against COLORS, so literal % in CSS must be written as %%.
 """
 from __future__ import annotations
 
+import html
+
 import streamlit as st
 
 # ---------------------------------------------------------------------------
@@ -1058,6 +1060,40 @@ _NAV_PAGES: list[tuple[str, str, str]] = [
 _DIFFICULTY_DISPLAY = {"latt": "Lätt", "medel": "Medel", "svar": "Svår"}
 
 
+def scenario_banner_html(
+    name: str, meta_bits: list[str], description: str
+) -> str:
+    """Sidebar banner for the app-wide current company.
+
+    Name, description and source label all originate from the LLM scenario
+    generator, so every fragment is escaped before interpolation. Long
+    descriptions are truncated for a tidy sidebar; the full text remains
+    available on each page's per-module info banner.
+    """
+    meta_html = (
+        f'<div style="font-size:10px;color:#6B7280;margin-top:2px;">'
+        f"{' • '.join(html.escape(bit) for bit in meta_bits)}</div>"
+        if meta_bits
+        else ""
+    )
+    desc_html = ""
+    if description:
+        snippet = (
+            description if len(description) <= 140 else description[:137] + "..."
+        )
+        desc_html = (
+            f'<div style="font-size:11px;color:#374151;margin-top:6px;'
+            f'line-height:1.35;">{html.escape(snippet)}</div>'
+        )
+    return (
+        '<div style="padding:8px 16px 4px 16px;">'
+        '<div style="font-size:12px;font-weight:600;color:#111827;">'
+        f"{html.escape(name)}</div>"
+        f"{meta_html}{desc_html}"
+        "</div>"
+    )
+
+
 def _render_current_scenario_banner() -> None:
     """Render an app-wide banner with the most recently generated company.
 
@@ -1089,28 +1125,7 @@ def _render_current_scenario_banner() -> None:
         meta_bits.append(source)
     if difficulty_label:
         meta_bits.append(difficulty_label)
-    meta_html = (
-        f'<div style="font-size:10px;color:#6B7280;margin-top:2px;">'
-        f"{' • '.join(meta_bits)}</div>"
-        if meta_bits
-        else ""
-    )
-    desc_html = ""
-    if description:
-        # Truncate long descriptions for a tidy sidebar; full text remains
-        # available on each page's per-module info banner.
-        snippet = description if len(description) <= 140 else description[:137] + "..."
-        desc_html = (
-            f'<div style="font-size:11px;color:#374151;margin-top:6px;'
-            f'line-height:1.35;">{snippet}</div>'
-        )
-    st.html(
-        '<div style="padding:8px 16px 4px 16px;">'
-        '<div style="font-size:12px;font-weight:600;color:#111827;">'
-        f"{name}</div>"
-        f"{meta_html}{desc_html}"
-        "</div>"
-    )
+    st.html(scenario_banner_html(name, meta_bits, description))
     if st.button(
         "Rensa aktuellt företag",
         key="eks_clear_current_scenario",

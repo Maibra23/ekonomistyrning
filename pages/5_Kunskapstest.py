@@ -9,7 +9,6 @@ click instead of the previous 10.
 """
 from __future__ import annotations
 
-import html
 import json
 import random
 from pathlib import Path
@@ -31,6 +30,12 @@ from utils.prompts import (
     build_quiz_combined_prompt,
     contains_forbidden_terms,
     validate_kapitel_referens,
+)
+from utils.quiz_ui import (
+    CLUSTER_LABELS as _CLUSTER_LABELS,
+    DIFFICULTY_LABELS as _DIFFICULTY_LABELS,
+    QTYPE_LABELS as _QTYPE_LABELS,
+    quiz_card_html,
 )
 from utils.ui import (
     footer_note,
@@ -197,15 +202,6 @@ if "quiz_answered" not in st.session_state:
     st.session_state["quiz_answered"] = False
 
 # Controls
-_CLUSTER_LABELS = {
-    "kalkyl": "Kalkylering",
-    "investering": "Investering",
-    "budget": "Budget",
-    "standardkost": "Standardkostnad",
-}
-_DIFFICULTY_LABELS = {"latt": "Lätt", "medel": "Medel", "svar": "Svår"}
-_QTYPE_LABELS = {"flerval": "Flerval (4 alternativ)", "numerisk": "Numerisk"}
-
 col1, col2, col3 = st.columns(3)
 with col1:
     kapitelkluster = st.selectbox(
@@ -425,89 +421,10 @@ if st.button("Generera fråga", type="primary", use_container_width=True):
 # Render current question (quiz card)
 # ---------------------------------------------------------------------------
 
-def _difficulty_class(diff: str) -> str:
-    return {"latt": "diff-latt", "medel": "diff-medel", "svar": "diff-svar"}.get(
-        diff, "diff-medel"
-    )
-
-
-_NBSP = " "
-
-
-def _given_label(key: str) -> str:
-    """Snake_case key to readable Swedish label (preserves å/ä/ö)."""
-    spaced = str(key).replace("_", " ").strip()
-    return spaced[:1].upper() + spaced[1:] if spaced else str(key)
-
-
-def _given_value(value: object) -> str:
-    """Render a given_data value with Swedish numeric conventions and HTML escaping."""
-    if isinstance(value, bool):
-        return "Ja" if value else "Nej"
-    if isinstance(value, int):
-        return f"{value:,}".replace(",", _NBSP)
-    if isinstance(value, float):
-        if abs(value - round(value)) < 1e-9:
-            return f"{int(round(value)):,}".replace(",", _NBSP)
-        return (
-            f"{value:,.2f}"
-            .replace(",", "\x00")
-            .replace(".", ",")
-            .replace("\x00", _NBSP)
-        )
-    return html.escape(str(value))
-
-
-def _render_question_card(q: dict) -> None:
-    """Render the quiz card: badges + scenario + question + given data."""
-    cluster_label = _CLUSTER_LABELS.get(q.get("kapitelkluster", ""), q.get("kapitelkluster", ""))
-    diff = q.get("difficulty", "medel")
-    diff_label = _DIFFICULTY_LABELS.get(diff, diff)
-    qtype = q.get("question_type", "flerval")
-    qtype_label = _QTYPE_LABELS.get(qtype, qtype)
-
-    badges_html = (
-        f'<div class="eks-quiz-badges">'
-        f'<span class="eks-quiz-badge">{cluster_label}</span>'
-        f'<span class="eks-quiz-badge {_difficulty_class(diff)}">{diff_label}</span>'
-        f'<span class="eks-quiz-badge">{qtype_label}</span>'
-        f"</div>"
-    )
-
-    scenario_html = ""
-    if q.get("scenario"):
-        scenario_html = (
-            f'<div class="eks-quiz-scenario"><strong>Scenario:</strong> '
-            f"{q['scenario']}</div>"
-        )
-
-    question_html = f'<div class="eks-quiz-question">{q.get("fraga", "")}</div>'
-
-    given_html = ""
-    given = q.get("given_data") or {}
-    if given:
-        items = "".join(
-            f"<li><strong>{html.escape(_given_label(k))}:</strong> "
-            f"{_given_value(v)}</li>"
-            for k, v in given.items()
-        )
-        given_html = (
-            f'<div class="eks-quiz-given">'
-            f'<div class="eks-quiz-given-title">Givna uppgifter</div>'
-            f"<ul>{items}</ul>"
-            f"</div>"
-        )
-
-    st.html(
-        f'<div class="eks-quiz-card">'
-        f"{badges_html}{scenario_html}{question_html}{given_html}"
-        f"</div>"
-    )
-
-
 q = st.session_state.get("quiz_current")
 if q:
-    _render_question_card(q)
+    # All LLM-derived text is escaped inside quiz_card_html (XSS guard).
+    st.html(quiz_card_html(q))
 
     # Answer input
     qtype = q.get("question_type", "flerval")
