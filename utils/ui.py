@@ -173,27 +173,43 @@ section[data-testid="stSidebar"] nav {display: none !important;}
 /* --- Sidebar base --- */
 section[data-testid="stSidebar"] {
     background-color: %(sidebar_bg)s !important;
-    min-width: 260px !important;
-    width: 260px !important;
-    transform: translateX(0) !important;
-    visibility: visible !important;
-    display: block !important;
 }
 section[data-testid="stSidebar"],
 section[data-testid="stSidebar"] * {
     color: rgba(255,255,255,0.65) !important;
 }
-/* Lock sidebar open: hide every Streamlit collapse handle so the student
-   cannot accidentally hide the navigation. The list of pages must stay
-   visible at all times. */
-button[data-testid="stSidebarCollapseButton"],
-button[data-testid="stSidebarCollapsedControl"],
-div[data-testid="stSidebarCollapseButton"],
-div[data-testid="collapsedControl"],
-button[kind="header"] {
-    display: none !important;
-    visibility: hidden !important;
-    pointer-events: none !important;
+/* Lock sidebar open on desktop only: hide every Streamlit collapse handle
+   so the student cannot accidentally hide the navigation. On narrow
+   screens (< 768px) the lock is released so the sidebar can be closed and
+   does not permanently cover the content (review U1). */
+@media (min-width: 768px) {
+    section[data-testid="stSidebar"] {
+        min-width: 260px !important;
+        width: 260px !important;
+        transform: translateX(0) !important;
+        visibility: visible !important;
+        display: block !important;
+    }
+    button[data-testid="stSidebarCollapseButton"],
+    button[data-testid="stSidebarCollapsedControl"],
+    div[data-testid="stSidebarCollapseButton"],
+    div[data-testid="collapsedControl"],
+    button[kind="header"] {
+        display: none !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+    }
+}
+/* On mobile the header must stay visible: it hosts the sidebar
+   expand/collapse control, which is the only way to reach navigation
+   once the sidebar is closed. */
+@media (max-width: 767.98px) {
+    header[data-testid="stHeader"] {
+        display: block !important;
+    }
+    .main .block-container {
+        padding: 20px 16px !important;
+    }
 }
 /* Streamlit pushes the main area aside while the sidebar is open. When the
    collapse button is hidden the layout occasionally resets the offset on
