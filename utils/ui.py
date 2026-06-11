@@ -110,7 +110,7 @@ LABELS: dict[str, str] = {
     "llm_offline": "Visar grundförklaring (offline-läge)",
     "llm_cap_warn": (
         "Sessionens gräns för förklaringar är uppnådd. "
-        "Ladda om sidan för att fortsätta."
+        "Beräkningar och diagram fungerar som vanligt."
     ),
     "scenario_egna": "Egna värden",
     "scenario_ai": "Generera nytt exempelföretag",
@@ -1166,18 +1166,13 @@ def render_session_cap_card() -> None:
     """Render the friendly Swedish info card for the 50 call session cap.
 
     Used by every module page when an LLM call raises LLMSessionCapError.
-    Combined with autosave (Task 10.5), refresh restores inputs so the
-    user does not lose work.
+    Purely informational: the counter is deliberately not user-resettable,
+    so the cap cannot be cleared from the UI (review V2). It resets when a
+    new browser session starts.
     """
     import streamlit as st
 
     from utils.llm import SESSION_CAP_MESSAGE
 
     st.info(SESSION_CAP_MESSAGE)
-    if st.button("Uppdatera sidan", key=f"session_cap_refresh_{id(st)}"):
-        # Clear the counter so the next session starts fresh; autosave
-        # state survives because it lives under different keys.
-        if "llm_calls_used" in st.session_state:
-            del st.session_state["llm_calls_used"]
-        st.rerun()
     st.caption("Beräkningar och diagram fungerar normalt även utan förklaringar.")

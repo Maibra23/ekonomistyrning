@@ -80,9 +80,18 @@ class LLMSessionCapError(LLMUnavailableError):
     """
 
 
+class LLMDailyCapError(LLMUnavailableError):
+    """Raised when the shared daily call budget is used up (review V2).
+
+    Subclasses LLMUnavailableError so every existing catch site degrades
+    to the deterministic fallback without code changes.
+    """
+
+
 SESSION_CAP_MESSAGE = (
-    "Sessionens gräns för förklaringar är uppnådd. Uppdatera sidan för att "
-    "fortsätta utan att förlora dina inmatningar (autosave är aktiv)."
+    "Sessionens gräns för förklaringar är uppnådd. Beräkningar, diagram "
+    "och export fungerar som vanligt. Gränsen nollställs när du börjar en "
+    "ny session."
 )
 
 
@@ -314,6 +323,12 @@ def cached_chat(
     Raises LLMSessionCapError only when a *new* call is required and the cap
     is used up, so answers already generated this session keep rendering.
     """
+    from utils.llm_budget import (
+        DAILY_CAP_MESSAGE,
+        get_daily_calls_remaining,
+        record_daily_call,
+    )
+
     config = get_llm_config()
     try:
         import streamlit as st
@@ -321,10 +336,14 @@ def cached_chat(
         # No Streamlit runtime (e.g. pytest): call directly, no cache/counting.
         if get_session_calls_remaining() <= 0:
             raise LLMSessionCapError(SESSION_CAP_MESSAGE)
+        if get_daily_calls_remaining() <= 0:
+            raise LLMDailyCapError(DAILY_CAP_MESSAGE)
         client = LLMClient(token=config.token, model=config.model, provider=config.provider)
-        return client.chat(
+        result = client.chat(
             system_prompt, user_prompt, max_new_tokens=max_new_tokens, temperature=temperature
         )
+        record_daily_call()
+        return result
 
     @st.cache_data(ttl=3600, show_spinner=False)
     def _call(prompt_hash: str, sp: str, up: str, mt: int, t: float, model: str) -> str:
@@ -348,6 +367,11 @@ def cached_chat(
     is_new = counted is None or prompt_hash not in counted
     if is_new and get_session_calls_remaining() <= 0:
         raise LLMSessionCapError(SESSION_CAP_MESSAGE)
+    # Server-side guard: the shared daily budget is independent of session
+    # state, so it survives reloads and protects the HF token on public
+    # deploys (review V2).
+    if is_new and get_daily_calls_remaining() <= 0:
+        raise LLMDailyCapError(DAILY_CAP_MESSAGE)
 
     result = _call(
         prompt_hash, system_prompt, user_prompt, max_new_tokens, temperature, config.model
@@ -356,6 +380,7 @@ def cached_chat(
     if is_new and counted is not None:
         counted.add(prompt_hash)
         increment_session_calls()
+        record_daily_call()
     return result
 
 

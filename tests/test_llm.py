@@ -228,7 +228,10 @@ def test_session_cap_message_is_user_friendly_swedish():
     from utils.llm import SESSION_CAP_MESSAGE
 
     assert "förklaringar" in SESSION_CAP_MESSAGE.lower()
-    assert "Uppdatera" in SESSION_CAP_MESSAGE
+    # The copy must not promise that a reload preserves inputs: session
+    # state dies on a real browser reload (review #3).
+    assert "Uppdatera sidan" not in SESSION_CAP_MESSAGE
+    assert "autosave" not in SESSION_CAP_MESSAGE.lower()
     # User-facing copy must not leak the LLM/tutor abstraction.
     assert "LLM" not in SESSION_CAP_MESSAGE
     assert "tutor" not in SESSION_CAP_MESSAGE.lower()
