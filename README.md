@@ -1,8 +1,6 @@
 # Ekonomistyrning Sandbox
 
-![CI](https://github.com/YOUR_USERNAME/ekonomistyrning-sandbox/actions/workflows/ci.yml/badge.svg)
-
-<!-- Byt ut YOUR_USERNAME mot ditt faktiska GitHub-användarnamn efter första pushen för att badgen ska visa korrekt status. -->
+![CI](https://github.com/Maibra23/ekonomistyrning/actions/workflows/ci.yml/badge.svg)
 
 **En interaktiv övningsmiljö för svenska studenter som läser *Ekonomistyrning: beslut och handling* av Göran Andersson.**
 
@@ -19,7 +17,7 @@ An interactive practice environment for Swedish accounting management students. 
 | Modul | Beskrivning | Kapitel |
 |-------|-------------|---------|
 | **Kalkylering** | Självkostnadskalkyl via pålägg, bidragskalkyl och ABC-kalkyl med waterfall-diagram | 4, 6, 7, 8 |
-| **Investeringsbedömning** | NPV, IRR, payback, annuitet, känslighetsanalys, inflation och skatt, Monte Carlo med 10 000 iterationer | 10 |
+| **Investeringsbedömning** | NPV, IRR, payback, annuitet, känslighetsanalys, inflation och skatt, Monte Carlo med upp till 50 000 iterationer | 10 |
 | **Budget och budgetering** | Resultatbudget, likviditetsbudget och balansbudget med automatisk integration och konsistenskontroll | 13, 14, 15 |
 | **Standardkostnadsanalys** | Avvikelsedekomposition i volym, pris och effektivitet med färgkodade diagram | 17 |
 | **Kunskapstest** | LLM-genererade scenariofrågor per kapitelkluster, numeriska svar verifieras mot kalkylator | 4 till 17 |
@@ -46,7 +44,7 @@ An interactive practice environment for Swedish accounting management students. 
 ## Lokal installation
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/Maibra23/ekonomistyrning.git
 cd ekonomistyrning
 python -m venv .venv
 source .venv/bin/activate    # Windows: .venv\Scripts\activate
