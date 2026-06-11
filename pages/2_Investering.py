@@ -21,6 +21,7 @@ from utils.investering import (
     npv_with_inflation_tax,
     payback,
     sensitivity_analysis,
+    tornado_analysis,
 )
 from utils.grounding_ui import show_grounding_warning
 from utils.llm import (
@@ -116,6 +117,7 @@ def _run_monte_carlo(
     rate_mean: float,
     rate_std: float,
     n_sims: int,
+    cf_corr: float = 0.0,
 ) -> dict:
     """Cached Monte Carlo simulation. Tuple args ensure hashability for st.cache_data."""
     return monte_carlo_npv(
@@ -127,6 +129,7 @@ def _run_monte_carlo(
         discount_rate_std=rate_std,
         n_simulations=n_sims,
         seed=42,
+        cashflow_correlation=cf_corr,
     )
 
 
@@ -754,6 +757,62 @@ with tab2:
                     "NPV är positivt i hela variationsintervallet. Investeringen är robust."
                 )
 
+    # Tornado overview: all three parameters flexed by the same relative
+    # variation in one chart (review roadmap item 10).
+    if base_cfs:
+        st.markdown("#### Tornadodiagram: alla parametrar samtidigt")
+        tornado_var = st.slider(
+            "Variation per parameter (± %)",
+            min_value=5,
+            max_value=50,
+            value=20,
+            step=5,
+            key="sa_tornado_var",
+            help=(
+                "Varje parameter varieras med samma relativa avvikelse, "
+                "allt annat lika. Längst stapel = mest avgörande parameter."
+            ),
+        )
+        tor_df = tornado_analysis(
+            base_cfs, base_rate, base_inv, variation=tornado_var / 100.0
+        )
+        tor_base_npv = float(tor_df["base_npv"].iloc[0])
+        tor_lo = tor_df[["npv_low", "npv_high"]].min(axis=1)
+        tor_hi = tor_df[["npv_low", "npv_high"]].max(axis=1)
+
+        fig_tor = go.Figure()
+        fig_tor.add_trace(go.Bar(
+            y=tor_df["label"],
+            x=tor_lo - tor_base_npv,
+            base=tor_base_npv,
+            orientation="h",
+            name="Nedsida",
+            marker_color=COLORS["danger"],
+        ))
+        fig_tor.add_trace(go.Bar(
+            y=tor_df["label"],
+            x=tor_hi - tor_base_npv,
+            base=tor_base_npv,
+            orientation="h",
+            name="Uppsida",
+            marker_color=COLORS["success"],
+        ))
+        fig_tor.add_vline(
+            x=tor_base_npv,
+            line_dash="dash",
+            line_color=COLORS["neutral"],
+            annotation_text="Bas-NPV",
+            annotation_position="top",
+        )
+        fig_tor.update_layout(barmode="overlay")
+        fig_tor.update_yaxes(autorange="reversed")
+        apply_layout(
+            fig_tor,
+            title=f"NPV-intervall vid ±{tornado_var} % per parameter",
+            height=320,
+        )
+        st.plotly_chart(fig_tor, use_container_width=True)
+
     # LLM explanation and Q&A for Tab 2
     sa_inputs = {
         "parameter": sa_param,
@@ -988,6 +1047,7 @@ with tab4:
         "mc_rate_mean": float(st.session_state["inv_rate"]),
         "mc_rate_std": 2.0,
         "mc_n_sims": 10_000,
+        "mc_corr": 0.0,
     }
     for _k, _v in _MC_DEFAULTS.items():
         if _k not in st.session_state:
@@ -1002,7 +1062,7 @@ with tab4:
     # Restore saved Monte Carlo input parameters (not result arrays)
     _mc_saved = load_state("investering_monte_carlo")
     if _mc_saved is not None:
-        for _k in ("mc_inv_mean", "mc_inv_std", "mc_rate_mean", "mc_rate_std"):
+        for _k in ("mc_inv_mean", "mc_inv_std", "mc_rate_mean", "mc_rate_std", "mc_corr"):
             if _k in _mc_saved:
                 st.session_state[_k] = float(_mc_saved[_k])
         if "mc_n_sims" in _mc_saved:
@@ -1063,6 +1123,20 @@ with tab4:
             key="mc_n_sims",
         )
 
+        mc_corr = st.slider(
+            "Korrelation mellan årens kassaflöden",
+            min_value=0.0,
+            max_value=0.9,
+            step=0.1,
+            help=(
+                "0 = åren är oberoende. Högre värden betyder att bra år "
+                "tenderar att följas av bra år (dras via Cholesky-"
+                "faktorisering), vilket ger en bredare och mer realistisk "
+                "NPV-spridning."
+            ),
+            key="mc_corr",
+        )
+
         st.markdown("**Kassaflöden per år (medelvärde och standardavvikelse)**")
         n_mc_years = st.session_state["inv_years"]
         mc_cf_key = "mc_cf_df"
@@ -1092,6 +1166,7 @@ with tab4:
                 "mc_rate_mean": mc_rate_mean,
                 "mc_rate_std": mc_rate_std,
                 "mc_n_sims": n_sims,
+                "mc_corr": mc_corr,
                 "mc_cf_records": mc_cf_df.to_dict(orient="records"),
             },
         )
@@ -1102,7 +1177,9 @@ with tab4:
         mc_cf_means_tup = tuple(mc_cf_df["Medel (kr)"].tolist())
         mc_cf_stds_tup = tuple(mc_cf_df["Std (kr)"].tolist())
 
-        if run_sim or "mc_last_result" not in st.session_state:
+        # Run only on explicit button press (review I3): no surprise
+        # 10 000-draw simulation on first page visit.
+        if run_sim:
             with st.spinner("Kör Monte Carlo-simulering..."):
                 mc_result = _run_monte_carlo(
                     inv_mean=mc_inv_mean,
@@ -1112,6 +1189,7 @@ with tab4:
                     rate_mean=mc_rate_mean / 100.0,
                     rate_std=mc_rate_std / 100.0,
                     n_sims=n_sims,
+                    cf_corr=mc_corr,
                 )
                 st.session_state["mc_last_result"] = mc_result
 
