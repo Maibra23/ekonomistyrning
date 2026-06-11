@@ -36,6 +36,7 @@ from utils.prompts import (
     build_qa_prompt,
     FALLBACK_TEMPLATES,
 )
+from utils.scenario_continuity import render_adopt_button
 from utils.scenarios import generate_scenario, set_current_scenario
 from utils.state_save import clear_state, load_state, save_state
 from utils.tutor import render_tutor_explanation
@@ -292,10 +293,21 @@ with tab1:
         inv_generate_clicked = st.button(
             "Generera ett exempelföretag", key="inv_gen_scenario", use_container_width=True
         )
-    if inv_generate_clicked:
-        _inv_difficulty_code = _DIFFICULTY_MAP[inv_difficulty_label]
+    _inv_adopt = render_adopt_button("investering", "inv_adopt_scenario")
+    if inv_generate_clicked or _inv_adopt:
+        if _inv_adopt:
+            _inv_difficulty_code = _inv_adopt["difficulty"]
+            _inv_company = {
+                "foretag_namn": _inv_adopt["foretag_namn"],
+                "beskrivning": _inv_adopt["beskrivning"],
+            }
+        else:
+            _inv_difficulty_code = _DIFFICULTY_MAP[inv_difficulty_label]
+            _inv_company = None
         with st.spinner("Genererar exempelföretag..."):
-            scenario = generate_scenario("investering", _inv_difficulty_code)
+            scenario = generate_scenario(
+                "investering", _inv_difficulty_code, company=_inv_company
+            )
         set_current_scenario("investering", scenario, _inv_difficulty_code)
         try:
             cash_flows_gen = list(scenario.get("arliga_kassaflon") or [])

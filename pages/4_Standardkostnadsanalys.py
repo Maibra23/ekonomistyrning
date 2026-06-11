@@ -25,6 +25,7 @@ from utils.prompts import (
     build_qa_prompt,
     FALLBACK_TEMPLATES,
 )
+from utils.scenario_continuity import render_adopt_button
 from utils.scenarios import generate_scenario, set_current_scenario
 from utils.standardkost import (
     variance_decomposition_rorlig,
@@ -112,10 +113,21 @@ with tab1:
             key="sk_gen_scenario",
             use_container_width=True,
         )
-    if sk_generate_clicked:
-        _sk_difficulty_code = _DIFFICULTY_MAP[sk_difficulty_label]
+    _sk_adopt = render_adopt_button("standardkost", "sk_adopt_scenario")
+    if sk_generate_clicked or _sk_adopt:
+        if _sk_adopt:
+            _sk_difficulty_code = _sk_adopt["difficulty"]
+            _sk_company = {
+                "foretag_namn": _sk_adopt["foretag_namn"],
+                "beskrivning": _sk_adopt["beskrivning"],
+            }
+        else:
+            _sk_difficulty_code = _DIFFICULTY_MAP[sk_difficulty_label]
+            _sk_company = None
         with st.spinner("Genererar exempelföretag..."):
-            scenario = generate_scenario("standardkost", _sk_difficulty_code)
+            scenario = generate_scenario(
+                "standardkost", _sk_difficulty_code, company=_sk_company
+            )
         st.session_state["std_volym"] = float(scenario.get("standard_volym", 1000.0))
         st.session_state["std_pris"] = float(scenario.get("standard_pris", 50.0))
         st.session_state["std_forbrukning"] = float(

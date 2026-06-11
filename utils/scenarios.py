@@ -323,12 +323,17 @@ def _vary(
 
 
 def _apply_variation(
-    module: str, base: dict[str, Any], difficulty: str = "medel"
+    module: str,
+    base: dict[str, Any],
+    difficulty: str = "medel",
+    company: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Return a varied copy of ``base`` with a fresh company name.
 
     ``difficulty`` selects the monetary scaling and rate nudge windows so
     a "lätt" fallback is visibly smaller and rounder than a "svår" one.
+    When ``company`` is given (cross-module continuity), its name and
+    description override the random/template identity.
     """
     if not base:
         return base
@@ -342,10 +347,33 @@ def _apply_variation(
     factor = rng.uniform(*factor_range)
     varied = _vary(base, factor, rng, rate_range)
     varied["foretag_namn"] = rng.choice(_COMPANY_NAMES)
+    _apply_company_identity(varied, company)
     return varied
 
 
-def _fallback_for(module: str, difficulty: str = "medel") -> dict[str, Any]:
+def _apply_company_identity(
+    scenario: dict[str, Any], company: dict[str, str] | None
+) -> None:
+    """Force the adopted company's identity onto ``scenario`` in place.
+
+    Guards continuity even when the LLM ignores the prompt instruction to
+    keep the exact name.
+    """
+    if not company:
+        return
+    name = str(company.get("foretag_namn", "")).strip()
+    if name:
+        scenario["foretag_namn"] = name
+    desc = str(company.get("beskrivning", "")).strip()
+    if desc and "bransch_beskrivning" in scenario:
+        scenario["bransch_beskrivning"] = desc
+
+
+def _fallback_for(
+    module: str,
+    difficulty: str = "medel",
+    company: dict[str, str] | None = None,
+) -> dict[str, Any]:
     """Return a placeholder scenario for ``module`` with per-call variation.
 
     Used when the LLM is unavailable, returns invalid JSON, or returns a
@@ -353,7 +381,7 @@ def _fallback_for(module: str, difficulty: str = "medel") -> dict[str, Any]:
     window so the fallback for "lätt" looks materially different from
     "svår" instead of all three sharing the same factor range.
     """
-    return _apply_variation(module, _fallback_base(module), difficulty)
+    return _apply_variation(module, _fallback_base(module), difficulty, company)
 
 
 # ---------------------------------------------------------------------------
@@ -396,13 +424,20 @@ def list_modules_for_scenarios() -> list[str]:
     return list(SUPPORTED_SCENARIO_MODULES)
 
 
-def generate_scenario(module: str, difficulty: str = "medel") -> dict[str, Any]:
+def generate_scenario(
+    module: str,
+    difficulty: str = "medel",
+    company: dict[str, str] | None = None,
+) -> dict[str, Any]:
     """Generate a fresh fiktivt svenskt företag scenario via the LLM.
 
     Args:
         module: One of the values returned by ``list_modules_for_scenarios``.
         difficulty: One of "latt", "medel", "svar". Invalid difficulties
             fall back to "medel".
+        company: Optional already-chosen company ({"foretag_namn",
+            "beskrivning"}) for cross-module continuity. The returned
+            scenario always carries this exact name.
 
     Returns:
         Dict with the keys required for ``module`` (see ``_REQUIRED_KEYS``).
@@ -416,21 +451,22 @@ def generate_scenario(module: str, difficulty: str = "medel") -> dict[str, Any]:
 
     try:
         system_prompt, user_prompt = build_scenario_generation_prompt(
-            module, difficulty
+            module, difficulty, company=company
         )
         raw = cached_chat(system_prompt, user_prompt, temperature=0.7)
         parsed = _extract_json_object(raw)
     except LLMUnavailableError:
-        return _fallback_for(module, difficulty)
+        return _fallback_for(module, difficulty, company)
     except (ValueError, json.JSONDecodeError):
-        return _fallback_for(module, difficulty)
+        return _fallback_for(module, difficulty, company)
     except Exception:
         # Defensive: never let a scenario generator failure crash a page
-        return _fallback_for(module, difficulty)
+        return _fallback_for(module, difficulty, company)
 
     required = _REQUIRED_KEYS[module]
     if not all(key in parsed for key in required):
-        return _fallback_for(module, difficulty)
+        return _fallback_for(module, difficulty, company)
+    _apply_company_identity(parsed, company)
     return parsed
 
 
