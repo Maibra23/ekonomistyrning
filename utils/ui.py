@@ -21,7 +21,7 @@ import streamlit as st
 # ---------------------------------------------------------------------------
 
 APP_VERSION = "0.2.0"
-APP_UPDATED = "2026-06-02"
+APP_UPDATED = "2026-06-11"
 
 
 # ---------------------------------------------------------------------------
@@ -154,7 +154,63 @@ BUDGET_VS_RAKNING_HELP: str = (
 
 GLOBAL_CSS: str = (
     """
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@300;400;600;700&display=swap');
+/* Self-hosted fonts (latin subsets in static/fonts/, served via
+   Streamlit static serving). No render-blocking Google Fonts request
+   and no third-party IP disclosure (GDPR, review L5). */
+/* latin */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(/app/static/fonts/IBMPlexMono-400.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* latin */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(/app/static/fonts/IBMPlexMono-500.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* latin */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url(/app/static/fonts/Inter-300.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* latin */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(/app/static/fonts/Inter-400.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* latin */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(/app/static/fonts/Inter-600.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* latin */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url(/app/static/fonts/Inter-700.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
 
 /* --- Streamlit chrome removal --- */
 #MainMenu {visibility: hidden;}
@@ -777,6 +833,17 @@ div[data-testid="stSlider"] label {
     display: inline-block;
     margin-bottom: 8px;
 }
+/* --- Accessibility (review U7) --- */
+.eks-tip:focus-visible {
+    outline: 2px solid %(primary_light)s;
+    outline-offset: 2px;
+    border-radius: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+    .eks-tip-text { transition: none; }
+    * { scroll-behavior: auto !important; }
+}
+
 .eks-grounding-warn {
     font-family: Inter, sans-serif;
     font-size: 11px;
@@ -1122,6 +1189,38 @@ def _render_current_scenario_banner() -> None:
         st.rerun()
 
 
+def _render_model_selector() -> None:
+    """Sidebar selectbox for the runtime LLM model override (review U3).
+
+    The backend (MODEL_SESSION_KEY in utils/llm.py) and the sidebar CSS for
+    the selectbox existed without any UI. Hidden when no token is
+    configured, since the choice would have no effect offline.
+    """
+    try:
+        from utils.llm import (
+            MODEL_SESSION_KEY,
+            SUPPORTED_MODELS,
+            get_active_model,
+            is_llm_available,
+        )
+    except ImportError:  # pragma: no cover - defensive
+        return
+    if not is_llm_available():
+        return
+    if MODEL_SESSION_KEY not in st.session_state:
+        st.session_state[MODEL_SESSION_KEY] = get_active_model()
+    st.selectbox(
+        "Modell för förklaringar",
+        options=list(SUPPORTED_MODELS),
+        format_func=lambda m: m.split("/")[-1],
+        key=MODEL_SESSION_KEY,
+        help=(
+            "Qwen3-8B är standard och snabbast. Qwen3-14B ger ofta något "
+            "utförligare förklaringar men svarar långsammare."
+        ),
+    )
+
+
 def _render_llm_budget_meter() -> None:
     """Show the remaining explanation budget for this session.
 
@@ -1170,6 +1269,7 @@ def render_sidebar(active_page: str) -> None:
             st.page_link(path, label=label)
 
         _render_current_scenario_banner()
+        _render_model_selector()
         _render_llm_budget_meter()
 
 

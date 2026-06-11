@@ -433,8 +433,15 @@ def build_qa_prompt(
 
     history_block = ""
     if chat_history:
-        lines = [f"{role}: {msg}" for role, msg in chat_history[-6:]]
-        history_block = "\n\nTidigare konversation:\n" + "\n".join(lines)
+        relevant = list(chat_history)
+        # Callers append the new question to the history before building
+        # the prompt; don't feed it both as history and as the current
+        # question (review K5).
+        if relevant and tuple(relevant[-1]) == ("user", user_question):
+            relevant = relevant[:-1]
+        if relevant:
+            lines = [f"{role}: {msg}" for role, msg in relevant[-6:]]
+            history_block = "\n\nTidigare konversation:\n" + "\n".join(lines)
 
     user_prompt = (
         f"Aktuella indata:\n{_format_inputs_block(current_inputs)}\n\n"

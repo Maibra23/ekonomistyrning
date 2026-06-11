@@ -113,9 +113,11 @@ För att inte slösa HF-kvot finns en hård gräns på 50 LLM-anrop per
 session. Att slå i taket var tidigare ett kryptiskt fel.
 
 **Aktuell hantering:** Day 10 introducerade LLMSessionCapError och ett
-vänligt svenskt info-kort med en knapp för att uppdatera sidan.
-Autosparen säkerställer att inmatningar inte går förlorade vid
-uppdatering. Efter day 10 centraliserades dessutom anropsräkningen i
+vänligt svenskt info-kort. Kortet är numera enbart informativt: räknaren
+kan inte nollställas från gränssnittet (kostnadsskydd, se V2 i
+granskningen 2026-06-11), och utöver sessionstaket finns en serverside
+dagsbudget (`LLM_DAILY_CAP`, standard 300 anrop/dag) som delas av alla
+sessioner och överlever omladdningar. Efter day 10 centraliserades dessutom anropsräkningen i
 `cached_chat`: varje unik prompt debiteras taket **en gång per session**,
 så cacheträffar och oavsiktliga rerenderingar (widget-ändring, chatt,
 flikbyte) är gratis. Inmatningssektionerna ligger nu i `st.form` med en
@@ -180,9 +182,8 @@ inmatningarna från URL:en, och aktuellt läge kan delas som länk. Kalkyl,
 Investering (alla flikar) och Budget har autospar; avkodningen är
 storleksbegränsad och ignorerar korrupta payloads.
 
-**Kvarvarande risk:** Standardkostnadsanalys saknar ännu autospar.
-LLM-förklaringar och chatthistorik följer inte med URL:en (medvetet:
-de är för stora och regenereras på begäran).
+**Kvarvarande risk:** LLM-förklaringar och chatthistorik följer inte
+med URL:en (medvetet: de är för stora och regenereras på begäran).
 
 ### Ingen autentisering 🟡
 
@@ -257,17 +258,17 @@ praktiska fall. Användaren kan modellera valfri hierarki.
 **Kvarvarande risk:** En student som söker en specifik mallstruktur från
 boken hittar inte den.
 
-### Monte Carlo antar normalfördelning och oberoende 🟢
+### Monte Carlo antar normalfördelning 🟢 (korrelation tillagd 2026-06-11)
 
-Monte Carlo-modulen sampling antar att varje parameter följer en
-normalfördelning och att parametrar är oberoende. Verkligheten är ofta
-varken det ena eller det andra.
+Monte Carlo-modulen antar att varje parameter följer en normalfördelning.
 
-**Aktuell hantering:** Documentation i den genererade förklaringen
-nämner antagandet. Användaren får tolka resultatet med försiktighet.
+**Aktuell hantering:** Årens kassaflöden kan nu dras med konstant parvis
+korrelation (Cholesky-faktorisering, reglage 0–0,9 i MC-fliken), vilket
+ger en mer realistisk NPV-spridning än oberoende-antagandet. Den
+genererade förklaringen nämner normalfördelningsantagandet.
 
-**Planerad lösning:** v3 utforskar log-normala fördelningar och
-korrelationsmatris.
+**Planerad lösning:** v3 utforskar log-normala fördelningar och en full
+korrelationsmatris (inte bara konstant parvis korrelation).
 
 ---
 
@@ -309,6 +310,28 @@ en chart per huvudblad.
 
 **Planerad lösning:** v2 utforskar flera charts per blad samt PDF-export
 för en mer komplett rapport.
+
+### Streamlits header och meny är dolda på desktop 🟢
+
+Designsystemet gömmer Streamlits inbyggda header, meny och verktygsrad
+på desktop för ett renare uttryck. Det tar också bort inbyggda vägar
+till t.ex. utskrift och skärminställningar (medvetet val, dokumenterat
+efter granskningen 2026-06-11).
+
+**Aktuell hantering:** Under 768 px visas headern igen eftersom den
+hostar sidofältets expandera/stäng-kontroll, som är enda vägen till
+navigationen på mobil.
+
+### Promptinjektion i Q&A-chatten 🟢
+
+Användarens fråga går oförändrad in i prompten. Grounding-kontrollen
+mildrar sifferhallucination men inte instruktionskapning ("ignorera
+systemprompten ...").
+
+**Aktuell hantering:** Skadevärdet är lågt i denna app: LLM:en har ingen
+verktygsaccess, all LLM-text HTML-escapas innan rendering (XSS-skyddet
+2026-06-11) och svaren påverkar inga beräkningar. Kvarstående effekt är
+i värsta fall ett vilseledande textsvar.
 
 ### Ingen mobil native app 🟢
 

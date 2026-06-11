@@ -42,6 +42,7 @@ from utils.scenarios import generate_scenario, set_current_scenario
 from utils.state_save import clear_state, load_state, save_state
 from utils.tutor import render_tutor_explanation
 from utils.ui import (
+    APP_UPDATED,
     SCENARIO_DIFFICULTY_HELP,
     footer_note,
     inject_css,
@@ -511,8 +512,25 @@ with tab1:
             yaxis="y2",
         ))
         fig1.add_hline(y=0, line_dash="dot", line_color=COLORS["neutral"], line_width=1)
+        # Axis titles colored to match their series so it is readable
+        # which scale belongs to which trace (review I4).
         fig1.update_layout(
-            yaxis2=dict(overlaying="y", side="right", title="Kumulativt nuvärde (kr)"),
+            yaxis=dict(
+                title=dict(
+                    text="Kassaflöde (kr)",
+                    font=dict(color=COLORS["primary"]),
+                ),
+            ),
+            yaxis2=dict(
+                overlaying="y",
+                side="right",
+                title=dict(
+                    text="Kumulativt nuvärde (kr)",
+                    font=dict(
+                        color=COLORS["success"] if npv_val >= 0 else COLORS["danger"]
+                    ),
+                ),
+            ),
         )
         apply_layout(fig1, title="Kassaflöden och kumulativt nuvärde", height=380)
         st.plotly_chart(fig1, use_container_width=True)
@@ -585,7 +603,12 @@ with tab1:
     tab1_outputs = {
         "npv": npv_val,
         "irr": irr_val if irr_val is not None else 0,
-        "aterbetalingstid": payback_val if payback_val is not None else 0,
+        # None must not become 0: payback 0 reads as "omedelbart
+        # återbetald" when the truth is "ej återbetald" (review I6).
+        "aterbetalingstid": (
+            payback_val if payback_val is not None
+            else "ej återbetald inom kalkylperioden"
+        ),
         "annuitet": annuitet_val,
     }
     _render_investering_llm("npv", tab1_inputs, tab1_outputs, "inv_tab1")
@@ -595,7 +618,7 @@ with tab1:
         st.session_state["_reset_inv_basic"] = True
         st.rerun()
 
-    st.html(footer_note(updated="2026-05-06"))
+    st.html(footer_note(updated=APP_UPDATED))
 
 # ===========================================================================
 # TAB 2 — KÄNSLIGHETSANALYS (kapitel 10.9)
@@ -830,7 +853,7 @@ with tab2:
         st.session_state["_reset_inv_sens"] = True
         st.rerun()
 
-    st.html(footer_note(updated="2026-05-06"))
+    st.html(footer_note(updated=APP_UPDATED))
 
 # ===========================================================================
 # TAB 3 — INFLATION OCH SKATT (kapitel 10.11)
@@ -864,6 +887,14 @@ with tab3:
         for _k in ("it_real_rate_pct", "it_inflation_pct", "it_tax_pct", "it_depreciation"):
             if _k in _it_saved:
                 st.session_state[_k] = float(_it_saved[_k])
+
+    st.caption(
+        "Startvärden för real kalkylränta och avskrivning hämtades från "
+        "**Grundläggande metoder** när fliken först öppnades. Senare "
+        f"ändringar i flik 1 (kalkylränta just nu: "
+        f"{st.session_state['inv_rate']:.1f} %) förs inte över automatiskt "
+        "– justera fälten här om du vill räkna på samma värden."
+    )
 
     col_it_in, col_it_res = st.columns([1, 2], gap="large")
 
@@ -1027,7 +1058,7 @@ with tab3:
         st.session_state["_reset_inv_inflation"] = True
         st.rerun()
 
-    st.html(footer_note(updated="2026-05-06"))
+    st.html(footer_note(updated=APP_UPDATED))
 
 # ===========================================================================
 # TAB 4 — MONTE CARLO (kapitel 10.9)
@@ -1072,6 +1103,14 @@ with tab4:
                 st.session_state["mc_cf_df"] = pd.DataFrame(_mc_saved["mc_cf_records"])
             except (ValueError, TypeError):
                 pass
+
+    st.caption(
+        "Startvärden för grundinvestering och kalkylränta hämtades från "
+        "**Grundläggande metoder** när fliken först öppnades. Senare "
+        f"ändringar i flik 1 (grundinvestering just nu: "
+        f"{format_sek(float(st.session_state['inv_initial']))}, kalkylränta "
+        f"{st.session_state['inv_rate']:.1f} %) förs inte över automatiskt."
+    )
 
     col_mc_in, col_mc_res = st.columns([1, 2], gap="large")
 
@@ -1327,4 +1366,4 @@ with tab4:
         st.session_state["_reset_inv_mc"] = True
         st.rerun()
 
-    st.html(footer_note(updated="2026-05-06"))
+    st.html(footer_note(updated=APP_UPDATED))

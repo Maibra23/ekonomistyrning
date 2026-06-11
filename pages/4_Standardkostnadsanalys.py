@@ -11,6 +11,7 @@ import streamlit as st
 
 from utils.charts import COLORS, apply_layout
 from utils.export import export_to_excel
+from utils.state_save import load_state, save_state
 from utils.formatting import format_sek
 from utils.llm import (
     LLMSessionCapError,
@@ -33,6 +34,7 @@ from utils.standardkost import (
 )
 from utils.tutor import render_tutor_explanation
 from utils.ui import (
+    APP_UPDATED,
     SCENARIO_DIFFICULTY_HELP,
     footer_note,
     inject_css,
@@ -94,6 +96,17 @@ with tab1:
         "Ange standardvärden och verkligt utfall för en rörlig kostnadspost. "
         "Avvikelsen bryts ner i tre komponenter: volym, pris och effektivitet."
     )
+
+    # Autosave: restore saved inputs once per session, before widgets render
+    # (review S3 — Standardkost was the last module without autosave).
+    _sk_saved = load_state("standardkost_rorlig")
+    if _sk_saved is not None:
+        for _k in (
+            "std_volym", "std_pris", "std_forbrukning",
+            "verk_volym", "verk_pris", "verk_forbrukning",
+        ):
+            if _k in _sk_saved:
+                st.session_state[_k] = float(_sk_saved[_k])
 
     # LLM driven scenario generator (Task 10.13)
     sk_gen_cols = st.columns([2, 1, 1])
@@ -386,7 +399,45 @@ with tab1:
             spinner_label="Analyserar avvikelser...",
         )
 
-    st.html(footer_note(updated="2026-05-06"))
+        # Excel export of the detailed decomposition (review S3): this is
+        # the table students bring to seminars, previously only tab 3
+        # offered export.
+        _rorlig_export_df = pd.DataFrame({
+            "Post": [
+                "Standardkostnad", "Verklig kostnad", "Total avvikelse",
+                "Volymavvikelse", "Prisavvikelse", "Effektivitetsavvikelse",
+            ],
+            "Belopp (kr)": [
+                rorlig_result["standard_kostnad"],
+                rorlig_result["verklig_kostnad"],
+                rorlig_result["total"],
+                rorlig_result["volymavvikelse"],
+                rorlig_result["prisavvikelse"],
+                rorlig_result["effektivitetsavvikelse"],
+            ],
+        })
+        st.download_button(
+            label="Exportera till Excel",
+            data=export_to_excel({"Rorliga avvikelser": _rorlig_export_df}),
+            file_name="avvikelser_rorliga.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="sk_rorlig_export",
+        )
+
+    # Autosave current input values on every rerun
+    save_state(
+        "standardkost_rorlig",
+        {
+            "std_volym": std_volym,
+            "std_pris": std_pris,
+            "std_forbrukning": std_forbrukning,
+            "verk_volym": verk_volym,
+            "verk_pris": verk_pris,
+            "verk_forbrukning": verk_forbrukning,
+        },
+    )
+
+    st.html(footer_note(updated=APP_UPDATED))
 
 # ===========================================================================
 # TAB 2 -- FASTA OMKOSTNADER (kapitel 17.7)
@@ -397,6 +448,13 @@ with tab2:
         "Jämför budgeterade fasta omkostnader med verkligt utfall. "
         "En enkel differensanalys som visar om företaget överskridit eller underskridit budget."
     )
+
+    # Autosave: restore saved inputs once per session (review S3)
+    _sk_fast_saved = load_state("standardkost_fast")
+    if _sk_fast_saved is not None:
+        for _k in ("fast_budget", "fast_verkligt"):
+            if _k in _sk_fast_saved:
+                st.session_state[_k] = float(_sk_fast_saved[_k])
 
     col_fix_in, col_fix_res = st.columns([1, 2], gap="large")
 
@@ -484,6 +542,29 @@ with tab2:
 
         st.caption("Fasta omkostnadsavvikelser.")
 
+        # Excel export (review S3)
+        _fast_export_df = pd.DataFrame({
+            "Post": ["Budgeterat belopp", "Verkligt belopp", "Avvikelse"],
+            "Belopp (kr)": [
+                fast_result["standard_belopp"],
+                fast_result["verkligt_belopp"],
+                fast_result["avvikelse"],
+            ],
+        })
+        st.download_button(
+            label="Exportera till Excel",
+            data=export_to_excel({"Fasta omkostnader": _fast_export_df}),
+            file_name="avvikelser_fasta.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="sk_fast_export",
+        )
+
+    # Autosave current input values on every rerun
+    save_state(
+        "standardkost_fast",
+        {"fast_budget": budget_belopp, "fast_verkligt": verkligt_belopp},
+    )
+
     # LLM interpretation for fixed overhead (on-demand)
     _fast_components = [{
         "typ": "Fast omkostnad",
@@ -509,7 +590,7 @@ with tab2:
         spinner_label="Analyserar...",
     )
 
-    st.html(footer_note(updated="2026-05-06"))
+    st.html(footer_note(updated=APP_UPDATED))
 
 # ===========================================================================
 # TAB 3 -- SAMMANSTALLNING
@@ -523,6 +604,12 @@ with tab3:
 
     rorlig_res = st.session_state.get("sk_rorlig_result")
     fast_res = st.session_state.get("sk_fast_result")
+
+    # Defined unconditionally: the blocks below and the Q&A chat at the
+    # bottom must not depend on which branch executed (review S1 — the old
+    # code had a latent NameError guarded only by a dir() lookup).
+    total_all = 0.0
+    bar_values: list[float] = []
 
     if rorlig_res is None and fast_res is None:
         st.info(
@@ -560,7 +647,6 @@ with tab3:
 
         # Build bar chart with all components
         bar_names = []
-        bar_values = []
 
         if rorlig_res:
             bar_names.extend(["Volymavvikelse", "Prisavvikelse", "Effektivitetsavvikelse"])
@@ -715,7 +801,7 @@ with tab3:
         try:
             if not is_llm_available():
                 raise LLMUnavailableError("Ingen token")
-            sk_ctx = {"total_avvikelse": total_all} if 'total_all' in dir() else {}
+            sk_ctx = {"total_avvikelse": total_all} if bar_values else {}
             sys_p, usr_p = build_qa_prompt("standardkost", sk_ctx, sk_ctx, user_q, chat_history=st.session_state["sk_chat_history"])
             with st.chat_message("assistant"):
                 with st.spinner("Tänker..."):
@@ -734,4 +820,4 @@ with tab3:
                 st.info(msg)
             st.session_state["sk_chat_history"].append(("assistant", msg))
 
-    st.html(footer_note(updated="2026-05-06"))
+    st.html(footer_note(updated=APP_UPDATED))

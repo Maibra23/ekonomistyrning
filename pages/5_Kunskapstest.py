@@ -38,6 +38,7 @@ from utils.quiz_ui import (
     quiz_card_html,
 )
 from utils.ui import (
+    APP_UPDATED,
     footer_note,
     inject_css,
     kpi_card,
@@ -244,14 +245,21 @@ def _verify_numeric_answer(question: dict) -> bool:
 
 
 def _get_fallback_question(kluster: str, diff: str, qtype: str) -> dict | None:
-    """Pick a random matching question from the static fallback bank."""
+    """Pick a random matching question from the static fallback bank.
+
+    Marks the result with ``_source = "fallback"`` and, when the bank had
+    no exact (difficulty, type) match, ``_degraded = True`` so the UI can
+    say so instead of silently serving the wrong difficulty (review Q6).
+    """
     matches = [
         q for q in FALLBACK_BANK
         if q.get("kapitelkluster") == kluster
         and q.get("difficulty", "medel") == diff
         and q.get("question_type", "flerval") == qtype
     ]
+    degraded = False
     if not matches:
+        degraded = True
         matches = [
             q for q in FALLBACK_BANK
             if q.get("kapitelkluster") == kluster
@@ -259,7 +267,12 @@ def _get_fallback_question(kluster: str, diff: str, qtype: str) -> dict | None:
         ]
     if not matches:
         matches = [q for q in FALLBACK_BANK if q.get("kapitelkluster") == kluster]
-    return random.choice(matches) if matches else None
+    if not matches:
+        return None
+    chosen = dict(random.choice(matches))
+    chosen["_source"] = "fallback"
+    chosen["_degraded"] = degraded
+    return chosen
 
 
 def _parse_quiz_json(raw: str) -> dict | None:
@@ -421,16 +434,29 @@ if st.button("Generera fråga", type="primary", use_container_width=True):
 # Render current question (quiz card)
 # ---------------------------------------------------------------------------
 
+# Answer letters, defined at module scope: the wrong-answer message also
+# uses them outside the flerval branch (review Q5).
+_ANSWER_LETTERS = ["A", "B", "C", "D", "E", "F"]
+
 q = st.session_state.get("quiz_current")
 if q:
     # All LLM-derived text is escaped inside quiz_card_html (XSS guard).
     st.html(quiz_card_html(q))
 
+    if q.get("_source") == "fallback":
+        note = "Frågan kommer från den inbyggda frågebanken (AI ej tillgänglig)."
+        if q.get("_degraded"):
+            note += (
+                " Banken saknade en exakt träff, så svårighetsgrad eller "
+                "frågetyp kan avvika från ditt val."
+            )
+        st.caption(note)
+
     # Answer input
     qtype = q.get("question_type", "flerval")
     if qtype == "flerval" and q.get("alternativ"):
         alt_list: list[str] = list(q["alternativ"])
-        letters = ["A", "B", "C", "D", "E", "F"]
+        letters = _ANSWER_LETTERS
         user_answer = st.radio(
             "Välj svar:",
             options=list(range(len(alt_list))),
@@ -441,22 +467,27 @@ if q:
     else:
         enhet = q.get("enhet") or ""
         enhet_hint = f"Svaret anges i {enhet}." if enhet else None
+        # value=None: 0,00 must not be pre-filled as a submittable answer
+        # (review Q3); mirrors the flerval radio's index=None.
         user_answer = st.number_input(
             "Ditt svar:",
+            value=None,
             format="%.2f",
             key="quiz_answer_num",
             help=enhet_hint,
+            placeholder="Skriv ditt svar",
         )
         if enhet:
             st.caption(f"Förväntad enhet: {enhet}")
 
     # Submit
-    can_submit = (qtype != "flerval") or (
-        st.session_state.get("quiz_answer_radio") is not None
-    )
-    submit_label = (
-        "Svara" if can_submit else "Välj ett alternativ för att svara"
-    )
+    if qtype == "flerval" and q.get("alternativ"):
+        can_submit = st.session_state.get("quiz_answer_radio") is not None
+        idle_label = "Välj ett alternativ för att svara"
+    else:
+        can_submit = st.session_state.get("quiz_answer_num") is not None
+        idle_label = "Ange ett svar för att svara"
+    submit_label = "Svara" if can_submit else idle_label
     if st.button(
         submit_label,
         key="quiz_submit",
@@ -604,6 +635,10 @@ if q:
 st.divider()
 score = st.session_state["quiz_score"]
 if score["total"] > 0:
+    if st.button("Nollställ statistik", key="quiz_reset_score"):
+        st.session_state["quiz_score"] = {"total": 0, "correct": 0}
+        st.rerun()
+
     pct = (score["correct"] / score["total"]) * 100
 
     render_kpi_row(
@@ -645,4 +680,4 @@ if score["total"] > 0:
 else:
     st.info("Inga frågor besvarade ännu. Tryck 'Generera fråga' för att börja.")
 
-st.html(footer_note(updated="2026-06-04"))
+st.html(footer_note(updated=APP_UPDATED))

@@ -39,6 +39,7 @@ from utils.tutor import (
     render_tutor_explanation,
 )
 from utils.ui import (
+    APP_UPDATED,
     SCENARIO_DIFFICULTY_HELP,
     footer_note,
     inject_css,
@@ -538,7 +539,7 @@ with tab_sj:
         st.session_state["_reset_sj"] = True
         st.rerun()
 
-    st.html(footer_note(updated="2026-05-06"))
+    st.html(footer_note(updated=APP_UPDATED))
 
 # ===========================================================================
 # TAB 2 — BIDRAGSKALKYL (kapitel 8)
@@ -795,7 +796,7 @@ with tab_bid:
         st.session_state["_reset_bid"] = True
         st.rerun()
 
-    st.html(footer_note(updated="2026-05-06"))
+    st.html(footer_note(updated=APP_UPDATED))
 
 # ===========================================================================
 # TAB 3 — ABC-KALKYL (kapitel 7)
@@ -849,13 +850,22 @@ with tab_abc:
             st.session_state.abc_act_df = _activities_to_df(activities)
             st.session_state.abc_prod_df = _products_to_df(products, activities)
         except (KeyError, TypeError, ValueError):
-            pass
+            # Surface after the rerun: a silent pass left the old tables
+            # on screen with no explanation (review K2).
+            st.session_state["abc_scenario_warning"] = True
         st.session_state["abc_scenario_info"] = {
             "foretag_namn": scenario.get("foretag_namn", "Exempelföretag"),
             "bransch_beskrivning": scenario.get("bransch_beskrivning", ""),
         }
         set_current_scenario("kalkyl_abc", scenario, _abc_difficulty_code)
         st.rerun()
+
+    if st.session_state.pop("abc_scenario_warning", False):
+        st.warning(
+            "Det genererade företaget hade ett oväntat format för "
+            "aktiviteter/produkter, så tabellerna behåller sina tidigare "
+            "värden. Generera gärna ett nytt exempelföretag."
+        )
 
     abc_info = st.session_state.get("abc_scenario_info")
     if abc_info:
@@ -1026,11 +1036,13 @@ with tab_abc:
                 key="abc_export",
             )
 
-        except Exception as exc:
+        except Exception:
+            # No str(exc): raw English/technical detail must not leak into
+            # the Swedish UI (review K3).
             st.error(
-                f"Beräkningsfel: {exc}. "
-                "Kontrollera att alla aktiviteter har drivvolymer > 0 och att "
-                "produkttabellens kolumner matchar aktivitetsnamnen."
+                "Beräkningen kunde inte genomföras. Kontrollera att alla "
+                "aktiviteter har drivvolymer > 0 och att produkttabellens "
+                "kolumner matchar aktivitetsnamnen."
             )
 
     st.caption("Metod: Aktivitetsbaserad kalkylering (ABC)")
@@ -1041,4 +1053,4 @@ with tab_abc:
         st.session_state.abc_prod_df = _products_to_df(_ABC_DEFAULT_PROD, _ABC_DEFAULT_ACT)
         st.rerun()
 
-    st.html(footer_note(updated="2026-05-06"))
+    st.html(footer_note(updated=APP_UPDATED))
