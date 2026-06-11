@@ -17,6 +17,7 @@ from utils.humanizer import humanize
 from utils.kalkyl import abc_calc, contribution_calc, self_cost_palagg
 from utils.grounding_ui import show_grounding_warning
 from utils.llm import (
+    LLMSessionCapError,
     LLMUnavailableError,
     cached_chat,
     is_llm_available,
@@ -43,6 +44,7 @@ from utils.ui import (
     kpi_card,
     page_title,
     render_kpi_row,
+    render_session_cap_card,
     render_sidebar,
 )
 
@@ -164,6 +166,11 @@ def _render_llm_section(
                         )
                     show_grounding_warning(grounding)
             st.session_state[chat_key].append(("assistant", result.text))
+        except LLMSessionCapError:
+            # Must be caught before LLMUnavailableError (its parent class):
+            # a capped user should see the cap card, not "try again later"
+            # advice that can never help (review K4).
+            render_session_cap_card()
         except LLMUnavailableError:
             fallback_msg = "Tjänsten är tillfälligt otillgänglig. Försök igen senare."
             with st.chat_message("assistant"):

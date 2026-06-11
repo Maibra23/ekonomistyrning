@@ -13,6 +13,7 @@ from utils.charts import COLORS, apply_layout
 from utils.export import export_to_excel
 from utils.formatting import format_sek
 from utils.llm import (
+    LLMSessionCapError,
     LLMUnavailableError,
     cached_chat,
     is_llm_available,
@@ -30,7 +31,16 @@ from utils.standardkost import (
     variance_fixed_overhead,
 )
 from utils.tutor import render_tutor_explanation
-from utils.ui import SCENARIO_DIFFICULTY_HELP, footer_note, inject_css, kpi_card, page_title, render_kpi_row, render_sidebar
+from utils.ui import (
+    SCENARIO_DIFFICULTY_HELP,
+    footer_note,
+    inject_css,
+    kpi_card,
+    page_title,
+    render_kpi_row,
+    render_session_cap_card,
+    render_sidebar,
+)
 
 # Difficulty label mapping for the scenario generator dropdown
 _DIFFICULTY_OPTIONS = ("Lätt", "Medel", "Svår")
@@ -701,6 +711,11 @@ with tab3:
                 result = humanize(raw)
                 st.markdown(result.text)
             st.session_state["sk_chat_history"].append(("assistant", result.text))
+        except LLMSessionCapError:
+            # Must be caught before LLMUnavailableError (its parent class):
+            # a capped user should see the cap card, not "try again later"
+            # advice that can never help (review K4).
+            render_session_cap_card()
         except LLMUnavailableError:
             msg = "Tjänsten är tillfälligt otillgänglig. Försök igen senare."
             with st.chat_message("assistant"):

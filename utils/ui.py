@@ -1151,6 +1151,32 @@ def _render_current_scenario_banner() -> None:
         st.rerun()
 
 
+def _render_llm_budget_meter() -> None:
+    """Show the remaining explanation budget for this session.
+
+    Surfaces ``get_session_calls_remaining()`` so the user sees the budget
+    shrink instead of walking into the cap unannounced (review gap 3).
+    Hidden when no LLM token is configured (offline mode has no budget).
+    """
+    try:
+        from utils.llm import (
+            SESSION_CALL_CAP,
+            get_session_calls_remaining,
+            is_llm_available,
+        )
+    except ImportError:  # pragma: no cover - defensive
+        return
+    if not is_llm_available():
+        return
+    remaining = get_session_calls_remaining()
+    st.html(
+        '<span class="eks-sidebar-section-label">FÖRKLARINGAR</span>'
+        '<div style="padding:0 16px 4px 16px;font-family:\'IBM Plex Mono\','
+        'monospace;font-size:11px;">'
+        f"Kvar denna session: {remaining}/{SESSION_CALL_CAP}</div>"
+    )
+
+
 def render_sidebar(active_page: str) -> None:
     """Render the full sidebar with brand, navigation, LLM status, and session info.
 
@@ -1173,9 +1199,7 @@ def render_sidebar(active_page: str) -> None:
             st.page_link(path, label=label)
 
         _render_current_scenario_banner()
-
-        st.html('<span class="eks-sidebar-section-label">INFORMATION</span>')
-        st.page_link("streamlit_app.py", label="Om appen")
+        _render_llm_budget_meter()
 
 
 def render_session_cap_card() -> None:

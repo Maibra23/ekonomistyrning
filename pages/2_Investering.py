@@ -24,6 +24,7 @@ from utils.investering import (
 )
 from utils.grounding_ui import show_grounding_warning
 from utils.llm import (
+    LLMSessionCapError,
     LLMUnavailableError,
     cached_chat,
     is_llm_available,
@@ -38,7 +39,16 @@ from utils.prompts import (
 from utils.scenarios import generate_scenario, set_current_scenario
 from utils.state_save import clear_state, load_state, save_state
 from utils.tutor import render_tutor_explanation
-from utils.ui import SCENARIO_DIFFICULTY_HELP, footer_note, inject_css, kpi_card, page_title, render_kpi_row, render_sidebar
+from utils.ui import (
+    SCENARIO_DIFFICULTY_HELP,
+    footer_note,
+    inject_css,
+    kpi_card,
+    page_title,
+    render_kpi_row,
+    render_session_cap_card,
+    render_sidebar,
+)
 
 
 # Difficulty label to API code mapping used by the LLM scenario generator
@@ -209,6 +219,11 @@ def _render_investering_llm(
                         )
                     show_grounding_warning(grounding)
             st.session_state[chat_key].append(("assistant", result.text))
+        except LLMSessionCapError:
+            # Must be caught before LLMUnavailableError (its parent class):
+            # a capped user should see the cap card, not "try again later"
+            # advice that can never help (review K4).
+            render_session_cap_card()
         except LLMUnavailableError:
             msg = "Tjänsten är tillfälligt otillgänglig. Försök igen senare."
             with st.chat_message("assistant"):
