@@ -51,9 +51,17 @@ def render_landing() -> None:
         stat_strip([
             ("5", "moduler"),
             ("1", "styrcykel"),
-            ("10 000", "MC-iterationer"),
+            ("50 000", "MC-iterationer (max)"),
             ("100%", "svenska"),
         ])
+    )
+
+    # Primary first-visit CTA: the pipeline says "Välj modul" but nothing in
+    # the main area used to lead anywhere (review L4).
+    st.page_link(
+        "pages/1_Kalkyl.py",
+        label="Börja här: Kalkylering →",
+        use_container_width=False,
     )
 
     # --- Interconnected module map ---------------------------------------
@@ -106,6 +114,21 @@ def render_landing() -> None:
             },
         ])
     )
+    # Real links under the map: the nodes themselves are not clickable, so
+    # give each module an actual navigation affordance (review L1).
+    link_cols = st.columns(5)
+    for col, (label, path) in zip(
+        link_cols,
+        [
+            ("Kalkylering →", "pages/1_Kalkyl.py"),
+            ("Investering →", "pages/2_Investering.py"),
+            ("Budget →", "pages/3_Budget.py"),
+            ("Standardkostnadsanalys →", "pages/4_Standardkostnadsanalys.py"),
+            ("Kunskapstest →", "pages/5_Kunskapstest.py"),
+        ],
+    ):
+        with col:
+            st.page_link(path, label=label)
     # --- How each module works ------------------------------------------
     st.html(section_heading("ARBETSGÅNG", "Så arbetar du i varje modul"))
     st.html(
