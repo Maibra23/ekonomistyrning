@@ -40,7 +40,9 @@ COLORS: dict[str, str] = {
     "card_bg": "#FFFFFF",
     "text_primary": "#111827",
     "text_secondary": "#6B7280",
-    "text_tertiary": "#9CA3AF",
+    # Used for small uppercase labels; must hold ~4.5:1 against white for
+    # WCAG AA at the 9.5-10.5px sizes the design system uses (review U5).
+    "text_tertiary": "#6B7280",
     "border": "#E5E7EB",
     "grid": "#F3F4F6",
     "neutral": "#6B7280",
@@ -475,32 +477,6 @@ div[data-testid="stSlider"] label {
     padding: 0 8px;
 }
 
-/* --- Nav card --- */
-.eks-nav-card {
-    background: %(card_bg)s;
-    border: 1px solid %(border)s;
-    border-radius: 4px;
-    padding: 20px 24px;
-    transition: border-color 0.2s;
-    cursor: pointer;
-    height: 100%%;
-}
-.eks-nav-card:hover { border-color: %(primary_light)s; }
-.eks-nav-card h4 {
-    font-family: Inter, sans-serif;
-    font-size: 15px;
-    font-weight: 700;
-    color: %(text_primary)s;
-    margin: 0 0 6px 0;
-}
-.eks-nav-card p {
-    font-family: Inter, sans-serif;
-    font-size: 13px;
-    color: %(text_secondary)s;
-    margin: 0;
-    line-height: 1.5;
-}
-
 /* --- In-page section heading --- */
 .eks-section-heading {
     margin: 20px 0 8px 0;
@@ -530,11 +506,6 @@ div[data-testid="stSlider"] label {
     padding: 16px 18px;
     display: flex;
     flex-direction: column;
-    transition: border-color 0.2s, box-shadow 0.2s;
-}
-.eks-map-node:hover {
-    border-color: %(primary_light)s;
-    box-shadow: 0 2px 10px rgba(30,64,175,0.08);
 }
 .eks-map-role {
     font-family: "IBM Plex Mono", monospace;
@@ -750,7 +721,7 @@ div[data-testid="stSlider"] label {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 1px;
-    color: rgba(255,255,255,0.35) !important;
+    color: rgba(255,255,255,0.55) !important;
     padding: 12px 16px 6px 16px;
     display: block;
 }
@@ -760,7 +731,7 @@ div[data-testid="stSlider"] label {
     margin-top: 16px;
     font-family: Inter, sans-serif;
     font-size: 10px;
-    color: rgba(255,255,255,0.35) !important;
+    color: rgba(255,255,255,0.55) !important;
 }
 
 /* --- LLM elements --- */
@@ -879,8 +850,12 @@ def kpi_card(
     """
     variant_class = f" variant-{variant}" if variant != "default" else ""
     unit_html = f'<span class="eks-kpi-unit">{unit}</span>' if unit else ""
+    # Direction arrow so color is never the only signal carrier (review U6,
+    # WCAG 1.4.1).
+    delta_arrow = {"up": "▲ ", "down": "▼ "}.get(delta_direction, "")
     delta_html = (
-        f'<div class="eks-kpi-delta delta-{delta_direction}">{delta}</div>'
+        f'<div class="eks-kpi-delta delta-{delta_direction}">'
+        f"{delta_arrow}{delta}</div>"
         if delta
         else ""
     )
@@ -1000,16 +975,6 @@ def thread_band(mark: str, text: str) -> str:
     )
 
 
-def nav_card(title: str, description: str) -> str:
-    """Module navigation card. Pair with st.page_link() for navigation."""
-    return (
-        f'<div class="eks-nav-card">'
-        f"<h4>{title}</h4>"
-        f"<p>{description}</p>"
-        f"</div>"
-    )
-
-
 def summary_box(text: str) -> str:
     """Highlighted contextual summary box with blue left border."""
     return f'<div class="eks-summary">{text}</div>'
@@ -1086,8 +1051,13 @@ def scenario_banner_html(
     descriptions are truncated for a tidy sidebar; the full text remains
     available on each page's per-module info banner.
     """
+    # The sidebar forces rgba(255,255,255,0.65) !important on all children,
+    # so the hierarchy must be expressed in white-scale inline styles with
+    # !important (inline !important wins over stylesheet !important) —
+    # review U2: the old gray palette was flattened to uniform half-white.
     meta_html = (
-        f'<div style="font-size:10px;color:#6B7280;margin-top:2px;">'
+        f'<div style="font-size:10px;color:rgba(255,255,255,0.6) !important;'
+        f'margin-top:2px;">'
         f"{' • '.join(html.escape(bit) for bit in meta_bits)}</div>"
         if meta_bits
         else ""
@@ -1098,12 +1068,13 @@ def scenario_banner_html(
             description if len(description) <= 140 else description[:137] + "..."
         )
         desc_html = (
-            f'<div style="font-size:11px;color:#374151;margin-top:6px;'
-            f'line-height:1.35;">{html.escape(snippet)}</div>'
+            f'<div style="font-size:11px;color:rgba(255,255,255,0.8) !important;'
+            f'margin-top:6px;line-height:1.35;">{html.escape(snippet)}</div>'
         )
     return (
         '<div style="padding:8px 16px 4px 16px;">'
-        '<div style="font-size:12px;font-weight:600;color:#111827;">'
+        '<div style="font-size:12px;font-weight:600;'
+        'color:rgba(255,255,255,0.95) !important;">'
         f"{html.escape(name)}</div>"
         f"{meta_html}{desc_html}"
         "</div>"
