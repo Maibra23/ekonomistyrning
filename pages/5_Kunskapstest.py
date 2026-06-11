@@ -31,12 +31,20 @@ from utils.prompts import (
     contains_forbidden_terms,
     validate_kapitel_referens,
 )
+from utils.quiz_progress import (
+    VALID_CLUSTERS,
+    cluster_stats,
+    mastery,
+    record_answer,
+    suggest_difficulty,
+)
 from utils.quiz_ui import (
     CLUSTER_LABELS as _CLUSTER_LABELS,
     DIFFICULTY_LABELS as _DIFFICULTY_LABELS,
     QTYPE_LABELS as _QTYPE_LABELS,
     quiz_card_html,
 )
+from utils.state_save import clear_state, load_state, save_state
 from utils.ui import (
     APP_UPDATED,
     footer_note,
@@ -197,6 +205,14 @@ st.html(
 # Session state for score tracking
 if "quiz_score" not in st.session_state:
     st.session_state["quiz_score"] = {"total": 0, "correct": 0}
+
+# Per-cluster progression (review gap 8): restored once per session from
+# the autosave/URL mirror, so it survives a browser reload.
+_progress_saved = load_state("quiz_progress")
+if _progress_saved is not None:
+    st.session_state["quiz_progress"] = _progress_saved
+if "quiz_progress" not in st.session_state:
+    st.session_state["quiz_progress"] = {}
 if "quiz_current" not in st.session_state:
     st.session_state["quiz_current"] = None
 if "quiz_answered" not in st.session_state:
@@ -222,6 +238,13 @@ with col3:
         "Frågetyp",
         list(_QTYPE_LABELS.keys()),
         format_func=lambda x: _QTYPE_LABELS[x],
+    )
+
+_suggested = suggest_difficulty(st.session_state["quiz_progress"], kapitelkluster)
+if _suggested != difficulty:
+    st.caption(
+        f"Utifrån din progression i {_CLUSTER_LABELS[kapitelkluster]} "
+        f"rekommenderas svårighetsgrad **{_DIFFICULTY_LABELS[_suggested]}**."
     )
 
 
@@ -508,6 +531,16 @@ if q:
             except (TypeError, ValueError):
                 correct = False
 
+        # Record into the per-cluster progression. Use the question's own
+        # metadata (a fallback-bank question may differ from the selectors).
+        st.session_state["quiz_progress"] = record_answer(
+            st.session_state.get("quiz_progress") or {},
+            str(q.get("kapitelkluster", kapitelkluster)),
+            str(q.get("difficulty", difficulty)),
+            correct,
+        )
+        save_state("quiz_progress", st.session_state["quiz_progress"])
+
         if correct:
             st.session_state["quiz_score"]["correct"] += 1
             st.success("Rätt svar!")
@@ -679,5 +712,58 @@ if score["total"] > 0:
     st.plotly_chart(fig_gauge, use_container_width=True)
 else:
     st.info("Inga frågor besvarade ännu. Tryck 'Generera fråga' för att börja.")
+
+# ---------------------------------------------------------------------------
+# Progression per kapitelkluster (mästerskapsvy)
+# ---------------------------------------------------------------------------
+
+st.divider()
+st.markdown("#### Din progression per ämnesområde")
+_progress = st.session_state.get("quiz_progress") or {}
+_any_progress = any(cluster_stats(_progress, c)["total"] > 0 for c in VALID_CLUSTERS)
+if _any_progress:
+    _prog_cards: list[str] = []
+    for _cluster in VALID_CLUSTERS:
+        _stats = cluster_stats(_progress, _cluster)
+        _m = mastery(_progress, _cluster)
+        if _stats["total"] > 0:
+            _delta = (
+                f"{_stats['correct']}/{_stats['total']} rätt "
+                f"({_stats['accuracy'] * 100:.0f} %)"
+            )
+            _direction = "up" if _stats["accuracy"] >= 0.7 else "down"
+        else:
+            _delta = "Inga frågor ännu"
+            _direction = "flat"
+        _variant = {
+            "masterskap": "success",
+            "saker": "success",
+            "ovning": "warning",
+        }.get(_m["code"], "default")
+        _prog_cards.append(
+            kpi_card(
+                _CLUSTER_LABELS.get(_cluster, _cluster),
+                _m["label"],
+                delta=_delta,
+                delta_direction=_direction,
+                variant=_variant,
+            )
+        )
+    render_kpi_row(_prog_cards)
+    _sel_mastery = mastery(_progress, kapitelkluster)
+    st.caption(
+        f"{_CLUSTER_LABELS[kapitelkluster]}: {_sel_mastery['beskrivning']} "
+        "Progressionen sparas i webbadressen och överlever en omladdning."
+    )
+    if st.button("Nollställ progression", key="quiz_reset_progress"):
+        st.session_state["quiz_progress"] = {}
+        clear_state("quiz_progress")
+        st.rerun()
+else:
+    st.caption(
+        "Besvara frågor för att bygga upp din progression per ämnesområde. "
+        "Nivåerna går från Ny via Grund och Säker till Mästerskap, och "
+        "sparas i webbadressen så att de överlever en omladdning."
+    )
 
 st.html(footer_note(updated=APP_UPDATED))
