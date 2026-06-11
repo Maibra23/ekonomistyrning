@@ -102,3 +102,22 @@ class TestScenarioBannerEscaping:
         assert "Nordvik Industri AB" in out
         assert "Självkostnadskalkyl • Medel" in out
         assert "Mindre svenskt tillverkningsföretag." in out
+
+
+class TestResponsiveSidebarCss:
+    """The sidebar lock must be desktop-only (review U1)."""
+
+    def test_sidebar_lock_is_inside_desktop_media_query(self):
+        from utils.ui import GLOBAL_CSS
+
+        desktop_idx = GLOBAL_CSS.find("@media (min-width: 768px)")
+        lock_idx = GLOBAL_CSS.find("transform: translateX(0)")
+        assert desktop_idx != -1
+        assert lock_idx > desktop_idx
+
+    def test_header_restored_on_mobile(self):
+        from utils.ui import GLOBAL_CSS
+
+        mobile_idx = GLOBAL_CSS.find("@media (max-width: 767.98px)")
+        assert mobile_idx != -1
+        assert GLOBAL_CSS.find('header[data-testid="stHeader"]', mobile_idx) != -1
