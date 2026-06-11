@@ -169,18 +169,20 @@ utvecklingsmiljö men kan ta tre till fem på Cloud.
 **Kvarvarande risk:** Vid framtida features med större matriser eller
 DataFrames kan minnesgränsen bita.
 
-### Session state förloras vid reload 🟡 (autosave added day 10 for kalkyl/investering)
+### Session state förloras vid reload 🟢 (URL-persistens 2026-06-11)
 
-Streamlit nollställer st.session_state vid sidladdning. En användare som
-råkar trycka på Tillbaka eller F5 förlorar allt.
+Streamlit nollställer st.session_state vid sidladdning.
 
-**Aktuell hantering:** Day 10 introducerade utils/state_save.py med
-save_state/load_state/clear_state. Kalkyl och investering har autospar
-per tab.
+**Aktuell hantering:** utils/state_save.py speglar varje moduls sparade
+inmatningar till st.query_params som en komprimerad base64url-blob (en
+parameter per modul). Vid en riktig webbläsaromladdning återställs
+inmatningarna från URL:en, och aktuellt läge kan delas som länk. Kalkyl,
+Investering (alla flikar) och Budget har autospar; avkodningen är
+storleksbegränsad och ignorerar korrupta payloads.
 
-**Kvarvarande risk:** Budget och standardkost har inte autospar i v1
-eftersom deras input-grafer är komplexa. Detta planeras i v2 tillsammans
-med persistent användarkonton.
+**Kvarvarande risk:** Standardkostnadsanalys saknar ännu autospar.
+LLM-förklaringar och chatthistorik följer inte med URL:en (medvetet:
+de är för stora och regenereras på begäran).
 
 ### Ingen autentisering 🟡
 

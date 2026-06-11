@@ -146,3 +146,91 @@ def test_helpers_silent_when_session_state_missing(monkeypatch):
     state_save.save_state("kalkyl_sjalvkostnad", {"a": 1})
     assert state_save.load_state("kalkyl_sjalvkostnad") is None
     state_save.clear_state("kalkyl_sjalvkostnad")
+
+
+class TestQueryParamPersistence:
+    """URL-level persistence (review gap 4 / roadmap 11): session_state dies
+    on a real browser reload, so saved inputs are mirrored into
+    st.query_params and restored from the URL when the session is fresh."""
+
+    def test_encode_decode_roundtrip(self):
+        from utils.state_save import _decode_params, _encode_params
+
+        inputs = {"sj_dm": 850.0, "sj_units": 5000.0, "name": "Nordvik & Co"}
+        encoded = _encode_params(inputs)
+        assert isinstance(encoded, str)
+        # URL-safe: no characters that need escaping
+        assert all(c.isalnum() or c in "-_=" for c in encoded)
+        assert _decode_params(encoded) == inputs
+
+    def test_decode_rejects_garbage(self):
+        from utils.state_save import _decode_params
+
+        assert _decode_params("not-base64!!!") is None
+        assert _decode_params("") is None
+        assert _decode_params(None) is None
+
+    def test_decode_rejects_non_dict_payload(self):
+        import base64
+        import json
+        import zlib
+
+        from utils.state_save import _decode_params
+
+        payload = base64.urlsafe_b64encode(
+            zlib.compress(json.dumps([1, 2, 3]).encode("utf-8"))
+        ).decode("ascii")
+        assert _decode_params(payload) is None
+
+    def test_decode_rejects_oversized_payload(self):
+        import base64
+        import json
+        import zlib
+
+        from utils.state_save import _decode_params
+
+        big = {"k": "x" * 100_000}
+        payload = base64.urlsafe_b64encode(
+            zlib.compress(json.dumps(big).encode("utf-8"))
+        ).decode("ascii")
+        assert _decode_params(payload) is None
+
+    def test_load_state_falls_back_to_query_params(self, monkeypatch):
+        from utils import state_save as ss
+
+        fake_session: dict = {}
+        fake_qp = {"s_kalkyl_bidrag": ss._encode_params({"bid_pris": 599.0})}
+        monkeypatch.setattr(ss, "_get_session_state", lambda: fake_session)
+        monkeypatch.setattr(ss, "_get_query_params", lambda: fake_qp)
+
+        restored = ss.load_state("kalkyl_bidrag")
+        assert restored == {"bid_pris": 599.0}
+        # Second call: already loaded this session
+        assert ss.load_state("kalkyl_bidrag") is None
+
+    def test_save_state_mirrors_to_query_params(self, monkeypatch):
+        from utils import state_save as ss
+
+        fake_session: dict = {}
+        fake_qp: dict = {}
+        monkeypatch.setattr(ss, "_get_session_state", lambda: fake_session)
+        monkeypatch.setattr(ss, "_get_query_params", lambda: fake_qp)
+
+        ss.save_state("budget", {"bud_forsaljning": 12_000_000.0})
+        assert "s_budget" in fake_qp
+        assert ss._decode_params(fake_qp["s_budget"]) == {
+            "bud_forsaljning": 12_000_000.0
+        }
+
+    def test_clear_state_removes_query_param(self, monkeypatch):
+        from utils import state_save as ss
+
+        fake_session: dict = {}
+        fake_qp: dict = {}
+        monkeypatch.setattr(ss, "_get_session_state", lambda: fake_session)
+        monkeypatch.setattr(ss, "_get_query_params", lambda: fake_qp)
+
+        ss.save_state("budget", {"bud_forsaljning": 1.0})
+        ss.clear_state("budget")
+        assert "s_budget" not in fake_qp
+        assert "saved_budget" not in fake_session
