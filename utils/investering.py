@@ -307,6 +307,64 @@ def sensitivity_analysis(
     return pd.DataFrame(records)
 
 
+def tornado_analysis(
+    base_cash_flows: list[float],
+    base_discount_rate: float,
+    base_initial: float,
+    variation: float = 0.20,
+) -> pd.DataFrame:
+    """NPV impact of varying each parameter ±``variation``, for a tornado chart.
+
+    The standard textbook/IB sensitivity overview: every parameter is
+    flexed by the same relative amount and the resulting NPV interval is
+    plotted as a horizontal bar, sorted with the widest (most decisive)
+    parameter on top.
+
+    Args:
+        base_cash_flows: Base-case cash flows at t=1..n.
+        base_discount_rate: Base-case kalkylränta.
+        base_initial: Base-case grundinvestering.
+        variation: Relative variation (e.g. 0.20 = ±20%). Must be > 0.
+
+    Returns:
+        DataFrame with columns ["parameter", "label", "npv_low",
+        "npv_high", "base_npv"], sorted by NPV span descending.
+        npv_low/npv_high are the NPVs at parameter low/high values
+        (for discount rate, a higher rate gives the lower NPV).
+    """
+    if variation <= 0:
+        raise ValueError(f"variation must be > 0, got {variation}")
+
+    base_npv = npv(base_cash_flows, base_discount_rate, base_initial)
+    lo, hi = 1.0 - variation, 1.0 + variation
+
+    rows = [
+        {
+            "parameter": "cash_flows",
+            "label": "Kassaflöden",
+            "npv_low": npv([cf * lo for cf in base_cash_flows], base_discount_rate, base_initial),
+            "npv_high": npv([cf * hi for cf in base_cash_flows], base_discount_rate, base_initial),
+        },
+        {
+            "parameter": "discount_rate",
+            "label": "Kalkylränta",
+            "npv_low": npv(base_cash_flows, base_discount_rate * lo, base_initial),
+            "npv_high": npv(base_cash_flows, base_discount_rate * hi, base_initial),
+        },
+        {
+            "parameter": "initial_investment",
+            "label": "Grundinvestering",
+            "npv_low": npv(base_cash_flows, base_discount_rate, base_initial * lo),
+            "npv_high": npv(base_cash_flows, base_discount_rate, base_initial * hi),
+        },
+    ]
+    df = pd.DataFrame(rows)
+    df["base_npv"] = base_npv
+    spans = (df["npv_high"] - df["npv_low"]).abs()
+    df = df.loc[spans.sort_values(ascending=False).index].reset_index(drop=True)
+    return df
+
+
 def monte_carlo_npv(
     initial_investment_mean: float,
     initial_investment_std: float,
@@ -316,10 +374,16 @@ def monte_carlo_npv(
     discount_rate_std: float,
     n_simulations: int = 10_000,
     seed: int = 42,
+    cashflow_correlation: float = 0.0,
 ) -> dict:
     """Monte Carlo NPV simulation (kapitel 10.9 extension).
 
-    All parameters drawn from independent normal distributions.
+    Investment and discount rate are drawn from independent normals.
+    Yearly cash flows are drawn either independently (correlation 0) or
+    with a constant pairwise correlation via Cholesky decomposition:
+    good years tend to follow good years, which widens the realistic
+    NPV spread compared to the independent assumption.
+
     Discount rates are clipped to >= 0 to prevent division errors.
 
     Args:
@@ -331,11 +395,19 @@ def monte_carlo_npv(
         discount_rate_std: Std dev of kalkylränta.
         n_simulations: Number of Monte Carlo draws.
         seed: Random seed for reproducibility.
+        cashflow_correlation: Constant pairwise correlation between the
+            yearly cash flows, in [0, 0.99]. 0 reproduces the legacy
+            independent draws exactly.
 
     Returns:
         Dict with keys: npvs (ndarray), mean, median, std, p5, p95,
         prob_positive_npv.
     """
+    if not 0.0 <= cashflow_correlation <= 0.99:
+        raise ValueError(
+            f"cashflow_correlation must be in [0, 0.99], got {cashflow_correlation}"
+        )
+
     rng = np.random.default_rng(seed)
     n_years = len(cash_flow_means)
 
@@ -344,9 +416,21 @@ def monte_carlo_npv(
         rng.normal(discount_rate_mean, discount_rate_std, n_simulations), 0.0, None
     )
 
-    cf_matrix = np.column_stack(
-        [rng.normal(mean, std, n_simulations) for mean, std in zip(cash_flow_means, cash_flow_stds)]
-    )
+    if cashflow_correlation == 0.0:
+        # Legacy path: keeps results bit-identical for existing seeds.
+        cf_matrix = np.column_stack(
+            [rng.normal(mean, std, n_simulations) for mean, std in zip(cash_flow_means, cash_flow_stds)]
+        )
+    else:
+        # Constant-correlation matrix is positive definite for rho in
+        # [0, 1); scale by the per-year std devs to get the covariance.
+        corr = np.full((n_years, n_years), cashflow_correlation)
+        np.fill_diagonal(corr, 1.0)
+        stds = np.asarray(cash_flow_stds, dtype=float)
+        cov = corr * np.outer(stds, stds)
+        chol = np.linalg.cholesky(cov)
+        z = rng.standard_normal((n_simulations, n_years))
+        cf_matrix = np.asarray(cash_flow_means, dtype=float) + z @ chol.T
 
     # shape: (n_simulations, n_years)
     discount_factors = np.column_stack(

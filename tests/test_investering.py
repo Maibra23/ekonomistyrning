@@ -359,3 +359,91 @@ class TestMonteCarlo:
         r1 = monte_carlo_npv(**base, seed=1)
         r2 = monte_carlo_npv(**base, seed=2)
         assert r1["mean"] != r2["mean"]
+
+
+class TestTornadoAnalysis:
+    """Tornado data for the sensitivity tab (review roadmap item 10)."""
+
+    def _base(self):
+        return dict(
+            base_cash_flows=[250_000.0] * 5,
+            base_discount_rate=0.10,
+            base_initial=1_000_000.0,
+        )
+
+    def test_returns_three_parameters_sorted_by_impact(self):
+        from utils.investering import tornado_analysis
+
+        df = tornado_analysis(**self._base(), variation=0.20)
+        assert list(df.columns) == [
+            "parameter", "label", "npv_low", "npv_high", "base_npv",
+        ]
+        assert len(df) == 3
+        spans = (df["npv_high"] - df["npv_low"]).abs().tolist()
+        assert spans == sorted(spans, reverse=True)
+
+    def test_low_high_bracket_base_npv(self):
+        from utils.investering import npv, tornado_analysis
+
+        base = self._base()
+        df = tornado_analysis(**base, variation=0.20)
+        base_npv = npv(
+            base["base_cash_flows"],
+            base["base_discount_rate"],
+            base["base_initial"],
+        )
+        for _, row in df.iterrows():
+            lo, hi = sorted([row["npv_low"], row["npv_high"]])
+            assert lo <= base_npv <= hi
+            assert row["base_npv"] == base_npv
+
+    def test_invalid_variation_raises(self):
+        import pytest
+
+        from utils.investering import tornado_analysis
+
+        with pytest.raises(ValueError):
+            tornado_analysis(**self._base(), variation=0.0)
+
+
+class TestCorrelatedMonteCarlo:
+    """Constant pairwise cash-flow correlation via Cholesky (item 10)."""
+
+    def _kwargs(self, **extra):
+        return dict(
+            initial_investment_mean=1_000_000.0,
+            initial_investment_std=50_000.0,
+            cash_flow_means=[250_000.0] * 5,
+            cash_flow_stds=[40_000.0] * 5,
+            discount_rate_mean=0.10,
+            discount_rate_std=0.01,
+            n_simulations=4_000,
+            seed=42,
+            **extra,
+        )
+
+    def test_zero_correlation_matches_legacy_results(self):
+        import numpy as np
+
+        from utils.investering import monte_carlo_npv
+
+        legacy = monte_carlo_npv(**self._kwargs())
+        explicit = monte_carlo_npv(**self._kwargs(cashflow_correlation=0.0))
+        assert np.allclose(legacy["npvs"], explicit["npvs"])
+
+    def test_positive_correlation_increases_npv_spread(self):
+        from utils.investering import monte_carlo_npv
+
+        independent = monte_carlo_npv(**self._kwargs(cashflow_correlation=0.0))
+        correlated = monte_carlo_npv(**self._kwargs(cashflow_correlation=0.8))
+        assert correlated["std"] > independent["std"] * 1.2
+
+    def test_correlation_out_of_range_raises(self):
+        import pytest
+
+        from utils.investering import monte_carlo_npv
+
+        with pytest.raises(ValueError):
+            monte_carlo_npv(**self._kwargs(cashflow_correlation=-0.2))
+        with pytest.raises(ValueError):
+            monte_carlo_npv(**self._kwargs(cashflow_correlation=1.5))
