@@ -19,6 +19,7 @@ from utils.llm import (
 )
 from utils.humanizer import humanize
 from utils.prompts import (
+    TUTOR_REQUIRED_SECTIONS,
     build_standardkost_interpretation_prompt,
     build_qa_prompt,
     FALLBACK_TEMPLATES,
@@ -190,7 +191,7 @@ with tab1:
                 step=0.1,
                 format="%.2f",
                 key="verk_forbrukning",
-                help="Faktisk insatsforbrukning per producerad enhet",
+                help="Faktisk insatsförbrukning per producerad enhet",
             )
         sk_rorlig_form_submit = st.form_submit_button("Uppdatera värden", type="primary")
 
@@ -352,7 +353,7 @@ with tab1:
                 {"standard_volym": std_volym, "verklig_volym": verk_volym},
                 {"total_avvikelse": rorlig_result["total"]},
             ),
-            required_sections=["Antagande", "Berakning", "Tolkning", "Kallor och forbehall"],
+            required_sections=TUTOR_REQUIRED_SECTIONS,
             expected_numbers={
                 "total_avvikelse": rorlig_result["total"],
                 "volymavvikelse": rorlig_result["volymavvikelse"],

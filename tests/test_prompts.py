@@ -445,3 +445,19 @@ def test_system_prompt_base_mentions_amnesavgransning():
     """The topical scope reminder must be in the base prompt."""
     assert "ÄMNESAVGRÄNSNING" in SYSTEM_PROMPT_BASE or "ämnesavgränsning" in SYSTEM_PROMPT_BASE.lower()
     assert "Andersson" not in SYSTEM_PROMPT_BASE
+
+
+def test_tutor_required_sections_match_prompt_instructions():
+    """The canonical section constant must name exactly the headers the
+    explanation prompts instruct the LLM to write (review K6)."""
+    from utils.prompts import (
+        TUTOR_REQUIRED_SECTIONS,
+        build_kalkyl_explanation_prompt,
+    )
+
+    sys_p, usr_p = build_kalkyl_explanation_prompt(
+        "bidrag", {"pris_per_styck": 100}, {"tackningsbidrag_per_styck": 50}
+    )
+    blob = sys_p + usr_p
+    for section in TUTOR_REQUIRED_SECTIONS:
+        assert section in blob, f"saknad sektion i prompten: {section}"

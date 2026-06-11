@@ -568,7 +568,7 @@ if q:
                         f"quiz ({kapitelkluster})",
                         q.get("given_data", {}),
                         {"ratt_svar": q.get("ratt_svar")},
-                        f"Forklara denna fraga och svaret djupare: {q.get('fraga', '')}",
+                        f"Förklara denna fråga och svaret djupare: {q.get('fraga', '')}",
                     )
                     with st.spinner("Förklarar..."):
                         raw = cached_chat(sys_p, usr_p)

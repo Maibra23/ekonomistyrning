@@ -91,7 +91,7 @@ def _build_prompt_for_fixture(module: str, fixture: dict) -> tuple[str, str]:
 # Scoring functions
 # ---------------------------------------------------------------------------
 
-REQUIRED_SECTIONS = ["Antagande", "Berakning", "Tolkning", "Kallor och forbehall"]
+from utils.prompts import TUTOR_REQUIRED_SECTIONS as REQUIRED_SECTIONS
 
 # Swedish character pattern - check for suspiciously many English-only words
 SWEDISH_CHARS = re.compile(r"[åäöÅÄÖ]")
