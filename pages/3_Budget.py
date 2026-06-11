@@ -36,6 +36,7 @@ from utils.scenarios import generate_scenario, set_current_scenario
 from utils.state_save import clear_state, load_state, save_state
 from utils.tutor import render_tutor_explanation
 from utils.ui import (
+    APP_UPDATED,
     BUDGET_VS_RAKNING_HELP,
     SCENARIO_DIFFICULTY_HELP,
     footer_note,
@@ -279,6 +280,12 @@ with st.expander("Steg 1: Resultatbudget", expanded=True):
 
     with col_in1:
         with st.form("bud_step1_form"):
+            # Submit at the top: with ~9 fields in a narrow column the
+            # button otherwise ends up below the fold while the results to
+            # the right are already visible with old values (review B3).
+            bud_step1_form_submit = st.form_submit_button(
+                "Uppdatera värden", type="primary", use_container_width=True
+            )
             st.markdown("**Intäkter**")
             forsaljning = st.number_input(
                 "Försäljning (kr)",
@@ -369,7 +376,6 @@ with st.expander("Steg 1: Resultatbudget", expanded=True):
                 help="Bolagsskattesats (standard 20,6 %)",
             )
             st.session_state["bud_skattesats"] = skattesats
-            bud_step1_form_submit = st.form_submit_button("Uppdatera värden", type="primary")
 
     with col_res1:
         # Build resultatbudget
@@ -449,10 +455,10 @@ with st.expander("Steg 1: Resultatbudget", expanded=True):
             totals=dict(marker=dict(color=COLORS["primary"])),
             text=[format_sek(v) for v in waterfall_values],
             textposition="outside",
-            textfont=dict(size=9),
+            textfont=dict(size=11),
         ))
-        apply_layout(fig_resultat, title="Resultatbudget (vattenfall)", height=420)
-        fig_resultat.update_layout(xaxis_tickangle=-45)
+        apply_layout(fig_resultat, title="Resultatbudget (vattenfall)", height=440)
+        fig_resultat.update_layout(xaxis_tickangle=-30)
         st.plotly_chart(fig_resultat, use_container_width=True)
 
 # ===========================================================================
@@ -539,6 +545,11 @@ with st.expander("Steg 2: Likviditetsbudget", expanded=True):
     with col_res2:
         # Build likviditetsbudget
         inkop = rorliga  # purchases approximated by variable costs
+        st.caption(
+            "Förenkling: inköpen antas vara lika stora som de rörliga "
+            "kostnaderna. I en fullständig likviditetsbudget skulle "
+            "inköpen även justeras för lagerförändring."
+        )
         likviditet_df = build_likviditetsbudget(
             resultat_df=resultat_df,
             opening_cash=opening_cash,
@@ -876,61 +887,60 @@ with st.expander("Steg 3: Balansbudget", expanded=True):
 
 st.markdown("### Sammanfattande analys")
 
-if True:
-    # Build summary dicts from the computed DataFrames
-    resultat_summary = {
-        "forsaljning": forsaljning,
-        "arets_resultat": arets_resultat,
-        "bruttoresultat": bruttoresultat,
-        "rorelseresultat": rorelseresultat,
-    }
-    likviditet_summary = {
-        "opening_cash": opening_cash,
-        "forandring_likvida_medel": forandring,
-        "likvida_medel_ub": likvida_ub,
-        "delta_rorelsekapital": delta_rk,
-    }
-    balans_summary_dict = {
-        "summa_tillgangar_ub": summa_tillgangar_ub,
-        "summa_skulder_ek_ub": summa_skulder_ek_ub,
-        "differens": difference,
-    }
+# Build summary dicts from the computed DataFrames
+resultat_summary = {
+    "forsaljning": forsaljning,
+    "arets_resultat": arets_resultat,
+    "bruttoresultat": bruttoresultat,
+    "rorelseresultat": rorelseresultat,
+}
+likviditet_summary = {
+    "opening_cash": opening_cash,
+    "forandring_likvida_medel": forandring,
+    "likvida_medel_ub": likvida_ub,
+    "delta_rorelsekapital": delta_rk,
+}
+balans_summary_dict = {
+    "summa_tillgangar_ub": summa_tillgangar_ub,
+    "summa_skulder_ek_ub": summa_skulder_ek_ub,
+    "differens": difference,
+}
 
-    _budget_fallback_inputs = {
-        "forsaljning": forsaljning,
+_budget_fallback_inputs = {
+    "forsaljning": forsaljning,
+    "arets_resultat": arets_resultat,
+}
+_budget_fallback_outputs = {
+    "likvida_medel_ub": likvida_ub,
+    "summa_tillgangar_ub": summa_tillgangar_ub,
+    "balanserad": is_balanced,
+}
+render_tutor_explanation(
+    state_key="budget_consistency_llm",
+    inputs={
+        **resultat_summary,
+        **likviditet_summary,
+        **balans_summary_dict,
+        "is_balanced": is_balanced,
+    },
+    outputs={"difference": difference},
+    build_prompt=lambda: build_budget_consistency_prompt(
+        resultat_summary, likviditet_summary, balans_summary_dict,
+        is_balanced, difference,
+    ),
+    fallback_text=lambda: FALLBACK_TEMPLATES["budget"](
+        "budget", _budget_fallback_inputs, _budget_fallback_outputs
+    ),
+    required_sections=TUTOR_REQUIRED_SECTIONS,
+    expected_numbers={
         "arets_resultat": arets_resultat,
-    }
-    _budget_fallback_outputs = {
-        "likvida_medel_ub": likvida_ub,
-        "summa_tillgangar_ub": summa_tillgangar_ub,
-        "balanserad": is_balanced,
-    }
-    render_tutor_explanation(
-        state_key="budget_consistency_llm",
-        inputs={
-            **resultat_summary,
-            **likviditet_summary,
-            **balans_summary_dict,
-            "is_balanced": is_balanced,
-        },
-        outputs={"difference": difference},
-        build_prompt=lambda: build_budget_consistency_prompt(
-            resultat_summary, likviditet_summary, balans_summary_dict,
-            is_balanced, difference,
-        ),
-        fallback_text=lambda: FALLBACK_TEMPLATES["budget"](
-            "budget", _budget_fallback_inputs, _budget_fallback_outputs
-        ),
-        required_sections=TUTOR_REQUIRED_SECTIONS,
-        expected_numbers={
-            "arets_resultat": arets_resultat,
-            "forandring_likvida_medel": forandring,
-            "summa_tillgangar": summa_tillgangar_ub,
-            "balansavvikelse": difference,
-        },
-        heading=None,
-        spinner_label="Analyserar budgetkonsistens...",
-    )
+        "forandring_likvida_medel": forandring,
+        "summa_tillgangar": summa_tillgangar_ub,
+        "balansavvikelse": difference,
+    },
+    heading=None,
+    spinner_label="Analyserar budgetkonsistens...",
+)
 
 # Q&A chat
 if "budget_chat_history" not in st.session_state:
@@ -1032,4 +1042,4 @@ st.download_button(
 # Autosave current input values on every rerun.
 save_state("budget", {_k: st.session_state.get(_k) for _k in _BUD_STATE_KEYS})
 
-st.html(footer_note(updated="2026-05-06"))
+st.html(footer_note(updated=APP_UPDATED))

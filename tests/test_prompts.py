@@ -461,3 +461,21 @@ def test_tutor_required_sections_match_prompt_instructions():
     blob = sys_p + usr_p
     for section in TUTOR_REQUIRED_SECTIONS:
         assert section in blob, f"saknad sektion i prompten: {section}"
+
+
+def test_qa_prompt_does_not_duplicate_current_question():
+    """The current question must not appear both as history and as the
+    'Studentens fråga' line (review K5)."""
+    from utils.prompts import build_qa_prompt
+
+    question = "Varför är täckningsbidraget viktigt?"
+    history = [
+        ("user", "Vad är nollpunkten?"),
+        ("assistant", "Nollpunkten är ..."),
+        ("user", question),
+    ]
+    _, usr_p = build_qa_prompt(
+        "kalkyl (bidrag)", {"pris": 100}, {"tb": 50}, question, chat_history=history
+    )
+    assert usr_p.count(question) == 1
+    assert "Vad är nollpunkten?" in usr_p
