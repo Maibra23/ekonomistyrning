@@ -23,6 +23,7 @@ from utils.llm import (
     verify_grounding,
 )
 from utils.prompts import (
+    TUTOR_REQUIRED_SECTIONS,
     FALLBACK_TEMPLATES,
     build_kalkyl_explanation_prompt,
     build_kalkyl_step_guide_prompt,
@@ -95,7 +96,7 @@ def _render_llm_section(
         fallback_text=lambda: FALLBACK_TEMPLATES["kalkyl"](
             calc_type, inputs, outputs
         ),
-        required_sections=["Antagande", "Berakning", "Tolkning", "Kallor och forbehall"],
+        required_sections=TUTOR_REQUIRED_SECTIONS,
         expected_numbers=expected_numbers or None,
     )
 

@@ -30,6 +30,7 @@ from utils.llm import (
     verify_grounding,
 )
 from utils.prompts import (
+    TUTOR_REQUIRED_SECTIONS,
     build_investering_explanation_prompt,
     build_qa_prompt,
     FALLBACK_TEMPLATES,
@@ -167,7 +168,7 @@ def _render_investering_llm(
         fallback_text=lambda: FALLBACK_TEMPLATES["investering"](
             method, inputs, outputs
         ),
-        required_sections=["Antagande", "Berakning", "Tolkning", "Kallor och forbehall"],
+        required_sections=TUTOR_REQUIRED_SECTIONS,
         expected_numbers=expected or None,
     )
 
@@ -445,7 +446,7 @@ with tab1:
                     f"lägre grundinvestering."
                 )
         else:
-            st.info("Investeringen är precis pågränsen (NPV = 0). Övriga faktorer avgör.")
+            st.info("Investeringen är precis på gränsen (NPV = 0). Övriga faktorer avgör.")
 
         # Bar chart (cash flows) + cumulative discounted line
         years = list(range(1, antal_ar + 1))
@@ -686,7 +687,7 @@ with tab2:
                 y=0,
                 line_dash="dash",
                 line_color=COLORS["danger"],
-                annotation_text="NPV = 0 (breakevengransen)",
+                annotation_text="NPV = 0 (nollpunkten)",
                 annotation_position="top right",
             )
             fig2.add_trace(go.Scatter(
@@ -717,7 +718,7 @@ with tab2:
                     st.info(
                         f"Kritisk variation: {critical_var:.1f} %. "
                         f"Om {param_label.lower()} ändras med mer än "
-                        f"{abs(critical_var):.1f} % {direction} frånbasfallet blir NPV negativt."
+                        f"{abs(critical_var):.1f} % {direction} från basfallet blir NPV negativt."
                     )
             elif not pos_mask.any():
                 st.error("NPV är negativt i hela variationsintervallet. Investeringen är känslig.")
@@ -824,7 +825,7 @@ with tab3:
                 key="it_tax_pct",
             )
             depreciation = st.number_input(
-                "Skattemässig avskrivning per ar (kr)",
+                "Skattemässig avskrivning per år (kr)",
                 min_value=0.0,
                 step=10_000.0,
                 format="%.0f",
@@ -868,7 +869,7 @@ with tab3:
                     delta_direction="flat",
                 ),
                 kpi_card(
-                    "NPV fore skatt",
+                    "NPV före skatt",
                     format_sek(it_res["npv_before_tax"]),
                     variant="success" if it_res["npv_before_tax"] >= 0 else "danger",
                 ),
@@ -895,7 +896,7 @@ with tab3:
             fig3 = go.Figure(go.Waterfall(
                 orientation="v",
                 measure=["absolute", "relative", "total"],
-                x=["NPV fore skatt", "Skatteeffekt", "NPV efter skatt"],
+                x=["NPV före skatt", "Skatteeffekt", "NPV efter skatt"],
                 y=[
                     it_res["npv_before_tax"],
                     tax_impact,
@@ -949,7 +950,7 @@ with tab3:
 with tab4:
     st.markdown(
         "Monte Carlo-simulering skattar NPV-fördelningen genom att slumpmässigt dra "
-        "grundinvestering, kassaflöden och kalkylränta frånnormala sannolikhetsfördelningar. "
+        "grundinvestering, kassaflöden och kalkylränta från normala sannolikhetsfördelningar. "
         "Resultatet visar riskprofilen och sannolikheten för positivt utfall."
     )
 
@@ -1035,7 +1036,7 @@ with tab4:
             key="mc_n_sims",
         )
 
-        st.markdown("**Kassaflöden per ar (medelvärde och standardavvikelse)**")
+        st.markdown("**Kassaflöden per år (medelvärde och standardavvikelse)**")
         n_mc_years = st.session_state["inv_years"]
         mc_cf_key = "mc_cf_df"
 
@@ -1173,7 +1174,7 @@ with tab4:
                 boxmean=True,
                 boxpoints=False,
             ))
-            apply_layout(fig5, title="NPV-spridning (ladadiagram)", height=300)
+            apply_layout(fig5, title="NPV-spridning (lådagram)", height=300)
             st.plotly_chart(fig5, use_container_width=True)
 
             # Swedish decision text

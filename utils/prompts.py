@@ -12,6 +12,18 @@ from typing import Any
 
 NBSP = "\u00a0"
 
+# Canonical section headers for tutor explanations. The prompt builders
+# instruct the LLM to use exactly these (with \u00e5/\u00e4/\u00f6), so structure
+# validation must check the same strings. Single source of truth: pages
+# import this instead of re-typing the list (review K6 \u2014 ASCII variants in
+# some pages validated against headers the LLM never writes).
+TUTOR_REQUIRED_SECTIONS: list[str] = [
+    "Antagande",
+    "Ber\u00e4kning",
+    "Tolkning",
+    "K\u00e4llor och f\u00f6rbeh\u00e5ll",
+]
+
 
 # Terminology glossary. Maps the canonical Swedish ekonomistyrning term to a
 # tuple of (english_equivalent, incorrect_variant_or_None). The incorrect

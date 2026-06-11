@@ -25,6 +25,7 @@ from utils.llm import (
 )
 from utils.humanizer import humanize
 from utils.prompts import (
+    TUTOR_REQUIRED_SECTIONS,
     build_budget_consistency_prompt,
     build_qa_prompt,
     FALLBACK_TEMPLATES,
@@ -243,7 +244,7 @@ with st.expander("Steg 1: Resultatbudget", expanded=True):
 
     with col_in1:
         with st.form("bud_step1_form"):
-            st.markdown("**Intakter**")
+            st.markdown("**Intäkter**")
             forsaljning = st.number_input(
                 "Försäljning (kr)",
                 min_value=0.0,
@@ -885,7 +886,7 @@ if True:
         fallback_text=lambda: FALLBACK_TEMPLATES["budget"](
             "budget", _budget_fallback_inputs, _budget_fallback_outputs
         ),
-        required_sections=["Antagande", "Beräkning", "Tolkning", "Källor och förbehåll"],
+        required_sections=TUTOR_REQUIRED_SECTIONS,
         expected_numbers={
             "arets_resultat": arets_resultat,
             "forandring_likvida_medel": forandring,

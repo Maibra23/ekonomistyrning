@@ -844,12 +844,14 @@ class TestHumanizerSmoke:
 
         text = (
             "**Antagande**\nI hope this helps. The cost is 1,234.56 kr "
-            "\u2013 which is high.\n**Berakning**\nCalc here.\n"
-            "**Tolkning**\nInterpretation.\n**Kallor och forbehall**\nSources."
+            "\u2013 which is high.\n**Beräkning**\nCalc here.\n"
+            "**Tolkning**\nInterpretation.\n**Källor och förbehåll**\nSources."
         )
+        from utils.prompts import TUTOR_REQUIRED_SECTIONS
+
         result = humanize(
             text,
-            required_sections=["Antagande", "Berakning", "Tolkning", "Kallor och forbehall"],
+            required_sections=TUTOR_REQUIRED_SECTIONS,
         )
         assert len(result.tells_found) > 0
         assert "\u2013" not in result.text
