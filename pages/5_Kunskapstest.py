@@ -573,11 +573,28 @@ if q:
                     with st.spinner("Förklarar..."):
                         raw = cached_chat(sys_p, usr_p)
                     result = humanize(raw)
-                    st.markdown(result.text)
+                    # Persist so the next interaction does not erase the
+                    # answer (review Q2); rendered below for the current
+                    # question.
+                    st.session_state["quiz_deeper"] = {
+                        "fraga": q.get("fraga", ""),
+                        "text": result.text,
+                    }
+                except LLMSessionCapError:
+                    # Before LLMUnavailableError: subclass must win or the
+                    # capped user gets advice that never helps (review K4).
+                    render_session_cap_card()
                 except LLMUnavailableError:
                     st.info("Djupare förklaring är inte tillgänglig just nu.")
-                except LLMSessionCapError:
-                    render_session_cap_card()
+
+        _deeper = st.session_state.get("quiz_deeper")
+        if (
+            isinstance(_deeper, dict)
+            and _deeper.get("text")
+            and _deeper.get("fraga") == q.get("fraga", "")
+        ):
+            st.markdown("**Djupare förklaring**")
+            st.markdown(_deeper["text"])
 
 
 # ---------------------------------------------------------------------------

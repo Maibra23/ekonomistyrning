@@ -19,6 +19,7 @@ from utils.charts import COLORS, apply_layout
 from utils.export import export_to_excel
 from utils.formatting import format_sek
 from utils.llm import (
+    LLMSessionCapError,
     LLMUnavailableError,
     cached_chat,
     is_llm_available,
@@ -31,6 +32,7 @@ from utils.prompts import (
     FALLBACK_TEMPLATES,
 )
 from utils.scenarios import generate_scenario, set_current_scenario
+from utils.state_save import clear_state, load_state, save_state
 from utils.tutor import render_tutor_explanation
 from utils.ui import (
     BUDGET_VS_RAKNING_HELP,
@@ -42,6 +44,7 @@ from utils.ui import (
     page_title,
     pipeline_steps,
     render_kpi_row,
+    render_session_cap_card,
     render_sidebar,
 )
 
@@ -124,6 +127,25 @@ def _load_defaults() -> None:
 if "bud_forsaljning" not in st.session_state:
     _load_defaults()
 
+# All budget input keys, used by autosave (review B1: Budget was the only
+# module without save_state/load_state).
+_BUD_STATE_KEYS: tuple[str, ...] = (
+    "bud_forsaljning", "bud_rorliga", "bud_personal", "bud_lokal",
+    "bud_avskrivningar", "bud_ovriga", "bud_finansiella", "bud_skattesats",
+    "bud_opening_cash", "bud_kf_dagar", "bud_ls_dagar", "bud_lager_dagar",
+    "bud_investeringar", "bud_finansiering", "bud_ob_anlaggning",
+    "bud_ob_lager", "bud_ob_kundfordringar", "bud_ob_likvida",
+    "bud_ob_eget_kapital", "bud_ob_langsiktiga", "bud_ob_leverantorsskulder",
+    "bud_nyanskaffning", "bud_avskrivningar_balans",
+)
+
+# Autosave: restore saved values once per session, before widgets render.
+_bud_saved = load_state("budget")
+if _bud_saved is not None:
+    for _k in _BUD_STATE_KEYS:
+        if _k in _bud_saved:
+            st.session_state[_k] = float(_bud_saved[_k])
+
 # ---------------------------------------------------------------------------
 # Page header
 # ---------------------------------------------------------------------------
@@ -197,6 +219,7 @@ with bud_gen_cols[2]:
     )
 
 if bud_reset_clicked:
+    clear_state("budget")
     _load_defaults()
     st.session_state.pop("bud_scenario_info", None)
     st.rerun()
@@ -925,6 +948,11 @@ if user_q:
             result = humanize(raw)
             st.markdown(result.text)
         st.session_state["budget_chat_history"].append(("assistant", result.text))
+    except LLMSessionCapError:
+        # Must be caught before LLMUnavailableError (its parent class):
+        # a capped user should see the cap card, not "try again later"
+        # advice that can never help (review K4).
+        render_session_cap_card()
     except LLMUnavailableError:
         msg = "Tjänsten är tillfälligt otillgänglig. Försök igen senare."
         with st.chat_message("assistant"):
@@ -988,5 +1016,8 @@ st.download_button(
     file_name="budget_helhetsplan.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 )
+
+# Autosave current input values on every rerun.
+save_state("budget", {_k: st.session_state.get(_k) for _k in _BUD_STATE_KEYS})
 
 st.html(footer_note(updated="2026-05-06"))
