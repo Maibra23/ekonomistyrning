@@ -100,9 +100,11 @@ betygsättningsmodell.
 Tutorn glömmer allt mellan sessioner. En student som återvänder en vecka
 senare börjar om från noll.
 
-**Aktuell hantering:** Day 10 introducerade autospar för kalkyl och
-investering. Inmatningar överlever sidladdning men följer inte med över
-flera enheter eller längre tidsperioder.
+**Aktuell hantering:** Autospar finns i alla moduler och speglas till
+webbadressen, så inmatningar överlever sidladdning. Kunskapstestet har
+sedan 2026-06-11 progression per kapitelkluster (historik, mästerskapsnivå
+och rekommenderad svårighetsgrad) som också sparas i URL:en. Spaced
+repetition saknas dock, och inget följer med över flera enheter.
 
 **Planerad lösning:** v2 planerar persistent användarkonton, vilket skulle
 möjliggöra att tutorn minns dina tidigare scenarier och svaga punkter.
