@@ -12,10 +12,9 @@ from __future__ import annotations
 
 import io
 import re
-from typing import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 
 import pandas as pd
-
 
 _FORBIDDEN_SHEET_CHARS = re.compile(r"[\\/*?:\[\]]")
 

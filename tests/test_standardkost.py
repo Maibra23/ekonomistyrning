@@ -15,7 +15,6 @@ from utils.standardkost import (
     variance_summary,
 )
 
-
 # ---------------------------------------------------------------------------
 # Variance decomposition for variable direct costs
 # ---------------------------------------------------------------------------

@@ -35,9 +35,15 @@ except ImportError:
 
 
 def main() -> None:
-    from utils.llm import LLMClient, LLMUnavailableError, get_hf_token, get_llm_config, verify_grounding
-    from utils.prompts import build_kalkyl_explanation_prompt
     from utils.humanizer import humanize
+    from utils.llm import (
+        LLMClient,
+        LLMUnavailableError,
+        get_hf_token,
+        get_llm_config,
+        verify_grounding,
+    )
+    from utils.prompts import build_kalkyl_explanation_prompt
 
     print("=" * 60)
     print("LLM Smoke Test")

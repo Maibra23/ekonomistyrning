@@ -5,16 +5,15 @@ independent verification of the implementation.
 """
 from __future__ import annotations
 
-import pytest
 import pandas as pd
+import pytest
 
 from utils.budget import (
-    build_resultatbudget,
-    build_likviditetsbudget,
     build_balansbudget,
+    build_likviditetsbudget,
+    build_resultatbudget,
     validate_budget_balance,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helper to extract a value from a budget DataFrame by Post name
@@ -342,7 +341,6 @@ class TestBalansbudget:
     def test_opening_balance_sums(self, full_budget):
         """Opening balance should already balance (IB tillgangar == IB skulder+EK)."""
         balans_df = full_budget[0]
-        opening_balance = full_budget[3]
 
         ib_tillgangar = balans_df.loc[
             balans_df["Post"] == "Summa tillgångar", "Ingaende"

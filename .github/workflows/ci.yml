@@ -42,8 +42,14 @@ jobs:
       - name: Install project dependencies
         run: pip install -r requirements.txt
 
-      - name: Install pytest-cov
-        run: pip install pytest-cov
+      - name: Install dev tooling
+        run: pip install pytest-cov ruff mypy
+
+      - name: Lint (ruff)
+        run: ruff check utils/ pages/ tests/ streamlit_app.py
+
+      - name: Type check (mypy)
+        run: mypy
 
       - name: Run pytest with coverage
         run: pytest tests/ -v --cov=utils --cov-report=term-missing --cov-report=xml

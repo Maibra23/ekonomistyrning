@@ -11,20 +11,19 @@ import streamlit as st
 
 from utils.charts import COLORS, apply_layout
 from utils.export import export_to_excel
-from utils.state_save import load_state, save_state
 from utils.formatting import format_sek
+from utils.humanizer import humanize
 from utils.llm import (
     LLMSessionCapError,
     LLMUnavailableError,
     cached_chat,
     is_llm_available,
 )
-from utils.humanizer import humanize
 from utils.prompts import (
-    TUTOR_REQUIRED_SECTIONS,
-    build_standardkost_interpretation_prompt,
-    build_qa_prompt,
     FALLBACK_TEMPLATES,
+    TUTOR_REQUIRED_SECTIONS,
+    build_qa_prompt,
+    build_standardkost_interpretation_prompt,
 )
 from utils.scenario_continuity import render_adopt_button
 from utils.scenarios import generate_scenario, set_current_scenario
@@ -32,6 +31,7 @@ from utils.standardkost import (
     variance_decomposition_rorlig,
     variance_fixed_overhead,
 )
+from utils.state_save import load_state, save_state
 from utils.tutor import render_tutor_explanation
 from utils.ui import (
     APP_UPDATED,

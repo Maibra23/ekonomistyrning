@@ -13,9 +13,9 @@ import streamlit as st
 from utils.charts import COLORS, PALETTE, apply_layout, color_by_sign
 from utils.export import export_to_excel
 from utils.formatting import format_percent, format_sek
+from utils.grounding_ui import show_grounding_warning
 from utils.humanizer import humanize
 from utils.kalkyl import abc_calc, contribution_calc, self_cost_palagg
-from utils.grounding_ui import show_grounding_warning
 from utils.llm import (
     LLMSessionCapError,
     LLMUnavailableError,
@@ -24,8 +24,8 @@ from utils.llm import (
     verify_grounding,
 )
 from utils.prompts import (
-    TUTOR_REQUIRED_SECTIONS,
     FALLBACK_TEMPLATES,
+    TUTOR_REQUIRED_SECTIONS,
     build_kalkyl_explanation_prompt,
     build_kalkyl_step_guide_prompt,
     build_qa_prompt,

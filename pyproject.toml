@@ -1,0 +1,44 @@
+[project]
+name = "ekonomistyrning-sandbox"
+version = "0.2.0"
+description = "Interaktiv övningsmiljö för svensk ekonomistyrning (Streamlit + Qwen3)"
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["__pycache__", ".venv"]
+
+[tool.ruff.lint]
+# E/W pycodestyle, F pyflakes, I isort, B bugbear, UP pyupgrade
+select = ["E", "W", "F", "I", "B", "UP"]
+ignore = [
+    # Long strings dominate this codebase (Swedish UI copy, prompts);
+    # wrapping them hurts readability more than it helps.
+    "E501",
+    # Streamlit pages intentionally run code at import time between
+    # imports (st.set_page_config must precede other st calls).
+    "E402",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Pages use broad excepts deliberately (LLM failures must never crash a page)
+"pages/*" = ["B904"]
+# GLOBAL_CSS deliberately uses % interpolation against COLORS (literal CSS
+# percent is written %%); converting to format specifiers would churn the
+# whole stylesheet for no benefit.
+"utils/ui.py" = ["UP031"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["utils"]
+# Pragmatic baseline: full annotations are enforced where they exist;
+# third-party stubs (streamlit, plotly, hf-hub) are not required.
+ignore_missing_imports = true
+check_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

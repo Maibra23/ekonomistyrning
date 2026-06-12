@@ -5,8 +5,6 @@ the user prompts contain the actual input numbers.
 """
 from __future__ import annotations
 
-import json
-
 from utils.prompts import (
     FALLBACK_TEMPLATES,
     SYSTEM_PROMPT_BASE,

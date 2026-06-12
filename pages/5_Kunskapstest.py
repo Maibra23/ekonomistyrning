@@ -40,8 +40,14 @@ from utils.quiz_progress import (
 )
 from utils.quiz_ui import (
     CLUSTER_LABELS as _CLUSTER_LABELS,
+)
+from utils.quiz_ui import (
     DIFFICULTY_LABELS as _DIFFICULTY_LABELS,
+)
+from utils.quiz_ui import (
     QTYPE_LABELS as _QTYPE_LABELS,
+)
+from utils.quiz_ui import (
     quiz_card_html,
 )
 from utils.state_save import clear_state, load_state, save_state
@@ -55,7 +61,6 @@ from utils.ui import (
     render_session_cap_card,
     render_sidebar,
 )
-
 
 # Tighter token budget for quiz generation: the JSON envelope rarely needs
 # more than 800-1000 output tokens, so 1200 leaves headroom without paying
@@ -372,7 +377,7 @@ def _generate_question(kluster: str, diff: str, qtype: str) -> dict | None:
     quality_log = st.session_state.setdefault("quiz_quality_log", [])
     last_candidate: dict | None = None
 
-    for attempt in range(_QUIZ_MAX_ATTEMPTS):
+    for _attempt in range(_QUIZ_MAX_ATTEMPTS):
         try:
             sys_p, usr_p = build_quiz_combined_prompt(kluster, diff, qtype)
             raw = cached_chat(

@@ -40,6 +40,7 @@ An interactive practice environment for Swedish accounting management students. 
 - numpy, pandas, scipy, numpy-financial (beräkningar)
 - xlsxwriter, openpyxl (Excel-export)
 - pytest (testramverk)
+- ruff + mypy (lint och statisk typkontroll, körs i CI)
 
 ## Lokal installation
 

@@ -8,6 +8,7 @@ See docs/METHODOLOGY.md sections 6.3 to 6.7 for the design rationale.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from typing import Any
 
 NBSP = "\u00a0"
@@ -1041,7 +1042,7 @@ def build_quiz_combined_prompt(
     return system_prompt, user_prompt
 
 
-FALLBACK_TEMPLATES: dict[str, callable] = {
+FALLBACK_TEMPLATES: dict[str, Callable[..., str]] = {
     "kalkyl": fallback_kalkyl_template,
     "investering": fallback_investering_template,
     "budget": fallback_budget_template,

@@ -98,6 +98,7 @@ class TestChartsSmoke:
 
     def test_apply_layout(self):
         import plotly.graph_objects as go
+
         from utils.charts import apply_layout
 
         fig = go.Figure()
@@ -106,6 +107,7 @@ class TestChartsSmoke:
 
     def test_apply_layout_no_title(self):
         import plotly.graph_objects as go
+
         from utils.charts import apply_layout
 
         fig = go.Figure()
@@ -1017,7 +1019,7 @@ class TestPageImport:
             try:
                 mod = importlib.import_module(page_module)
                 assert mod is not None
-            except (SyntaxError, ModuleNotFoundError) as exc:
+            except (SyntaxError, ModuleNotFoundError):
                 # These are real errors in our code, re-raise
                 raise
             except Exception as exc:

@@ -938,7 +938,7 @@ def kpi_card(
 def render_kpi_row(cards: list[str]) -> None:
     """Render a list of kpi_card() HTML strings in equal-width columns."""
     cols = st.columns(len(cards))
-    for col, card_html in zip(cols, cards):
+    for col, card_html in zip(cols, cards, strict=True):
         col.html(card_html)
 
 

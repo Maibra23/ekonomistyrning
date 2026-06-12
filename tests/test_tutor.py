@@ -6,8 +6,6 @@ cache key shape, cache reuse predicate) so regressions surface fast.
 """
 from __future__ import annotations
 
-import pytest
-
 from utils.tutor import _hash_payload, _store_key, get_cached_tutor_text
 
 
