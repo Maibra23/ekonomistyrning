@@ -96,6 +96,12 @@ _LATEX_SYMBOLS: tuple[tuple[str, str], ...] = (
     (r"\pm", "\u00b1"),
 )
 
+# Markdown ATX headers (# .. ######) at line start, with optional closing
+# hashes. The LLM sometimes emits these despite instructions; st.markdown
+# renders them in large display fonts, which breaks the uniform text size
+# of tutor output. They are demoted to bold body text instead.
+HEADER_PATTERN = re.compile(r"^#{1,6}[ \t]+(.+?)[ \t]*#*[ \t]*$", flags=re.MULTILINE)
+
 # Number with English thousand and decimal separators: 1,234.56
 EN_NUMBER_PATTERN = re.compile(r"(?<![A-Za-z])(\d{1,3}(?:,\d{3})+)(?:\.(\d+))?(?![A-Za-z])")
 
@@ -152,6 +158,25 @@ def _has_cost_context(text: str, match_start: int, match_end: int, window: int =
     return any(token in _COST_CONTEXT_WORDS for token in surrounding)
 
 
+def normalize_markdown_headers(text: str) -> str:
+    """Demote markdown headers to bold text so all output renders at body size.
+
+    ``## Antagande`` becomes ``**Antagande**``. Existing bold markers inside
+    the header text are stripped first so the result never contains ``****``.
+    Inline hashes (``rad #5``, ``C#``) are untouched because the pattern only
+    matches hashes at line start followed by whitespace.
+    """
+    def replace(match: re.Match) -> str:
+        title = match.group(1).strip().strip("*").strip()
+        if not title:
+            return ""
+        # Trailing newline separates the label from the body text so the
+        # label renders as its own paragraph instead of inline bold.
+        return f"**{title}**\n"
+
+    return HEADER_PATTERN.sub(replace, text)
+
+
 def strip_ai_tells(text: str) -> tuple[str, list[str]]:
     """Remove known AI tell phrases. Returns (cleaned_text, tells_found)."""
     found: list[str] = []
@@ -164,8 +189,12 @@ def strip_ai_tells(text: str) -> tuple[str, list[str]]:
                 found.append(match.group(0).strip())
             cleaned = regex.sub("", cleaned)
 
-    cleaned = re.sub(r"\s{2,}", " ", cleaned)
-    cleaned = re.sub(r"\s+([,.;:!?])", r"\1", cleaned)
+    # Collapse runs of spaces/tabs but keep newlines: paragraph breaks carry
+    # the section structure that st.markdown renders, so flattening them
+    # would merge sections into one block of text.
+    cleaned = re.sub(r"[^\S\n]{2,}", " ", cleaned)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    cleaned = re.sub(r"[^\S\n]+([,.;:!?])", r"\1", cleaned)
     cleaned = re.sub(r"^[\s,.;:!?]+", "", cleaned)
     return cleaned, found
 
@@ -214,7 +243,7 @@ def normalize_dashes(text: str) -> str:
     cleaned = DASH_PATTERN.sub(", ", cleaned)
     cleaned = SPACED_HYPHEN_PATTERN.sub(", ", cleaned)
     cleaned = re.sub(r",\s*,", ",", cleaned)
-    cleaned = re.sub(r"\s{2,}", " ", cleaned)
+    cleaned = re.sub(r"[^\S\n]{2,}", " ", cleaned)
     return cleaned
 
 
@@ -335,12 +364,20 @@ def humanize(
 ) -> HumanizeResult:
     """Run the full humanizer pipeline.
 
-    Order: strip AI tells, normalize dashes, enforce Swedish numbers,
-    validate structure. Each step is reported in transformations_applied.
+    Order: normalize markdown headers, strip AI tells, normalize dashes,
+    enforce Swedish numbers, validate structure. Each step is reported in
+    transformations_applied.
+
+    Header normalization must run first: strip_ai_tells collapses blank
+    lines, after which a header may no longer sit at the start of a line.
     """
     transformations: list[str] = []
 
-    cleaned, tells = strip_ai_tells(text)
+    cleaned = normalize_markdown_headers(text)
+    if cleaned != text:
+        transformations.append("normalize_markdown_headers")
+
+    cleaned, tells = strip_ai_tells(cleaned)
     if tells:
         transformations.append("strip_ai_tells")
 

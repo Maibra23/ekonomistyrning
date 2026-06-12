@@ -8,6 +8,7 @@ from utils.humanizer import (
     enforce_swedish_numbers,
     humanize,
     normalize_dashes,
+    normalize_markdown_headers,
     normalize_swedish_terminology,
     strip_ai_tells,
     strip_latex,
@@ -344,6 +345,103 @@ def test_humanize_without_glossary_has_empty_corrections() -> None:
     """Backwards compatibility: existing callers omit glossary entirely."""
     result = humanize("NPV är 12 345 kr.")
     assert result.terminology_corrections == []
+
+
+# ---------------------------------------------------------------------------
+# Markdown header normalization (uniform text size in st.markdown output)
+# ---------------------------------------------------------------------------
+
+
+def test_normalize_headers_demotes_h2_to_bold():
+    text = "## Antagande\nLinjäritet inom intervallet."
+    cleaned = normalize_markdown_headers(text)
+    assert "##" not in cleaned
+    assert "**Antagande**" in cleaned
+
+
+def test_normalize_headers_all_levels():
+    text = "# Rubrik ett\n### Rubrik tre\n###### Rubrik sex"
+    cleaned = normalize_markdown_headers(text)
+    assert "#" not in cleaned
+    assert "**Rubrik ett**" in cleaned
+    assert "**Rubrik tre**" in cleaned
+    assert "**Rubrik sex**" in cleaned
+
+
+def test_normalize_headers_strips_existing_bold_markers():
+    text = "## **Tolkning**\nResultatet är positivt."
+    cleaned = normalize_markdown_headers(text)
+    assert "****" not in cleaned
+    assert "**Tolkning**" in cleaned
+
+
+def test_normalize_headers_removes_closing_hashes():
+    text = "## Beräkning ##\nNPV blir 12 345 kr."
+    cleaned = normalize_markdown_headers(text)
+    assert "#" not in cleaned
+    assert "**Beräkning**" in cleaned
+
+
+def test_normalize_headers_ignores_inline_hash():
+    text = "Se rad #5 i tabellen och C# som språk."
+    cleaned = normalize_markdown_headers(text)
+    assert cleaned == text
+
+
+def test_normalize_headers_leaves_body_text_unchanged():
+    text = "## Antagande\nVi antar 8 % kalkylränta.\n\nVanlig mening utan rubrik."
+    cleaned = normalize_markdown_headers(text)
+    assert "Vi antar 8 % kalkylränta." in cleaned
+    assert "Vanlig mening utan rubrik." in cleaned
+
+
+def test_normalize_headers_puts_label_on_own_paragraph():
+    text = "## Beräkning\nNPV blir 12 345 kr."
+    cleaned = normalize_markdown_headers(text)
+    assert "**Beräkning**\n\nNPV blir 12 345 kr." in cleaned
+
+
+def test_strip_ai_tells_preserves_paragraph_breaks():
+    text = "Stycke ett om kostnader.\n\nStycke två om intäkter."
+    cleaned, _ = strip_ai_tells(text)
+    assert "\n\n" in cleaned
+
+
+def test_normalize_dashes_preserves_paragraph_breaks():
+    text = "NPV är positiv — bra.\n\nNästa stycke."
+    cleaned = normalize_dashes(text)
+    assert "\n\n" in cleaned
+
+
+def test_humanize_keeps_sections_as_paragraphs():
+    text = (
+        "## Antagande\nLinjäritet.\n\n"
+        "## Beräkning\nNPV blir 12 345 kr."
+    )
+    result = humanize(text)
+    assert "**Antagande**\n\nLinjäritet.\n\n**Beräkning**\n\nNPV" in result.text
+
+
+def test_humanize_pipeline_demotes_headers():
+    text = (
+        "## Antagande\nLinjäritet.\n\n"
+        "## Beräkning\nNPV blir 12 345 kr.\n\n"
+        "## Tolkning\nLönsam.\n\n"
+        "## Källor och förbehåll\nNuvärdesmetoden."
+    )
+    result = humanize(
+        text,
+        required_sections=["Antagande", "Beräkning", "Tolkning", "Källor och förbehåll"],
+    )
+    assert "#" not in result.text
+    assert "**Antagande**" in result.text
+    assert result.structure_valid is True
+    assert "normalize_markdown_headers" in result.transformations_applied
+
+
+def test_humanize_without_headers_skips_transformation():
+    result = humanize("**Antagande**\nNPV är 12 345 kr.")
+    assert "normalize_markdown_headers" not in result.transformations_applied
 
 
 def test_humanize_clean_swedish_text_unchanged():

@@ -121,6 +121,7 @@ ABSOLUTA REGLER
 - Vid tveksamhet om svensk term, använd terminologin i ORDLISTA strikt.
 - Använd endast siffror som är givna i användarens input. Hitta inte på tal.
 - Använd aldrig em streck eller en streck. Använd kommatecken eller meningsuppdelning istället.
+- Använd aldrig Markdown-rubriker (#, ## eller ###). Skriv avsnittsnamn i fetstil med dubbla asterisker, till exempel **Antagande**, så att all text visas i samma textstorlek.
 - Skriv ALDRIG LaTeX eller matematisk markup. Inga snedstreck-kommandon (\\frac, \\text, \\times, \\cdot), inga dollartecken ($), inga klammerparenteser för matte. Skriv beräkningar i klartext, till exempel "599 kr minus 325 kr blir 274 kr" eller "274 kr gånger 35 000 stycken".
 - Skriv subtraktion med ordet "minus" eller på egen rad, aldrig med ett ensamt bindestreck mellan tal.
 - Avrunda tal till något som är begripligt: hela enheter för antal (nollpunkt 15 328 stycken, inte 15 328,4672) och högst två decimaler för kronbelopp. Uttryck alltid säkerhetsmarginal och liknande andelar i procent (56,2 %); om indata anges som decimaltal (0,562) ska du räkna om det till procent i texten.
