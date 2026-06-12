@@ -16,11 +16,13 @@ from utils.grounding_ui import show_grounding_warning
 from utils.humanizer import humanize
 from utils.investering import (
     annuity,
+    compare_investments,
     irr,
     monte_carlo_npv,
     npv,
     npv_with_inflation_tax,
     payback,
+    ranking_conflict,
     sensitivity_analysis,
     tornado_analysis,
 )
@@ -251,11 +253,12 @@ st.html(
     )
 )
 
-tab1, tab2, tab3, tab4 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "Grundläggande metoder",
     "Känslighetsanalys",
     "Inflation och skatt",
     "Monte Carlo",
+    "Jämförelse",
 ])
 
 # ===========================================================================
@@ -1364,5 +1367,179 @@ with tab4:
         clear_state("investering_monte_carlo")
         st.session_state["_reset_inv_mc"] = True
         st.rerun()
+
+    st.html(footer_note(updated=APP_UPDATED))
+
+# ===========================================================================
+# TAB 5 — JÄMFÖRELSE AV ALTERNATIV (kapitel 10: val mellan investeringar)
+# ===========================================================================
+
+with tab5:
+    st.markdown(
+        "Ställ två investeringsalternativ mot varandra med samma kalkylränta. "
+        "NPV är beslutskriteriet; IRR och payback visas som komplement."
+    )
+
+    _CMP_DEFAULTS = {
+        "cmp_rate": float(st.session_state["inv_rate"]),
+        "cmp_a_name": "Alternativ A",
+        "cmp_a_initial": float(st.session_state["inv_initial"]),
+        "cmp_a_cf": 300_000.0,
+        "cmp_a_years": int(st.session_state["inv_years"]),
+        "cmp_b_name": "Alternativ B",
+        "cmp_b_initial": float(st.session_state["inv_initial"]) * 1.5,
+        "cmp_b_cf": 420_000.0,
+        "cmp_b_years": int(st.session_state["inv_years"]),
+    }
+    for _k, _v in _CMP_DEFAULTS.items():
+        if _k not in st.session_state:
+            st.session_state[_k] = _v
+
+    # Restore saved comparison inputs once per session
+    _cmp_saved = load_state("investering_jamforelse")
+    if _cmp_saved is not None:
+        for _k in _CMP_DEFAULTS:
+            if _k in _cmp_saved:
+                if _k.endswith("_name"):
+                    st.session_state[_k] = str(_cmp_saved[_k])
+                elif _k.endswith("_years"):
+                    st.session_state[_k] = int(_cmp_saved[_k])
+                else:
+                    st.session_state[_k] = float(_cmp_saved[_k])
+
+    with st.form("inv_cmp_form"):
+        cmp_rate = st.number_input(
+            "Gemensam kalkylränta (%)",
+            min_value=0.0,
+            max_value=50.0,
+            step=0.5,
+            format="%.1f",
+            key="cmp_rate",
+            help="Samma kalkylränta används för båda alternativen",
+        )
+        col_a, col_b = st.columns(2, gap="large")
+        with col_a:
+            st.markdown("**Alternativ A**")
+            cmp_a_name = st.text_input("Namn", key="cmp_a_name")
+            cmp_a_initial = st.number_input(
+                "Grundinvestering (kr)",
+                min_value=0.0, step=50_000.0, format="%.0f", key="cmp_a_initial",
+            )
+            cmp_a_cf = st.number_input(
+                "Årligt kassaflöde (kr)",
+                min_value=0.0, step=10_000.0, format="%.0f", key="cmp_a_cf",
+            )
+            cmp_a_years = st.number_input(
+                "Livslängd (år)", min_value=1, max_value=30, step=1, key="cmp_a_years",
+            )
+        with col_b:
+            st.markdown("**Alternativ B**")
+            cmp_b_name = st.text_input("Namn", key="cmp_b_name")
+            cmp_b_initial = st.number_input(
+                "Grundinvestering (kr)",
+                min_value=0.0, step=50_000.0, format="%.0f", key="cmp_b_initial",
+            )
+            cmp_b_cf = st.number_input(
+                "Årligt kassaflöde (kr)",
+                min_value=0.0, step=10_000.0, format="%.0f", key="cmp_b_cf",
+            )
+            cmp_b_years = st.number_input(
+                "Livslängd (år)", min_value=1, max_value=30, step=1, key="cmp_b_years",
+            )
+        st.form_submit_button("Uppdatera värden", type="primary")
+
+    save_state(
+        "investering_jamforelse",
+        {
+            "cmp_rate": cmp_rate,
+            "cmp_a_name": cmp_a_name,
+            "cmp_a_initial": cmp_a_initial,
+            "cmp_a_cf": cmp_a_cf,
+            "cmp_a_years": int(cmp_a_years),
+            "cmp_b_name": cmp_b_name,
+            "cmp_b_initial": cmp_b_initial,
+            "cmp_b_cf": cmp_b_cf,
+            "cmp_b_years": int(cmp_b_years),
+        },
+    )
+
+    _cmp_projects = [
+        {
+            "name": cmp_a_name.strip() or "Alternativ A",
+            "initial_investment": cmp_a_initial,
+            "cash_flows": [cmp_a_cf] * int(cmp_a_years),
+        },
+        {
+            "name": cmp_b_name.strip() or "Alternativ B",
+            "initial_investment": cmp_b_initial,
+            "cash_flows": [cmp_b_cf] * int(cmp_b_years),
+        },
+    ]
+    cmp_df = compare_investments(_cmp_projects, discount_rate=cmp_rate / 100.0)
+
+    _best_row = cmp_df.loc[cmp_df["rank_npv"] == 1].iloc[0]
+    _other_row = cmp_df.loc[cmp_df["rank_npv"] != 1].iloc[0]
+
+    render_kpi_row([
+        kpi_card(
+            f"NPV: {row['name']}",
+            format_sek(row["npv"]),
+            variant="success" if row["rank_npv"] == 1 and row["npv"] > 0 else (
+                "danger" if row["npv"] < 0 else "default"
+            ),
+            delta="Högst nuvärde" if row["rank_npv"] == 1 else None,
+            delta_direction="up",
+        )
+        for _, row in cmp_df.iterrows()
+    ])
+
+    _cmp_table = pd.DataFrame({
+        "Mått": ["NPV (kr)", "IRR", "Payback", "Annuitet av NPV (kr/år)"],
+        **{
+            str(row["name"]): [
+                format_sek(row["npv"]),
+                format_percent(row["irr"]) if row["irr"] is not None and not pd.isna(row["irr"]) else "Ej definierad",
+                format_years(row["payback"]) if row["payback"] is not None and not pd.isna(row["payback"]) else "Ej återbetald",
+                format_sek(row["annuity"]),
+            ]
+            for _, row in cmp_df.iterrows()
+        },
+    })
+    st.dataframe(_cmp_table, use_container_width=True, hide_index=True)
+
+    fig_cmp = go.Figure()
+    fig_cmp.add_trace(go.Bar(
+        x=cmp_df["name"],
+        y=cmp_df["npv"],
+        marker_color=[
+            COLORS["success"] if v >= 0 else COLORS["danger"] for v in cmp_df["npv"]
+        ],
+        text=[format_sek(v) for v in cmp_df["npv"]],
+        textposition="outside",
+    ))
+    fig_cmp.add_hline(y=0, line_dash="dot", line_color=COLORS["neutral"], line_width=1)
+    apply_layout(fig_cmp, title="NPV per alternativ", height=360)
+    st.plotly_chart(fig_cmp, use_container_width=True)
+
+    if _best_row["npv"] <= 0 and _other_row["npv"] <= 0:
+        st.error(
+            "Båda alternativen har negativt eller noll nuvärde vid "
+            f"{cmp_rate:.1f} % kalkylränta. Rekommendationen är att avstå."
+        )
+    else:
+        st.success(
+            f"Rekommendation: **{_best_row['name']}** har högst nuvärde "
+            f"({format_sek(_best_row['npv'])} mot "
+            f"{format_sek(_other_row['npv'])}). NPV är beslutskriteriet "
+            "vid val mellan alternativ."
+        )
+    if ranking_conflict(cmp_df):
+        st.info(
+            "Observera: IRR rangordnar alternativen annorlunda än NPV. Det "
+            "är den klassiska skalkonflikten: ett mindre projekt kan ha "
+            "högre avkastning i procent medan ett större skapar mer värde "
+            "i kronor. Vid val mellan alternativ är det nuvärdet i kronor "
+            "som maximerar förmögenheten."
+        )
 
     st.html(footer_note(updated=APP_UPDATED))
