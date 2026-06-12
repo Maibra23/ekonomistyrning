@@ -14,7 +14,7 @@ import pandas as pd
 try:
     import numpy_financial as npf
 except ImportError:  # pragma: no cover
-    npf = None  # type: ignore[assignment]
+    npf = None
 
 
 def npv(
@@ -419,7 +419,7 @@ def monte_carlo_npv(
     if cashflow_correlation == 0.0:
         # Legacy path: keeps results bit-identical for existing seeds.
         cf_matrix = np.column_stack(
-            [rng.normal(mean, std, n_simulations) for mean, std in zip(cash_flow_means, cash_flow_stds)]
+            [rng.normal(mean, std, n_simulations) for mean, std in zip(cash_flow_means, cash_flow_stds, strict=True)]
         )
     else:
         # Constant-correlation matrix is positive definite for rho in

@@ -9,7 +9,6 @@ import pytest
 
 from utils.kalkyl import abc_calc, contribution_calc, self_cost_palagg, step_calc
 
-
 # ---------------------------------------------------------------------------
 # self_cost_palagg
 # ---------------------------------------------------------------------------

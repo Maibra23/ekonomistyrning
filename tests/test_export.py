@@ -47,10 +47,12 @@ def test_export_sheet_name_sanitized():
 
 def test_export_with_chart_produces_valid_xlsx():
     """A chart spec should be embedded without breaking the workbook."""
-    from utils.export import export_to_excel
-    from openpyxl import load_workbook
     import io
+
     import pandas as pd
+    from openpyxl import load_workbook
+
+    from utils.export import export_to_excel
 
     df = pd.DataFrame(
         {"Post": ["A", "B", "C"], "Belopp": [100, 200, 300]},
@@ -79,8 +81,9 @@ def test_export_with_chart_produces_valid_xlsx():
 
 def test_export_no_charts_for_sheet_is_silent():
     """Charts mapping that doesn't target a sheet should not raise."""
-    from utils.export import export_to_excel
     import pandas as pd
+
+    from utils.export import export_to_excel
 
     df = pd.DataFrame({"A": [1, 2], "B": [3, 4]})
     raw = export_to_excel(
@@ -91,10 +94,12 @@ def test_export_no_charts_for_sheet_is_silent():
 
 
 def test_export_chart_unknown_type_falls_back_to_column():
-    from utils.export import export_to_excel
-    from openpyxl import load_workbook
     import io
+
     import pandas as pd
+    from openpyxl import load_workbook
+
+    from utils.export import export_to_excel
 
     df = pd.DataFrame({"A": [1, 2], "B": [3, 4]})
     raw = export_to_excel(

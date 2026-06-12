@@ -119,6 +119,7 @@ def render_landing() -> None:
     link_cols = st.columns(5)
     for col, (label, path) in zip(
         link_cols,
+        # strict: exactly one link per column by construction
         [
             ("Kalkylering →", "pages/1_Kalkyl.py"),
             ("Investering →", "pages/2_Investering.py"),
@@ -126,6 +127,7 @@ def render_landing() -> None:
             ("Standardkostnadsanalys →", "pages/4_Standardkostnadsanalys.py"),
             ("Kunskapstest →", "pages/5_Kunskapstest.py"),
         ],
+        strict=True,
     ):
         with col:
             st.page_link(path, label=label)

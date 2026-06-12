@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Callable
+from collections.abc import Callable
 
 import streamlit as st
 

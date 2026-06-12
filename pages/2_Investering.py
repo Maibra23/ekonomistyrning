@@ -12,6 +12,7 @@ import streamlit as st
 from utils.charts import COLORS, apply_layout
 from utils.export import export_to_excel
 from utils.formatting import format_percent, format_sek, format_years
+from utils.grounding_ui import show_grounding_warning
 from utils.humanizer import humanize
 from utils.investering import (
     annuity,
@@ -23,7 +24,6 @@ from utils.investering import (
     sensitivity_analysis,
     tornado_analysis,
 )
-from utils.grounding_ui import show_grounding_warning
 from utils.llm import (
     LLMSessionCapError,
     LLMUnavailableError,
@@ -32,10 +32,10 @@ from utils.llm import (
     verify_grounding,
 )
 from utils.prompts import (
+    FALLBACK_TEMPLATES,
     TUTOR_REQUIRED_SECTIONS,
     build_investering_explanation_prompt,
     build_qa_prompt,
-    FALLBACK_TEMPLATES,
 )
 from utils.scenario_continuity import render_adopt_button
 from utils.scenarios import generate_scenario, set_current_scenario
@@ -52,7 +52,6 @@ from utils.ui import (
     render_session_cap_card,
     render_sidebar,
 )
-
 
 # Difficulty label to API code mapping used by the LLM scenario generator
 _DIFFICULTY_OPTIONS = ("Lätt", "Medel", "Svår")

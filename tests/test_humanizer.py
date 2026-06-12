@@ -14,7 +14,6 @@ from utils.humanizer import (
     validate_structure,
 )
 
-
 # ---------------------------------------------------------------------------
 # LaTeX stripping (Day 10 hardening: tutor text must never leak raw LaTeX)
 # ---------------------------------------------------------------------------

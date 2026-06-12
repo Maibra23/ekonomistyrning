@@ -23,7 +23,6 @@ from utils.prompts import (
     build_scenario_generation_prompt,
 )
 
-
 # ---------------------------------------------------------------------------
 # Per module key contracts (used by validation and fallback)
 # ---------------------------------------------------------------------------

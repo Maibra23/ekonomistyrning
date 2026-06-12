@@ -16,7 +16,6 @@ import pytest
 
 from utils.llm import LLMUnavailableError
 from utils.prompts import (
-    SUPPORTED_SCENARIO_DIFFICULTIES,
     SUPPORTED_SCENARIO_MODULES,
     build_scenario_generation_prompt,
 )

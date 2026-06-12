@@ -13,12 +13,11 @@ See docs/PRD.md section 14 and docs/METHODOLOGY.md section 6.10.
 from __future__ import annotations
 
 import json
-import os
 import random
 import re
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 # Add project root to path
@@ -31,16 +30,14 @@ from utils.llm import (
     LLMUnavailableError,
     get_hf_token,
     get_llm_config,
-    extract_numbers,
     verify_grounding,
 )
 from utils.prompts import (
-    build_kalkyl_explanation_prompt,
-    build_investering_explanation_prompt,
     build_budget_consistency_prompt,
+    build_investering_explanation_prompt,
+    build_kalkyl_explanation_prompt,
     build_standardkost_interpretation_prompt,
 )
-
 
 # ---------------------------------------------------------------------------
 # Load fixtures
@@ -169,7 +166,7 @@ def run_evaluation(verbose: bool = True) -> dict:
     modules = ["kalkyl", "investering", "budget", "standardkost"]
 
     results = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "model": config["model"],
         "provider": config["provider"],
         "modules": {},
@@ -300,7 +297,7 @@ def print_random_samples(results: dict, n_per_module: int = 3) -> None:
             print(f"  Structure: {sample.get('structure_valid')}")
             print(f"  Tells: {sample.get('tells_list', [])}")
             print(f"  English: {sample.get('english_words_list', [])}")
-            print(f"  Text (first 500 chars):")
+            print("  Text (first 500 chars):")
             print(f"  {sample.get('cleaned_text', '(empty)')}")
             print()
 
@@ -311,7 +308,7 @@ def print_random_samples(results: dict, n_per_module: int = 3) -> None:
 
 if __name__ == "__main__":
     print("LLM Evaluation Harness")
-    print(f"Project: Ekonomistyrning Sandbox")
+    print("Project: Ekonomistyrning Sandbox")
     print(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
 
     results = run_evaluation(verbose=True)

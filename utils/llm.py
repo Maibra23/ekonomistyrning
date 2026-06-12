@@ -12,8 +12,8 @@ from __future__ import annotations
 import hashlib
 import os
 import re
+from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Iterator
 
 # Load .env file if python-dotenv is available
 try:
@@ -335,9 +335,9 @@ def cached_chat(
     except ImportError:
         # No Streamlit runtime (e.g. pytest): call directly, no cache/counting.
         if get_session_calls_remaining() <= 0:
-            raise LLMSessionCapError(SESSION_CAP_MESSAGE)
+            raise LLMSessionCapError(SESSION_CAP_MESSAGE) from None
         if get_daily_calls_remaining() <= 0:
-            raise LLMDailyCapError(DAILY_CAP_MESSAGE)
+            raise LLMDailyCapError(DAILY_CAP_MESSAGE) from None
         client = LLMClient(token=config.token, model=config.model, provider=config.provider)
         result = client.chat(
             system_prompt, user_prompt, max_new_tokens=max_new_tokens, temperature=temperature

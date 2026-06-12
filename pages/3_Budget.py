@@ -18,18 +18,18 @@ from utils.budget import (
 from utils.charts import COLORS, apply_layout
 from utils.export import export_to_excel
 from utils.formatting import format_sek
+from utils.humanizer import humanize
 from utils.llm import (
     LLMSessionCapError,
     LLMUnavailableError,
     cached_chat,
     is_llm_available,
 )
-from utils.humanizer import humanize
 from utils.prompts import (
+    FALLBACK_TEMPLATES,
     TUTOR_REQUIRED_SECTIONS,
     build_budget_consistency_prompt,
     build_qa_prompt,
-    FALLBACK_TEMPLATES,
 )
 from utils.scenario_continuity import render_adopt_button
 from utils.scenarios import generate_scenario, set_current_scenario
