@@ -17,7 +17,7 @@ An interactive practice environment for Swedish accounting management students. 
 | Modul | Beskrivning | Kapitel |
 |-------|-------------|---------|
 | **Kalkylering** | Självkostnadskalkyl via pålägg, bidragskalkyl och ABC-kalkyl med waterfall-diagram | 4, 6, 7, 8 |
-| **Investeringsbedömning** | NPV, IRR, payback, annuitet, känslighetsanalys, inflation och skatt, Monte Carlo med upp till 50 000 iterationer | 10 |
+| **Investeringsbedömning** | NPV, IRR, payback, annuitet, känslighetsanalys med tornadodiagram, inflation och skatt, Monte Carlo (upp till 50 000 iterationer, korrelerade kassaflöden) samt jämförelse av två alternativ | 10 |
 | **Budget och budgetering** | Resultatbudget, likviditetsbudget och balansbudget med automatisk integration och konsistenskontroll | 13, 14, 15 |
 | **Standardkostnadsanalys** | Avvikelsedekomposition i volym, pris och effektivitet med färgkodade diagram | 17 |
 | **Kunskapstest** | LLM-genererade scenariofrågor per kapitelkluster, numeriska svar verifieras mot kalkylator | 4 till 17 |

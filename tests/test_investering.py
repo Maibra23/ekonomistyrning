@@ -446,3 +446,93 @@ class TestCorrelatedMonteCarlo:
             monte_carlo_npv(**self._kwargs(cashflow_correlation=-0.2))
         with pytest.raises(ValueError):
             monte_carlo_npv(**self._kwargs(cashflow_correlation=1.5))
+
+
+class TestCompareInvestments:
+    """Side-by-side appraisal of alternatives (review roadmap item 16)."""
+
+    def _projects(self):
+        return [
+            {
+                "name": "Maskin A",
+                "initial_investment": 1_000_000.0,
+                "cash_flows": [300_000.0] * 5,
+            },
+            {
+                "name": "Maskin B",
+                "initial_investment": 1_500_000.0,
+                "cash_flows": [420_000.0] * 5,
+            },
+        ]
+
+    def test_returns_one_row_per_project_with_metrics(self):
+        from utils.investering import compare_investments
+
+        df = compare_investments(self._projects(), discount_rate=0.10)
+        assert list(df["name"]) == ["Maskin A", "Maskin B"]
+        for col in ("npv", "irr", "payback", "annuity", "rank_npv"):
+            assert col in df.columns
+
+    def test_npv_matches_single_project_function(self):
+        from utils.investering import compare_investments, npv
+
+        projects = self._projects()
+        df = compare_investments(projects, discount_rate=0.10)
+        expected = npv([300_000.0] * 5, 0.10, 1_000_000.0)
+        assert abs(df.loc[df["name"] == "Maskin A", "npv"].iloc[0] - expected) < 1e-6
+
+    def test_rank_is_by_npv_descending(self):
+        from utils.investering import compare_investments
+
+        df = compare_investments(self._projects(), discount_rate=0.10)
+        best = df.loc[df["rank_npv"] == 1, "name"].iloc[0]
+        # A: 300 000 x 3,7908 - 1 000 000 = +137k beats
+        # B: 420 000 x 3,7908 - 1 500 000 = +92k at 10%
+        assert best == "Maskin A"
+
+    def test_never_recovered_payback_is_none(self):
+        from utils.investering import compare_investments
+
+        projects = [{
+            "name": "Förlust",
+            "initial_investment": 1_000_000.0,
+            "cash_flows": [50_000.0] * 3,
+        }]
+        df = compare_investments(projects, discount_rate=0.10)
+        assert df["payback"].iloc[0] is None or df["payback"].isna().iloc[0]
+
+    def test_requires_at_least_two_for_ranking_conflict_flag(self):
+        from utils.investering import compare_investments, ranking_conflict
+
+        df = compare_investments(self._projects(), discount_rate=0.10)
+        # Same-scale conventional projects: NPV and IRR rankings may or may
+        # not agree; the helper must answer without raising.
+        assert isinstance(ranking_conflict(df), bool)
+
+    def test_ranking_conflict_detected(self):
+        from utils.investering import compare_investments, ranking_conflict
+
+        # Classic scale conflict: small project with huge IRR, large
+        # project with bigger absolute NPV.
+        projects = [
+            {
+                "name": "Liten",
+                "initial_investment": 100_000.0,
+                "cash_flows": [80_000.0] * 3,
+            },
+            {
+                "name": "Stor",
+                "initial_investment": 2_000_000.0,
+                "cash_flows": [900_000.0] * 3,
+            },
+        ]
+        df = compare_investments(projects, discount_rate=0.05)
+        assert ranking_conflict(df) is True
+
+    def test_empty_projects_raises(self):
+        import pytest
+
+        from utils.investering import compare_investments
+
+        with pytest.raises(ValueError):
+            compare_investments([], discount_rate=0.10)

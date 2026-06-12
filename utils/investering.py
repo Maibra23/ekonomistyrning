@@ -448,3 +448,62 @@ def monte_carlo_npv(
         "p95": float(np.percentile(npvs, 95)),
         "prob_positive_npv": float(np.mean(npvs > 0)),
     }
+
+
+def compare_investments(
+    projects: list[dict], discount_rate: float
+) -> pd.DataFrame:
+    """Appraise several alternatives side by side (kapitel 10: val mellan alternativ).
+
+    Args:
+        projects: Each dict has "name", "initial_investment" and
+            "cash_flows" (t=1..n). At least one project is required.
+        discount_rate: Shared kalkylränta as a decimal.
+
+    Returns:
+        DataFrame with one row per project and columns ["name", "npv",
+        "irr", "irr_message", "payback", "annuity", "rank_npv",
+        "rank_irr"]. irr/payback are None when undefined. rank_npv is 1
+        for the highest NPV; rank_irr ranks defined IRRs only.
+    """
+    if not projects:
+        raise ValueError("Minst ett projekt krävs för jämförelse.")
+
+    rows = []
+    for project in projects:
+        initial = float(project["initial_investment"])
+        flows = [float(cf) for cf in project["cash_flows"]]
+        npv_val = npv(flows, discount_rate, initial)
+        irr_val, irr_msg = irr([-initial, *flows])
+        payback_val = payback(flows, initial)
+        annuity_val = annuity(npv_val, discount_rate, len(flows)) if flows else 0.0
+        rows.append({
+            "name": str(project["name"]),
+            "npv": npv_val,
+            "irr": irr_val,
+            "irr_message": irr_msg,
+            "payback": payback_val,
+            "annuity": annuity_val,
+        })
+
+    df = pd.DataFrame(rows)
+    df["rank_npv"] = df["npv"].rank(ascending=False, method="min").astype(int)
+    # IRR can be undefined; rank only the defined values.
+    df["rank_irr"] = df["irr"].rank(ascending=False, method="min")
+    return df
+
+
+def ranking_conflict(comparison: pd.DataFrame) -> bool:
+    """True when NPV and IRR rank the alternatives differently.
+
+    The classic scale conflict from kapitel 10: a small project can have
+    the highest IRR while a larger one creates more absolute value. NPV
+    is the decision criterion; the flag exists so the UI can teach why.
+    Projects with undefined IRR are excluded from the check.
+    """
+    defined = comparison.dropna(subset=["irr"])
+    if len(defined) < 2:
+        return False
+    npv_order = defined.sort_values("npv", ascending=False)["name"].tolist()
+    irr_order = defined.sort_values("irr", ascending=False)["name"].tolist()
+    return npv_order != irr_order
