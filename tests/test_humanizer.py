@@ -151,6 +151,50 @@ def test_normalize_dashes_en_dash():
     assert "\u2013" not in cleaned
 
 
+def test_normalize_dashes_preserves_negative_number_unary_minus():
+    # A minus sign directly attached to a number is a negative value, not a
+    # sentence dash. Turning it into a comma corrupts the figure (a negative
+    # NPV would read as positive).
+    text = "Resultatet blir −52 303 kr."
+    cleaned = normalize_dashes(text)
+    assert ", 52 303" not in cleaned
+    assert "-52 303" in cleaned
+
+
+def test_normalize_dashes_preserves_negative_result_in_equation():
+    text = "NPV = 947 696,69 kr − 1 000 000 kr = −52 303,31 kr"
+    cleaned = normalize_dashes(text)
+    # Subtraction operator becomes the word "minus"...
+    assert "minus" in cleaned
+    # ...but the negative result keeps a real minus sign.
+    assert "-52 303,31" in cleaned
+    assert "= , 52 303" not in cleaned
+
+
+def test_normalize_dashes_en_dash_subtraction_between_numbers():
+    # The model sometimes emits an en-dash as the subtraction operator.
+    text = "947 696,69 kr – 1 000 000 kr"
+    cleaned = normalize_dashes(text)
+    assert "minus" in cleaned
+    assert ", 1 000 000" not in cleaned
+
+
+def test_negative_number_survives_full_humanize_for_grounding():
+    from utils.llm import extract_numbers
+
+    text = (
+        "Antagande Vi diskonterar kassafloden.\n\n"
+        "Berakning NPV = 947 696,69 kr − 1 000 000 kr = −52 303,31 kr.\n\n"
+        "Tolkning NPV ar negativt.\n\n"
+        "Kallor Kapitel 10."
+    )
+    result = humanize(text)
+    nums = extract_numbers(result.text)
+    # The negative NPV must be recoverable as a negative number so the
+    # grounding check matches the computed value.
+    assert any(abs(n - (-52303.31)) < 1.0 for n in nums)
+
+
 def test_normalize_dashes_preserves_compound_hyphens():
     text = "Detta är en två-stegs analys av kostnads-strukturen."
     cleaned = normalize_dashes(text)
