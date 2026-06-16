@@ -37,9 +37,8 @@ tests/output/
 !data/*.xlsx
 tests/eval_results_*.json
 
-# Local agent harness scratch and settings
-.claude-tmp/
-.claude/
+# Local dev tooling scratch directories
+.*-tmp/
 
 # Server-side daily LLM budget counter (runtime state, never tracked)
 data/.llm_daily_usage.json
