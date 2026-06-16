@@ -724,10 +724,27 @@ with tab_bid:
         ))
         apply_layout(fig_be, title="Nollpunktsdiagram (kr vs antal enheter)", height=380)
         # Label both axes and let Plotly expand the margins so the tick labels
-        # and titles are never clipped or hidden behind the legend.
+        # and titles are never clipped.
         fig_be.update_xaxes(title_text="Antal enheter (st)", automargin=True)
         fig_be.update_yaxes(title_text="Kronor (kr)", automargin=True)
-        fig_be.update_layout(margin={"l": 70, "r": 30, "t": 60, "b": 90})
+        # apply_layout places a horizontal legend below the plot (y=-0.25),
+        # which collides with the x-axis title "Antal enheter (st)". In a
+        # break-even chart both lines rise to the right, so the upper-left
+        # corner is empty — move the legend inside there instead, freeing the
+        # bottom margin for the axis title.
+        fig_be.update_layout(
+            legend={
+                "orientation": "v",
+                "yanchor": "top",
+                "y": 0.98,
+                "xanchor": "left",
+                "x": 0.02,
+                "bgcolor": "rgba(255, 255, 255, 0.75)",
+                "bordercolor": COLORS["neutral_light"],
+                "borderwidth": 1,
+            },
+            margin={"l": 70, "r": 30, "t": 60, "b": 60},
+        )
         st.plotly_chart(fig_be, use_container_width=True)
 
     # Build inputs/outputs dicts for LLM
