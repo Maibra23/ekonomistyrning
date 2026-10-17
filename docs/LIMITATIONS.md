@@ -125,8 +125,7 @@ så cacheträffar och oavsiktliga rerenderingar (widget-ändring, chatt,
 flikbyte) är gratis. Inmatningssektionerna ligger nu i `st.form` med en
 "Uppdatera värden"-knapp, så tutorn avfyras bara vid bekräftelse i stället
 för vid varje tangenttryck. Tidigare räknades varje rerun mot taket, vilket
-tömde budgeten enbart genom att man experimenterade. Se
-[CHANGELOG.md](CHANGELOG.md) avsnitt C.
+tömde budgeten enbart genom att man experimenterade.
 
 **Kvarvarande risk:** En entusiastisk användare som kör många quiz eller
 bekräftar många olika scenarier kan fortfarande slå i taket mitt i en

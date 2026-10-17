@@ -35,7 +35,6 @@ Levererat efter tio dagars bygge och en day 10 hardening pass:
 - Liggande balansbudgetdiagram och förklarande verktygstips
 - Svensk ordlista i systempromten
 - Begränsningssektion i README, full inventering i docs/LIMITATIONS.md
-- Samlad ändringslogg i docs/CHANGELOG.md
 
 ---
 

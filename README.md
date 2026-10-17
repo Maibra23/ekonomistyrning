@@ -141,14 +141,10 @@ ekonomistyrning/
 ├── docs/
 │   ├── PRD.md                    # Produktkrav
 │   ├── METHODOLOGY.md            # Formler och antaganden
-│   ├── CHECKLIST.md              # Terminologigranskning
-│   ├── DESIGN.md                 # Designbeslut
-│   ├── CHANGELOG.md              # Ändringar i grenen day-10-hardening
 │   ├── LIMITATIONS.md            # Kända begränsningar
 │   ├── ROADMAP.md                # Framåtblickande plan
-│   ├── LINKEDIN_POST.md          # LinkedIn-inlägg
-│   ├── CV_BLURB.md               # CV-punkt
-│   └── DEMO_SCRIPT.md            # Demomanus
+│   ├── PAGE_WALKTHROUGH.md       # Genomgång sida för sida
+│   └── IMPROVEMENTS.md           # Utvärdering och förbättringsförslag
 ├── .streamlit/
 │   ├── config.toml               # Tema
 │   └── secrets.toml.example      # Mall för hemligheter
@@ -160,9 +156,8 @@ ekonomistyrning/
 
 - [docs/PRD.md](docs/PRD.md) - Vision, målanvändare, scope, success metrics, risk register
 - [docs/METHODOLOGY.md](docs/METHODOLOGY.md) - Alla formler, antaganden och kapitelreferenser
-- [docs/CHECKLIST.md](docs/CHECKLIST.md) - Svensk terminologigranskning
-- [docs/DESIGN.md](docs/DESIGN.md) - Designbeslut och arkitektur
-- [docs/CHANGELOG.md](docs/CHANGELOG.md) - Samlade ändringar i grenen day-10-hardening (härdning, UI, interaktivitet)
+- [docs/PAGE_WALKTHROUGH.md](docs/PAGE_WALKTHROUGH.md) - Genomgång av varje sida och interaktion
+- [docs/IMPROVEMENTS.md](docs/IMPROVEMENTS.md) - Utvärdering per sida och realistiska förbättringar
 
 Läs PRD.md och METHODOLOGY.md innan du börjar utveckla en ny modul.
 
