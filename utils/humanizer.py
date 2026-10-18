@@ -57,8 +57,17 @@ AI_TELLS_SV: list[str] = [
 
 ALL_AI_TELLS = AI_TELLS_EN + AI_TELLS_SV
 
-# Em dash, en dash, figure dash, horizontal bar, minus sign
-DASH_PATTERN = re.compile(r"[\u2014\u2013\u2012\u2015\u2212]")
+# Em dash, en dash, figure dash, horizontal bar, minus sign. The negative
+# lookahead protects negative numbers: a dash glued to a following digit
+# ("\u221252 303") is a sign, not a sentence dash, and is handled separately.
+DASH_PATTERN = re.compile(r"[\u2014\u2013\u2012\u2015\u2212](?!\d)")
+
+# A dash glued directly to a digit is the sign of a negative number
+# ("\u221252 303 kr"). It must be preserved as a real minus, never turned into a
+# comma (which would make a negative NPV read as positive and break the
+# grounding check). We normalize it to an ASCII hyphen-minus so downstream
+# number parsing (SWEDISH_NUMBER_PATTERN) recognizes the sign.
+NEGATIVE_SIGN_PATTERN = re.compile(r"[-\u2012\u2013\u2014\u2015\u2212](?=\d)")
 
 # Hyphen between spaces (used as a sentence break, not a compound word hyphen)
 SPACED_HYPHEN_PATTERN = re.compile(r"\s+-\s+")
@@ -67,9 +76,11 @@ SPACED_HYPHEN_PATTERN = re.compile(r"\s+-\s+")
 # The left side is a number with an optional currency/quantity unit; the right
 # side begins with a digit. We convert the operator to the word "minus" so the
 # dash-stripping rules below cannot turn the subtraction into a comma (which
-# would silently corrupt a calculation shown to the student).
+# would silently corrupt a calculation shown to the student). All dash glyphs
+# the model might emit as the operator are accepted, not only the ASCII hyphen.
 SUBTRACTION_PATTERN = re.compile(
-    r"(\d(?:[\u00a0 ]?(?:kr|%|st|styck(?:en)?))?)[ \t]+[-\u2212][ \t]+(?=\d)"
+    r"(\d(?:[\u00a0 ]?(?:kr|%|st|styck(?:en)?))?)[ \t]+"
+    r"[-\u2012\u2013\u2014\u2015\u2212][ \t]+(?=\d)"
 )
 
 # LaTeX / math markup the model sometimes emits despite instructions. These are
@@ -237,9 +248,12 @@ def normalize_dashes(text: str) -> str:
 
     Hyphens inside compound words (no spaces around them) are preserved.
     Subtraction between numbers (``599 kr - 325 kr``) is converted to the
-    word ``minus`` first so it is not mistaken for a sentence dash.
+    word ``minus`` first so it is not mistaken for a sentence dash, and the
+    sign of a negative number (``−52 303 kr``) is kept as a real minus.
     """
     cleaned = SUBTRACTION_PATTERN.sub(r"\1 minus ", text)
+    # Preserve negative-number signs before stripping sentence dashes.
+    cleaned = NEGATIVE_SIGN_PATTERN.sub("-", cleaned)
     cleaned = DASH_PATTERN.sub(", ", cleaned)
     cleaned = SPACED_HYPHEN_PATTERN.sub(", ", cleaned)
     cleaned = re.sub(r",\s*,", ",", cleaned)

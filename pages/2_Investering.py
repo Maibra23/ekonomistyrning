@@ -168,11 +168,21 @@ def _render_investering_llm(
     inputs: dict,
     outputs: dict,
     tab_key: str,
+    ground_keys: set[str] | None = None,
 ):
-    """Render on-demand LLM explanation and Q&A for an investering tab."""
+    """Render on-demand LLM explanation and Q&A for an investering tab.
+
+    ``outputs`` are all passed to the LLM as context, but only the keys in
+    ``ground_keys`` are checked against the explanation text. When the page
+    shows several KPIs that a single method-focused explanation is not
+    expected to narrate (e.g. the NPV explanation does not discuss the
+    annuity), grounding every KPI produces a false "wrong number" warning.
+    Defaults to grounding all numeric outputs when ``ground_keys`` is None.
+    """
     expected = {
         k: v for k, v in outputs.items()
         if isinstance(v, (int, float)) and v is not None
+        and (ground_keys is None or k in ground_keys)
     }
     render_tutor_explanation(
         state_key=f"{tab_key}_llm",
@@ -613,7 +623,13 @@ with tab1:
         ),
         "annuitet": annuitet_val,
     }
-    _render_investering_llm("npv", tab1_inputs, tab1_outputs, "inv_tab1")
+    # The NPV explanation centres on the NPV decision rule; IRR, payback and
+    # annuity are shown as KPI cards but are not all narrated in the prose, so
+    # ground only the headline NPV figure to avoid false "wrong number"
+    # warnings on metrics the explanation legitimately omits.
+    _render_investering_llm(
+        "npv", tab1_inputs, tab1_outputs, "inv_tab1", ground_keys={"npv"}
+    )
 
     if st.button("Återställ till standardvärden", key="inv_basic_reset_autosave"):
         clear_state("investering_basic")
