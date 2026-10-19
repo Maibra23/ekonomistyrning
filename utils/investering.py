@@ -479,6 +479,7 @@ def compare_investments(
         annuity_val = annuity(npv_val, discount_rate, len(flows)) if flows else 0.0
         rows.append({
             "name": str(project["name"]),
+            "years": len(flows),
             "npv": npv_val,
             "irr": irr_val,
             "irr_message": irr_msg,
@@ -488,9 +489,93 @@ def compare_investments(
 
     df = pd.DataFrame(rows)
     df["rank_npv"] = df["npv"].rank(ascending=False, method="min").astype(int)
+    df["rank_annuity"] = df["annuity"].rank(ascending=False, method="min").astype(int)
     # IRR can be undefined; rank only the defined values.
     df["rank_irr"] = df["irr"].rank(ascending=False, method="min")
     return df
+
+
+def decision_criterion(comparison: pd.DataFrame) -> str:
+    """Return the textbook ranking criterion for a comparison.
+
+    With equal lifetimes the alternative with the highest NPV wins. With
+    unequal lifetimes NPVs are not comparable (the longer project gets
+    more years to accumulate value), so the alternatives are ranked by
+    the annuity of their NPV, which assumes each can be repeated.
+
+    Returns "npv" or "annuity".
+    """
+    if "years" not in comparison.columns:
+        return "npv"
+    return "npv" if comparison["years"].nunique() <= 1 else "annuity"
+
+
+def npv_profile(
+    cash_flows: list[float],
+    initial_investment: float,
+    rates: list[float],
+) -> list[float]:
+    """NPV at each discount rate in ``rates`` (decimals).
+
+    Plotting the result against the rates gives the NPV profile; the
+    curve crosses zero at the IRR.
+    """
+    return [npv(cash_flows, r, initial_investment) for r in rates]
+
+
+def crossover_rate(
+    flows_a: list[float],
+    initial_a: float,
+    flows_b: list[float],
+    initial_b: float,
+) -> float | None:
+    """Discount rate where two alternatives have the same NPV.
+
+    This is Fisher's intersection: the IRR of the difference between the
+    two cash-flow series (the shorter one padded with zeros). Returns
+    None when the NPV profiles do not cross at a rate between -99 % and
+    1000 %.
+    """
+    n = max(len(flows_a), len(flows_b))
+    a = list(flows_a) + [0.0] * (n - len(flows_a))
+    b = list(flows_b) + [0.0] * (n - len(flows_b))
+    diff = [-(initial_a - initial_b)] + [x - y for x, y in zip(a, b, strict=True)]
+    if all(abs(v) < 1e-9 for v in diff):
+        return None
+    value = _bisect_irr(diff)
+    return float(value) if value is not None else None
+
+
+def with_residual_and_working_capital(
+    cash_flows: list[float],
+    initial_investment: float,
+    restvarde: float = 0.0,
+    rorelsekapital: float = 0.0,
+) -> tuple[list[float], float]:
+    """Add residual value and working capital to an investment.
+
+    Working capital is tied up at t=0 (it increases the initial outlay)
+    and released in the last year. The residual value is received in the
+    last year as well.
+
+    Returns ``(cash_flows, initial_investment)`` adjusted accordingly.
+    """
+    flows = [float(cf) for cf in cash_flows]
+    if flows:
+        flows[-1] += float(restvarde) + float(rorelsekapital)
+    return flows, float(initial_investment) + float(rorelsekapital)
+
+
+def resize_cash_flows(values: list[float], n_years: int, default: float) -> list[float]:
+    """Fit a list of yearly cash flows to ``n_years``.
+
+    Extra years are cut off. Missing years repeat the last known value
+    (or ``default`` when the list is empty), so changing the horizon
+    never wipes the values the student already typed.
+    """
+    kept = [float(v) for v in values[:n_years]]
+    fill = kept[-1] if kept else float(default)
+    return kept + [fill] * (n_years - len(kept))
 
 
 def ranking_conflict(comparison: pd.DataFrame) -> bool:
