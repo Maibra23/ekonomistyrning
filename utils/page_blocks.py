@@ -1,12 +1,14 @@
 """Page building blocks shared by the module pages.
 
-Every module page has the same three pieces of UI: a scenario row
+Every module page has the same pieces of UI: a scenario row
 (difficulty, "Generera ett exempelföretag", optional reset and the
-cross-module adopt button), a Q&A chat about the current numbers, and
-an Excel header naming the company. Keeping them here means a fix lands
+cross-module adopt button), a Q&A chat about the current numbers, an
+Excel header naming the company and a share link with every input. Keeping them here means a fix lands
 on every page at once instead of in five copies.
 """
 from __future__ import annotations
+
+from urllib.parse import urlencode
 
 import streamlit as st
 
@@ -212,3 +214,38 @@ def render_qa_chat(
                 "inte, prova igen om en stund."
             )
 
+
+
+# ---------------------------------------------------------------------------
+# Share link
+# ---------------------------------------------------------------------------
+
+
+def share_url(base_url: str, params: dict[str, str]) -> str:
+    """Join the page URL (without any old query string) and the input params."""
+    base = base_url.split("?", 1)[0]
+    query = urlencode(sorted(params.items()))
+    return f"{base}?{query}" if query else base
+
+
+def render_share_link() -> None:
+    """Popover with a link that reopens the page with the same inputs.
+
+    ``utils.state_save.save_state`` already mirrors every module's inputs
+    into the query string, so the current URL is the share link. Call
+    this after the page's save_state calls.
+    """
+    params = {k: st.query_params[k] for k in st.query_params}
+    if not params:
+        return
+    try:
+        base = str(st.context.url or "")
+    except AttributeError:  # older Streamlit without st.context.url
+        base = ""
+    with st.popover("Dela dina siffror"):
+        st.caption(
+            "Länken innehåller alla värden du har matat in här. Den som öppnar "
+            "den ser samma kalkyl, och du kan själv använda den för att komma "
+            "tillbaka senare."
+        )
+        st.code(share_url(base, params), language=None, wrap_lines=True)

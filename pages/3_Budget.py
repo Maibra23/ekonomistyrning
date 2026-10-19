@@ -35,6 +35,7 @@ from utils.page_blocks import (
     render_qa_chat,
     render_scenario_controls,
     render_scenario_info,
+    render_share_link,
     scenario_header_lines,
 )
 from utils.prompts import (
@@ -1265,5 +1266,7 @@ save_state(
         "bud_fin_manad": int(st.session_state["bud_fin_manad"]),
     },
 )
+
+render_share_link()
 
 st.html(footer_note(updated=APP_UPDATED))

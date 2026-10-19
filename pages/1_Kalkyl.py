@@ -37,6 +37,7 @@ from utils.page_blocks import (
     render_qa_chat,
     render_scenario_controls,
     render_scenario_info,
+    render_share_link,
     scenario_header_lines,
 )
 from utils.prompts import (
@@ -1093,3 +1094,6 @@ with tab_abc:
         st.rerun()
 
     st.html(footer_note(updated=APP_UPDATED))
+
+# One share link for the whole page: the URL holds the inputs of every tab.
+render_share_link()
