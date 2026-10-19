@@ -46,6 +46,29 @@ def test_page_runs_offline(path):
     assert len(at.chat_input) == 0
 
 
+@pytest.mark.parametrize("path", PAGES)
+def test_page_runs_in_english(path, monkeypatch):
+    import utils.i18n as i18n
+
+    # AppTest evaluates selectbox format_funcs outside the script run, where
+    # the session language is not visible; pinning the language keeps those
+    # lookups consistent with what the page rendered.
+    monkeypatch.setattr(i18n, "get_lang", lambda: "en")
+    at = _run(path, lang="en")
+    texts = [m.value for m in at.markdown] + [b.label for b in at.button]
+    assert not any("Uppdatera värden" in x for x in texts)
+
+
+def test_english_budget_buttons_work(monkeypatch):
+    import utils.i18n as i18n
+
+    monkeypatch.setattr(i18n, "get_lang", lambda: "en")
+    at = _run("pages/3_Budget.py", lang="en")
+    at.button(key="bud_gen_scenario").click().run()
+    assert not at.exception
+    assert any("balances" in s.value for s in at.success)
+
+
 def test_generated_budget_company_balances():
     at = _run("pages/3_Budget.py")
     for _ in range(3):

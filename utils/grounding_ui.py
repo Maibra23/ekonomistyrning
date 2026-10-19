@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import streamlit as st
 
+from utils.i18n import t
+
 GROUNDING_WARNING_TEXT = (
     "⚠ Förklaringen refererade siffror som inte exakt matchar beräkningen "
     "ovan. Lita alltid på siffrorna i kalkylen."
@@ -33,4 +35,4 @@ def show_grounding_warning(grounding_result: dict) -> None:
     if not missing and not wrong:
         return
 
-    st.caption(GROUNDING_WARNING_TEXT)
+    st.caption(t(GROUNDING_WARNING_TEXT))

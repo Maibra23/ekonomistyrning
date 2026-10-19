@@ -23,6 +23,7 @@ import streamlit as st
 
 from utils.grounding_ui import show_grounding_warning
 from utils.humanizer import humanize
+from utils.i18n import get_lang, t
 from utils.llm import (
     LLMSessionCapError,
     LLMUnavailableError,
@@ -78,7 +79,12 @@ def render_tutor_explanation(
     on every rerun until the inputs change.
     """
     if heading:
-        st.markdown(heading)
+        st.markdown(t(heading))
+    if get_lang() == "en" and is_llm_available():
+        st.caption(
+            "Explanations from the explanation service are written in Swedish, "
+            "the language of the course literature."
+        )
 
     current_hash = _hash_payload(inputs, outputs)
     store = st.session_state.get(_store_key(state_key))
@@ -99,19 +105,18 @@ def render_tutor_explanation(
         if cached_grounding and cached_grounding.get("missing"):
             st.html(
                 '<div class="eks-grounding-warn">'
-                "OBS: Förklaringen kan ha refererat fel siffra, "
-                "verifiera mot beräkningen ovan."
-                "</div>"
+                + t("OBS: Förklaringen kan ha refererat fel siffra, verifiera mot beräkningen ovan.")
+                + "</div>"
             )
             show_grounding_warning(cached_grounding)
 
     # --- Stale: warn + offer regenerate ---
     if is_stale and cached_text:
         st.caption(
-            "Indata har ändrats sedan förklaringen genererades. "
-            "Visat innehåll kan vara inaktuellt."
+            t("Indata har ändrats sedan förklaringen genererades. "
+            "Visat innehåll kan vara inaktuellt.")
         )
-        with st.expander("Visa tidigare förklaring (kan vara inaktuell)"):
+        with st.expander(t("Visa tidigare förklaring (kan vara inaktuell)")):
             st.markdown(cached_text)
 
     # --- The button ---
@@ -119,14 +124,14 @@ def render_tutor_explanation(
     btn_col, info_col = st.columns([1, 3])
     with btn_col:
         clicked = st.button(
-            label,
+            t(label),
             key=f"{state_key}__btn",
             type="primary" if not is_fresh else "secondary",
             use_container_width=True,
         )
     with info_col:
         if help_text and not is_fresh:
-            st.caption(help_text)
+            st.caption(t(help_text))
 
     if not clicked:
         return
@@ -136,7 +141,7 @@ def render_tutor_explanation(
         if not is_llm_available():
             raise LLMUnavailableError("Ingen token")
         sys_p, usr_p = build_prompt()
-        with st.spinner(spinner_label):
+        with st.spinner(t(spinner_label)):
             raw = cached_chat(sys_p, usr_p)
         result = humanize(raw, required_sections=required_sections)
 
@@ -157,9 +162,10 @@ def render_tutor_explanation(
     except LLMUnavailableError:
         st.html(
             '<div class="eks-offline-badge">'
-            "Visar grundförklaring (offline-läge)</div>"
+            + t("Visar grundförklaring (offline-läge)")
+            + "</div>"
         )
-        text = fallback_text() if fallback_text else "Förklaring ej tillgänglig."
+        text = fallback_text() if fallback_text else t("Förklaring ej tillgänglig.")
         st.session_state[_store_key(state_key)] = {
             "text": text,
             "hash": current_hash,
@@ -198,8 +204,8 @@ def render_step_guide(
     offline = not is_llm_available()
     if offline and fallback_text is None:
         st.caption(
-            "Steg för steg-guiden kräver förklaringstjänsten, som inte är "
-            "aktiv just nu."
+            t("Steg för steg-guiden kräver förklaringstjänsten, som inte är "
+            "aktiv just nu.")
         )
         return
     if offline:
@@ -221,14 +227,14 @@ def render_step_guide(
     btn_label = update_label if has_cache else button_label
     cols = st.columns([1, 1, 2]) if has_cache else st.columns([1, 3])
     clicked = cols[0].button(
-        btn_label,
+        t(btn_label),
         key=f"{state_key}__btn",
         use_container_width=True,
     )
     cleared = False
     if has_cache:
         cleared = cols[1].button(
-            clear_label,
+            t(clear_label),
             key=f"{state_key}__clear",
             use_container_width=True,
         )
@@ -248,7 +254,7 @@ def render_step_guide(
             if not is_llm_available():
                 raise LLMUnavailableError("Ingen token")
             sys_p, usr_p = build_prompt()
-            with st.spinner(spinner_label):
+            with st.spinner(t(spinner_label)):
                 raw = cached_chat(sys_p, usr_p)
             text = humanize(raw).text.strip()
             if not text:
@@ -260,8 +266,8 @@ def render_step_guide(
                 text = (raw or "").strip()
             if not text:
                 st.warning(
-                    "Tomt svar. Försök igen, eller kontrollera att din "
-                    "input innehåller meningsfulla värden."
+                    t("Tomt svar. Försök igen, eller kontrollera att din "
+                    "input innehåller meningsfulla värden.")
                 )
             else:
                 st.session_state[_store_key(state_key)] = {
@@ -279,21 +285,21 @@ def render_step_guide(
                 }
                 st.rerun()
             st.info(
-                "Steg för steg-guiden är inte tillgänglig just nu. "
-                "Försök igen senare."
+                t("Steg för steg-guiden är inte tillgänglig just nu. "
+                "Försök igen senare.")
             )
         except Exception as exc:  # pragma: no cover - defensive surface
             # Without this catch any unexpected LLM/parse error silently
             # ate the click and left the user staring at an unchanged
             # button. Show the message so they know what happened.
-            st.error(f"Kunde inte generera steg-för-steg guide: {exc}")
+            st.error(t("Kunde inte generera steg-för-steg guide: {0}", exc))
 
     if has_cache and not has_fresh:
         st.caption(
-            "Indata har ändrats sedan guiden genererades. "
-            "Tryck \"Uppdatera guiden\" för en ny."
+            t("Indata har ändrats sedan guiden genererades. "
+            "Tryck \"Uppdatera guiden\" för en ny.")
         )
 
     if has_cache:
-        with st.expander(expander_title, expanded=True):
+        with st.expander(t(expander_title), expanded=True):
             st.markdown(cached_text)

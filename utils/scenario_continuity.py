@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import streamlit as st
 
+from utils.i18n import t
 from utils.scenarios import get_current_scenario
 
 
@@ -28,11 +29,11 @@ def render_adopt_button(module: str, key: str) -> dict | None:
     if not name:
         return None
     clicked = st.button(
-        f"Använd {name} här",
+        t("Använd {0} här", name),
         key=key,
         help=(
-            "Hämtar in det aktuella företaget från den modul där det "
-            "genererades och tar fram siffror som passar den här modulen."
+            t("Hämtar in det aktuella företaget från den modul där det "
+            "genererades och tar fram siffror som passar den här modulen.")
         ),
         use_container_width=True,
     )

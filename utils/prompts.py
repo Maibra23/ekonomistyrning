@@ -11,6 +11,8 @@ import json
 from collections.abc import Callable
 from typing import Any
 
+from utils.i18n import t
+
 NBSP = "\u00a0"
 
 # Canonical section headers for tutor explanations. The prompt builders
@@ -206,6 +208,30 @@ _FIELD_LABELS: dict[str, str] = {
     "prisavvikelse": "Prisavvikelse (kr)",
     "effektivitetsavvikelse": "Effektivitetsavvikelse (kr)",
     "totalavvikelse": "Totalavvikelse (kr)",
+    "total_avvikelse": "Total avvikelse (kr)",
+    "budgetavvikelse": "Budgetavvikelse (kr)",
+    "budgeterat": "Budgeterade fasta omkostnader (kr)",
+    "verkligt": "Verkliga fasta omkostnader (kr)",
+    "normalvolym": "Normalvolym",
+    "rorlig_total": "Avvikelse rörliga kostnader (kr)",
+    "fast_avvikelse": "Avvikelse fasta omkostnader (kr)",
+    # Budget
+    "forsaljning": "Försäljning (kr)",
+    "arets_resultat": "Årets resultat (kr)",
+    "likvida_medel_ub": "Likvida medel UB (kr)",
+    "summa_tillgangar_ub": "Summa tillgångar UB (kr)",
+    "balanserad": "Balansbudgeten går ihop",
+    # Investering (more)
+    "restvarde": "Restvärde (kr)",
+    "rorelsekapital": "Rörelsekapital (kr)",
+    "inflation": "Inflation (decimal)",
+    "medel_npv": "Medel-NPV (kr)",
+    "grundinvestering_medel": "Grundinvestering, medelvärde (kr)",
+    "grundinvestering_std": "Grundinvestering, standardavvikelse (kr)",
+    "kalkylranta_medel": "Kalkylränta, medelvärde (%)",
+    "antal_simuleringar": "Antal simuleringar",
+    "aktiviteter": "Aktiviteter",
+    "produkter": "Produkter",
 }
 
 
@@ -220,7 +246,7 @@ def _label_for(key: str) -> str:
 def _format_value(value: Any) -> str:
     """Format a payload value with Swedish thousand separators where useful."""
     if isinstance(value, bool):
-        return "Ja" if value else "Nej"
+        return t("Ja") if value else t("Nej")
     if isinstance(value, int):
         return f"{value:,}".replace(",", NBSP)
     if isinstance(value, float):
@@ -263,7 +289,7 @@ def _format_labeled_block(inputs: dict[str, Any]) -> str:
     Use this for any text that is shown directly to the student, including
     the four section offline fallback templates.
     """
-    return "\n".join(f"- {_label_for(k)}: {_format_value(v)}" for k, v in inputs.items())
+    return "\n".join(f"- {t(_label_for(k))}: {_format_value(v)}" for k, v in inputs.items())
 
 
 def build_kalkyl_explanation_prompt(
@@ -545,34 +571,48 @@ _STANDARDKOST_DEFAULT_TOLKNING = (
 )
 
 
+def _four_sections(
+    antagande: str,
+    inputs: dict[str, Any],
+    outputs: dict[str, Any],
+    tolkning: str,
+    forbehall: str,
+) -> str:
+    """Assemble the four-section offline explanation in the current language."""
+    return (
+        f"**{t('Antagande')}**\n{antagande}\n\n"
+        f"**{t('Beräkning')}**\n"
+        f"{t('Indata')}:\n{_format_labeled_block(inputs)}\n\n"
+        f"{t('Resultat')}:\n{_format_labeled_block(outputs)}\n\n"
+        f"**{t('Tolkning')}**\n{tolkning}\n\n"
+        f"**{t('Källor och förbehåll')}**\n{forbehall}"
+    )
+
+
 def fallback_kalkyl_template(
     calc_type: str,
     inputs: dict[str, Any],
     outputs: dict[str, Any],
     interpretation: str | None = None,
 ) -> str:
-    """Return a Swedish four section explanation built from inputs and outputs."""
+    """Return a four section explanation built from inputs and outputs."""
     method_label = {
         "sjalvkostnad": "påläggsmetoden",
         "bidrag": "bidragskalkylen med nollpunktsanalys",
         "abc": "aktivitetsbaserad kalkylering (ABC)",
     }.get(calc_type, "produktkalkylering")
-
-    inputs_lines = _format_labeled_block(inputs)
-    outputs_lines = _format_labeled_block(outputs)
-
-    return (
-        f"**Antagande**\n"
-        f"Beräkningen följer {method_label} och förutsätter linjäritet inom "
-        f"relevant volymintervall.\n\n"
-        f"**Beräkning**\n"
-        f"Indata:\n{inputs_lines}\n\n"
-        f"Resultat:\n{outputs_lines}\n\n"
-        f"**Tolkning**\n"
-        f"{interpretation or _KALKYL_DEFAULT_TOLKNING}\n\n"
-        f"**Källor och förbehåll**\n"
-        f"Förenklad modell. Verkliga företag kan ha staffade satser och "
-        f"kostnadsställen som inte fångas här."
+    return _four_sections(
+        t(
+            "Beräkningen följer {0} och förutsätter linjäritet inom relevant volymintervall.",
+            t(method_label),
+        ),
+        inputs,
+        outputs,
+        interpretation or t(_KALKYL_DEFAULT_TOLKNING),
+        t(
+            "Förenklad modell. Verkliga företag kan ha staffade satser och "
+            "kostnadsställen som inte fångas här."
+        ),
     )
 
 
@@ -592,20 +632,18 @@ def fallback_investering_template(
         "inflation_skatt": "investeringsbedömning med inflation och skatt",
         "monte_carlo": "sannolikhetsbaserad analys med Monte Carlo",
     }.get(method, "investeringsbedömning")
-    inputs_lines = _format_labeled_block(inputs)
-    outputs_lines = _format_labeled_block(outputs)
-
-    return (
-        f"**Antagande**\n"
-        f"Bedömningen bygger på {method_label} och de kassaflöden och räntor som angivits.\n\n"
-        f"**Beräkning**\n"
-        f"Indata:\n{inputs_lines}\n\n"
-        f"Resultat:\n{outputs_lines}\n\n"
-        f"**Tolkning**\n"
-        f"{interpretation or _INVESTERING_DEFAULT_TOLKNING}\n\n"
-        f"**Källor och förbehåll**\n"
-        f"Modellen abstraherar från viss komplexitet och förutsätter att indata är representativa "
-        f"för investeringens livslängd."
+    return _four_sections(
+        t(
+            "Bedömningen bygger på {0} och de kassaflöden och räntor som angivits.",
+            t(method_label),
+        ),
+        inputs,
+        outputs,
+        interpretation or t(_INVESTERING_DEFAULT_TOLKNING),
+        t(
+            "Modellen abstraherar från viss komplexitet och förutsätter att indata "
+            "är representativa för investeringens livslängd."
+        ),
     )
 
 
@@ -616,21 +654,18 @@ def fallback_budget_template(
     interpretation: str | None = None,
 ) -> str:
     """Return a fallback four section explanation for budget analysis."""
-    inputs_lines = _format_labeled_block(inputs)
-    outputs_lines = _format_labeled_block(outputs)
-
-    return (
-        f"**Antagande**\n"
-        f"Budgeten omfattar resultat-, likviditets- och balansbudget och antar stabil "
-        f"affärsmodell utan extraordinära poster under perioden.\n\n"
-        f"**Beräkning**\n"
-        f"Indata:\n{inputs_lines}\n\n"
-        f"Resultat:\n{outputs_lines}\n\n"
-        f"**Tolkning**\n"
-        f"{interpretation or _BUDGET_DEFAULT_TOLKNING}\n\n"
-        f"**Källor och förbehåll**\n"
-        f"Förenklad budgetmodell. Periodiseringseffekter och säsongsvariationer fångas "
-        f"inte fullt ut."
+    return _four_sections(
+        t(
+            "Budgeten omfattar resultat-, likviditets- och balansbudget och antar "
+            "stabil affärsmodell utan extraordinära poster under perioden."
+        ),
+        inputs,
+        outputs,
+        interpretation or t(_BUDGET_DEFAULT_TOLKNING),
+        t(
+            "Förenklad budgetmodell. Periodiseringseffekter och säsongsvariationer "
+            "fångas inte fullt ut."
+        ),
     )
 
 
@@ -641,21 +676,18 @@ def fallback_standardkost_template(
     interpretation: str | None = None,
 ) -> str:
     """Return a fallback four section explanation for variance analysis."""
-    inputs_lines = _format_labeled_block(inputs)
-    outputs_lines = _format_labeled_block(outputs)
-
-    return (
-        f"**Antagande**\n"
-        f"Analysen följer standardkostnadsmetoden och delar upp totalavvikelsen i "
-        f"volym-, pris- och effektivitetskomponenter.\n\n"
-        f"**Beräkning**\n"
-        f"Indata:\n{inputs_lines}\n\n"
-        f"Resultat:\n{outputs_lines}\n\n"
-        f"**Tolkning**\n"
-        f"{interpretation or _STANDARDKOST_DEFAULT_TOLKNING}\n\n"
-        f"**Källor och förbehåll**\n"
-        f"Förenklad avvikelsemodell. Samspelseffekter mellan komponenterna kan ge "
-        f"mindre avstämningsdifferenser."
+    return _four_sections(
+        t(
+            "Analysen följer standardkostnadsmetoden och delar upp totalavvikelsen "
+            "i volym-, pris- och effektivitetskomponenter."
+        ),
+        inputs,
+        outputs,
+        interpretation or t(_STANDARDKOST_DEFAULT_TOLKNING),
+        t(
+            "Förenklad avvikelsemodell. Samspelseffekter mellan komponenterna kan "
+            "ge mindre avstämningsdifferenser."
+        ),
     )
 
 

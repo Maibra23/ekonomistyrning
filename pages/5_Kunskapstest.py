@@ -22,6 +22,7 @@ import streamlit as st
 
 from utils.charts import COLORS, apply_layout
 from utils.humanizer import humanize
+from utils.i18n import get_lang, t
 from utils.llm import (
     LLMSessionCapError,
     LLMUnavailableError,
@@ -203,14 +204,17 @@ FALLBACK_BANK = _load_fallback()
 
 st.html(
     page_title(
-        eyebrow="KUNSKAPSTEST",
-        title="Kunskapstest",
+        eyebrow=t("KUNSKAPSTEST"),
+        title=t("Kunskapstest"),
         subtitle=(
-            "Testa dina kunskaper med dynamiskt genererade frågor. "
-            "Välj ämnesområde, svårighetsgrad och frågetyp."
+            t("Testa dina kunskaper med dynamiskt genererade frågor. "
+            "Välj ämnesområde, svårighetsgrad och frågetyp.")
         ),
     )
 )
+
+if get_lang() == "en":
+    st.caption(t("Frågorna är skrivna på svenska, kursens språk."))
 
 # Per-cluster progression, restored once per session from the autosave/URL
 # mirror so it survives a browser reload. The score on the page is derived
@@ -231,29 +235,32 @@ if "quiz_seen" not in st.session_state:
 col1, col2, col3 = st.columns(3)
 with col1:
     kapitelkluster = st.selectbox(
-        "Ämnesområde",
+        t("Ämnesområde"),
         list(_CLUSTER_LABELS.keys()),
-        format_func=lambda x: _CLUSTER_LABELS[x],
+        format_func=lambda x: t(_CLUSTER_LABELS[x]),
     )
 with col2:
     difficulty = st.selectbox(
-        "Svårighetsgrad",
+        t("Svårighetsgrad"),
         list(_DIFFICULTY_LABELS.keys()),
-        format_func=lambda x: _DIFFICULTY_LABELS[x],
+        format_func=lambda x: t(_DIFFICULTY_LABELS[x]),
         index=1,
     )
 with col3:
     question_type = st.selectbox(
-        "Frågetyp",
+        t("Frågetyp"),
         list(_QTYPE_LABELS.keys()),
-        format_func=lambda x: _QTYPE_LABELS[x],
+        format_func=lambda x: t(_QTYPE_LABELS[x]),
     )
 
 _suggested = suggest_difficulty(st.session_state["quiz_progress"], kapitelkluster)
 if _suggested != difficulty:
     st.caption(
-        f"Utifrån din progression i {_CLUSTER_LABELS[kapitelkluster]} "
-        f"rekommenderas svårighetsgrad **{_DIFFICULTY_LABELS[_suggested]}**."
+        t(
+            "Utifrån din progression i {0} rekommenderas svårighetsgrad **{1}**.",
+            t(_CLUSTER_LABELS[kapitelkluster]),
+            t(_DIFFICULTY_LABELS[_suggested]),
+        )
     )
 
 
@@ -457,8 +464,8 @@ def _generate_question(kluster: str, diff: str, qtype: str) -> dict | None:
 # Generate button
 # ---------------------------------------------------------------------------
 
-if st.button("Generera fråga", type="primary", use_container_width=True):
-    with st.spinner("Genererar fråga..."):
+if st.button(t("Generera fråga"), type="primary", use_container_width=True):
+    with st.spinner(t("Genererar fråga...")):
         try:
             q = _generate_question(kapitelkluster, difficulty, question_type)
         except LLMSessionCapError:
@@ -471,7 +478,7 @@ if st.button("Generera fråga", type="primary", use_container_width=True):
         st.session_state.pop("quiz_answer_radio", None)
         st.session_state.pop("quiz_answer_num", None)
     elif "quiz_current" not in st.session_state or st.session_state.get("quiz_current") is None:
-        st.error("Kunde inte generera en fråga. Försök igen.")
+        st.error(t("Kunde inte generera en fråga. Försök igen."))
 
 
 # ---------------------------------------------------------------------------
@@ -489,11 +496,11 @@ if q:
     st.html(quiz_card_html(q))
 
     if q.get("_source") == "fallback":
-        st.caption("Frågan kommer från den inbyggda frågebanken.")
+        st.caption(t("Frågan kommer från den inbyggda frågebanken."))
     elif q.get("_source") == "generator":
         st.caption(
-            "Frågan är skapad med slumpade siffror och svaret är uträknat med "
-            "appens egna kalkylatorer."
+            t("Frågan är skapad med slumpade siffror och svaret är uträknat med "
+            "appens egna kalkylatorer.")
         )
 
     # Answer input
@@ -502,7 +509,7 @@ if q:
         alt_list: list[str] = list(q["alternativ"])
         letters = _ANSWER_LETTERS
         user_answer = st.radio(
-            "Välj svar:",
+            t("Välj svar:"),
             options=list(range(len(alt_list))),
             format_func=lambda i: f"{letters[i]}. {alt_list[i]}",
             key="quiz_answer_radio",
@@ -510,28 +517,28 @@ if q:
         )
     else:
         enhet = q.get("enhet") or ""
-        enhet_hint = f"Svaret anges i {enhet}." if enhet else None
+        enhet_hint = t("Svaret anges i {0}.", enhet) if enhet else None
         # value=None: 0,00 must not be pre-filled as a submittable answer;
         # mirrors the flerval radio's index=None.
         user_answer = st.number_input(
-            "Ditt svar:",
+            t("Ditt svar:"),
             value=None,
             format="%.2f",
             key="quiz_answer_num",
             help=enhet_hint,
-            placeholder="Skriv ditt svar",
+            placeholder=t("Skriv ditt svar"),
         )
         if enhet:
-            st.caption(f"Förväntad enhet: {enhet}")
+            st.caption(t("Förväntad enhet: {0}", enhet))
 
     # Submit
     if qtype == "flerval" and q.get("alternativ"):
         can_submit = st.session_state.get("quiz_answer_radio") is not None
-        idle_label = "Välj ett alternativ för att svara"
+        idle_label = t("Välj ett alternativ för att svara")
     else:
         can_submit = st.session_state.get("quiz_answer_num") is not None
-        idle_label = "Ange ett svar för att svara"
-    submit_label = "Svara" if can_submit else idle_label
+        idle_label = t("Ange ett svar för att svara")
+    submit_label = t("Svara") if can_submit else idle_label
     if st.button(
         submit_label,
         key="quiz_submit",
@@ -562,49 +569,51 @@ if q:
         save_state("quiz_progress", st.session_state["quiz_progress"])
 
         if correct:
-            st.success("Rätt svar!")
+            st.success(t("Rätt svar!"))
         else:
             if qtype == "flerval" and q.get("alternativ"):
                 correct_idx = q.get("ratt_svar", 0)
                 if isinstance(correct_idx, int) and 0 <= correct_idx < len(q["alternativ"]):
                     st.error(
-                        f"Fel svar. Rätt svar: "
-                        f"{letters[correct_idx]}. {q['alternativ'][correct_idx]}"
+                        t("Fel svar. Rätt svar: {0}. {1}", letters[correct_idx], q['alternativ'][correct_idx])
                     )
                 else:
-                    st.error("Fel svar.")
+                    st.error(t("Fel svar."))
             else:
                 enhet = q.get("enhet") or ""
                 suffix = f" {enhet}" if enhet else ""
-                st.error(f"Fel svar. Rätt svar: {q.get('ratt_svar')}{suffix}")
+                st.error(t("Fel svar. Rätt svar: {0}{1}", q.get('ratt_svar'), suffix))
 
     # After answer, show explanation side-by-side
     if st.session_state["quiz_answered"]:
-        st.markdown("#### Lösning och förklaring")
+        st.markdown(t("#### Lösning och förklaring"))
         explain_col, steps_col = st.columns(2)
         with steps_col:
             steps_text = q.get("berakning_steg")
-            st.markdown("**Beräkningssteg**")
+            st.markdown(t("**Beräkningssteg**"))
             if steps_text:
                 st.markdown(humanize(str(steps_text)).text)
             else:
-                st.caption("Inga separata beräkningssteg angavs.")
+                st.caption(t("Inga separata beräkningssteg angavs."))
         with explain_col:
-            st.markdown("**Förklaring**")
+            st.markdown(t("**Förklaring**"))
             forklaring = q.get("forklaring")
             if forklaring:
                 st.markdown(humanize(str(forklaring)).text)
             else:
-                st.caption("Ingen förklaring angavs.")
+                st.caption(t("Ingen förklaring angavs."))
 
         quality = q.get("quality")
         if quality:
-            with st.expander("Frågekvalitet (självvärdering)"):
+            with st.expander(t("Frågekvalitet (självvärdering)")):
                 st.markdown(
-                    f"- **Pedagogiskt värde:** {quality['pedagogiskt_varde']} / 5\n"
-                    f"- **Tydlighet:** {quality['tydlighet']} / 5\n"
-                    f"- **Realism:** {quality['realism']} / 5\n"
-                    f"- **Totalt:** {quality['total']} / 15"
+                    t(
+                        "- **Pedagogiskt värde:** {0} / 5\n- **Tydlighet:** {1} / 5\n- **Realism:** {2} / 5\n- **Totalt:** {3} / 15",
+                        quality['pedagogiskt_varde'],
+                        quality['tydlighet'],
+                        quality['realism'],
+                        quality['total'],
+                    )
                 )
                 if quality.get("motivering"):
                     st.caption(quality["motivering"])
@@ -612,8 +621,8 @@ if q:
         # Action buttons
         bcol1, bcol2, bcol3 = st.columns(3)
         with bcol1:
-            if st.button("Ny fråga", key="quiz_new"):
-                with st.spinner("Genererar ny fråga..."):
+            if st.button(t("Ny fråga"), key="quiz_new"):
+                with st.spinner(t("Genererar ny fråga...")):
                     try:
                         new_q = _generate_question(kapitelkluster, difficulty, question_type)
                     except LLMSessionCapError:
@@ -629,8 +638,8 @@ if q:
             harder_diff = {"latt": "medel", "medel": "svar", "svar": "svar"}.get(
                 difficulty, "svar"
             )
-            if st.button("Liknande fråga men svårare", key="quiz_harder"):
-                with st.spinner("Genererar svårare fråga..."):
+            if st.button(t("Liknande fråga men svårare"), key="quiz_harder"):
+                with st.spinner(t("Genererar svårare fråga...")):
                     try:
                         new_q = _generate_question(kapitelkluster, harder_diff, question_type)
                     except LLMSessionCapError:
@@ -645,7 +654,7 @@ if q:
         with bcol3:
             # Only with the explanation service: offline the button could
             # never do more than say it is unavailable.
-            if is_llm_available() and st.button("Förklara djupare", key="quiz_explain"):
+            if is_llm_available() and st.button(t("Förklara djupare"), key="quiz_explain"):
                 try:
                     if not is_llm_available():
                         raise LLMUnavailableError("Ingen token")
@@ -655,7 +664,7 @@ if q:
                         {"ratt_svar": q.get("ratt_svar")},
                         f"Förklara denna fråga och svaret djupare: {q.get('fraga', '')}",
                     )
-                    with st.spinner("Förklarar..."):
+                    with st.spinner(t("Förklarar...")):
                         raw = cached_chat(sys_p, usr_p)
                     result = humanize(raw)
                     # Persist so the next interaction does not erase the
@@ -669,7 +678,7 @@ if q:
                     # capped user gets advice that never helps.
                     render_session_cap_card()
                 except LLMUnavailableError:
-                    st.info("Djupare förklaring är inte tillgänglig just nu.")
+                    st.info(t("Djupare förklaring är inte tillgänglig just nu."))
 
         _deeper = st.session_state.get("quiz_deeper")
         if (
@@ -677,7 +686,7 @@ if q:
             and _deeper.get("text")
             and _deeper.get("fraga") == q.get("fraga", "")
         ):
-            st.markdown("**Djupare förklaring**")
+            st.markdown(t("**Djupare förklaring**"))
             st.markdown(_deeper["text"])
 
 
@@ -697,10 +706,10 @@ if score["total"] > 0:
 
     render_kpi_row(
         [
-            kpi_card("Besvarade frågor", str(score["total"])),
-            kpi_card("Rätta svar", str(score["correct"]), variant="success"),
+            kpi_card(t("Besvarade frågor"), str(score["total"])),
+            kpi_card(t("Rätta svar"), str(score["correct"]), variant="success"),
             kpi_card(
-                "Andel rätt",
+                t("Andel rätt"),
                 f"{pct:.0f} %",
                 variant="success" if pct >= 60 else "danger",
             ),
@@ -732,14 +741,14 @@ if score["total"] > 0:
     apply_layout(fig_gauge, height=280)
     st.plotly_chart(fig_gauge, use_container_width=True)
 else:
-    st.info("Inga frågor besvarade ännu. Tryck 'Generera fråga' för att börja.")
+    st.info(t("Inga frågor besvarade ännu. Tryck 'Generera fråga' för att börja."))
 
 # ---------------------------------------------------------------------------
 # Progression per kapitelkluster (mästerskapsvy)
 # ---------------------------------------------------------------------------
 
 st.divider()
-st.markdown("#### Din progression per ämnesområde")
+st.markdown(t("#### Din progression per ämnesområde"))
 _progress = st.session_state.get("quiz_progress") or {}
 _any_progress = any(cluster_stats(_progress, c)["total"] > 0 for c in VALID_CLUSTERS)
 if _any_progress:
@@ -748,13 +757,15 @@ if _any_progress:
         _stats = cluster_stats(_progress, _cluster)
         _m = mastery(_progress, _cluster)
         if _stats["total"] > 0:
-            _delta = (
-                f"{_stats['correct']}/{_stats['total']} rätt "
-                f"({_stats['accuracy'] * 100:.0f} %)"
+            _delta = t(
+                "{0}/{1} rätt ({2} %)",
+                _stats["correct"],
+                _stats["total"],
+                f"{_stats['accuracy'] * 100:.0f}",
             )
             _direction = "up" if _stats["accuracy"] >= 0.7 else "down"
         else:
-            _delta = "Inga frågor ännu"
+            _delta = t("Inga frågor ännu")
             _direction = "flat"
         _variant = {
             "masterskap": "success",
@@ -763,8 +774,8 @@ if _any_progress:
         }.get(_m["code"], "default")
         _prog_cards.append(
             kpi_card(
-                _CLUSTER_LABELS.get(_cluster, _cluster),
-                _m["label"],
+                t(_CLUSTER_LABELS.get(_cluster, _cluster)),
+                t(_m["label"]),
                 delta=_delta,
                 delta_direction=_direction,
                 variant=_variant,
@@ -773,19 +784,22 @@ if _any_progress:
     render_kpi_row(_prog_cards)
     _sel_mastery = mastery(_progress, kapitelkluster)
     st.caption(
-        f"{_CLUSTER_LABELS[kapitelkluster]}: {_sel_mastery['beskrivning']} "
-        "Progressionen sparas i webbadressen och överlever en omladdning."
+        t(
+            "{0}: {1} Progressionen sparas i webbadressen och överlever en omladdning.",
+            t(_CLUSTER_LABELS[kapitelkluster]),
+            t(_sel_mastery["beskrivning"]),
+        )
     )
-    if st.button("Nollställ resultat och progression", key="quiz_reset_progress"):
+    if st.button(t("Nollställ resultat och progression"), key="quiz_reset_progress"):
         st.session_state["quiz_progress"] = {}
         st.session_state["quiz_seen"] = []
         clear_state("quiz_progress")
         st.rerun()
 else:
     st.caption(
-        "Besvara frågor för att bygga upp din progression per ämnesområde. "
+        t("Besvara frågor för att bygga upp din progression per ämnesområde. "
         "Nivåerna går från Ny via Grund och Säker till Mästerskap, och "
-        "sparas i webbadressen så att de överlever en omladdning."
+        "sparas i webbadressen så att de överlever en omladdning.")
     )
 
 st.html(footer_note(updated=APP_UPDATED))

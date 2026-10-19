@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import html
 
+from utils.i18n import t
+
 NBSP = " "
 
 CLUSTER_LABELS: dict[str, str] = {
@@ -66,11 +68,11 @@ def quiz_card_html(q: dict) -> str:
     including badge labels (unknown codes fall back to the raw value).
     """
     cluster = str(q.get("kapitelkluster", ""))
-    cluster_label = CLUSTER_LABELS.get(cluster, cluster)
+    cluster_label = t(CLUSTER_LABELS.get(cluster, cluster))
     diff = str(q.get("difficulty", "medel"))
-    diff_label = DIFFICULTY_LABELS.get(diff, diff)
+    diff_label = t(DIFFICULTY_LABELS.get(diff, diff))
     qtype = str(q.get("question_type", "flerval"))
-    qtype_label = QTYPE_LABELS.get(qtype, qtype)
+    qtype_label = t(QTYPE_LABELS.get(qtype, qtype))
 
     badges_html = (
         f'<div class="eks-quiz-badges">'
@@ -84,7 +86,7 @@ def quiz_card_html(q: dict) -> str:
     scenario_html = ""
     if q.get("scenario"):
         scenario_html = (
-            f'<div class="eks-quiz-scenario"><strong>Scenario:</strong> '
+            f'<div class="eks-quiz-scenario"><strong>{html.escape(t("Scenario:"))}</strong> '
             f"{html.escape(str(q['scenario']))}</div>"
         )
 
@@ -102,7 +104,7 @@ def quiz_card_html(q: dict) -> str:
         )
         given_html = (
             f'<div class="eks-quiz-given">'
-            f'<div class="eks-quiz-given-title">Givna uppgifter</div>'
+            f'<div class="eks-quiz-given-title">{html.escape(t("Givna uppgifter"))}</div>'
             f"<ul>{items}</ul>"
             f"</div>"
         )

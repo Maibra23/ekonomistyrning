@@ -23,6 +23,7 @@ from utils.explain import (
 )
 from utils.export import export_to_excel, table_range
 from utils.formatting import format_percent, format_sek, format_years
+from utils.i18n import t, t_frame
 from utils.investering import (
     annuity,
     compare_investments,
@@ -221,7 +222,7 @@ def _render_investering_llm(
     render_qa_chat(
         chat_key="inv_chat_history",
         input_key=f"{tab_key}_chat_input",
-        placeholder="Fråga om denna investering",
+        placeholder=t("Fråga om denna investering"),
         context=f"investering ({method})",
         inputs=inputs,
         outputs=outputs,
@@ -234,22 +235,22 @@ def _render_investering_llm(
 
 st.html(
     page_title(
-        eyebrow="INVESTERINGSBEDÖMNING",
-        title="Investeringsbedömning",
+        eyebrow=t("INVESTERINGSBEDÖMNING"),
+        title=t("Investeringsbedömning"),
         subtitle=(
-            "Analysera lönsamheten i en investering med NPV, IRR, "
+            t("Analysera lönsamheten i en investering med NPV, IRR, "
             "återbetalningstid och annuitetsmetoden. "
-            "Inkluderar känslighetsanalys, inflations- och skattejustering samt Monte Carlo-simulering."
+            "Inkluderar känslighetsanalys, inflations- och skattejustering samt Monte Carlo-simulering.")
         ),
     )
 )
 
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "Grundläggande metoder",
-    "Känslighetsanalys",
-    "Inflation och skatt",
-    "Monte Carlo",
-    "Jämförelse",
+    t("Grundläggande metoder"),
+    t("Känslighetsanalys"),
+    t("Inflation och skatt"),
+    t("Monte Carlo"),
+    t("Jämförelse"),
 ])
 
 # ===========================================================================
@@ -311,32 +312,32 @@ with tab1:
     col_in, col_res = st.columns([1, 2], gap="large")
 
     with col_in:
-        st.markdown("**Investeringsparametrar**")
+        st.markdown(t("**Investeringsparametrar**"))
 
         with st.form("inv_basic_form"):
             antal_ar = st.slider(
-                "Antal år",
+                t("Antal år"),
                 min_value=1,
                 max_value=15,
                 key="inv_years",
-                help="Investeringens ekonomiska livslängd i år",
+                help=t("Investeringens ekonomiska livslängd i år"),
             )
 
             grundinvestering = st.number_input(
-                "Grundinvestering (kr)",
+                t("Grundinvestering (kr)"),
                 min_value=0.0,
                 step=10_000.0,
                 format="%.0f",
                 key="inv_initial",
-                help="Investeringens initialkostnad vid tidpunkt 0",
+                help=t("Investeringens initialkostnad vid tidpunkt 0"),
             )
 
             kalkylranta = st.slider(
-                "Kalkylränta (%)",
+                t("Kalkylränta (%)"),
                 min_value=0,
                 max_value=30,
                 key="inv_rate",
-                help="Avkastningskrav; används för att diskontera framtida kassaflöden",
+                help=t("Avkastningskrav; används för att diskontera framtida kassaflöden"),
             )
 
             # Fit the table to the horizon but keep what the student typed:
@@ -351,44 +352,44 @@ with tab1:
                 })
                 st.session_state.pop("cf_editor_tab1", None)
 
-            st.markdown("**Kassaflöden per år**")
+            st.markdown(t("**Kassaflöden per år**"))
             cf_df = st.data_editor(
                 st.session_state["inv_cf_df"],
                 use_container_width=True,
                 num_rows="fixed",
                 key="cf_editor_tab1",
                 column_config={
-                    "År": st.column_config.NumberColumn("År", disabled=True, width="small"),
+                    "År": st.column_config.NumberColumn(t("År"), disabled=True, width="small"),
                     "Kassaflöde (kr)": st.column_config.NumberColumn(
-                        "Kassaflöde (kr)",
+                        t("Kassaflöde (kr)"),
                         format="%.0f",
-                        help="Nettokassaflöde (inbetalningsöverskott) för respektive år",
+                        help=t("Nettokassaflöde (inbetalningsöverskott) för respektive år"),
                     ),
                 },
             )
             st.session_state["inv_cf_df"] = cf_df
 
-            st.markdown("**Restvärde och rörelsekapital**")
+            st.markdown(t("**Restvärde och rörelsekapital**"))
             restvarde = st.number_input(
-                "Restvärde (kr)",
+                t("Restvärde (kr)"),
                 min_value=0.0,
                 step=10_000.0,
                 format="%.0f",
                 key="inv_restvarde",
-                help="Vad utrustningen kan säljas för när kalkylperioden är slut. Räknas som en inbetalning sista året.",
+                help=t("Vad utrustningen kan säljas för när kalkylperioden är slut. Räknas som en inbetalning sista året."),
             )
             rorelsekapital = st.number_input(
-                "Rörelsekapital (kr)",
+                t("Rörelsekapital (kr)"),
                 min_value=0.0,
                 step=10_000.0,
                 format="%.0f",
                 key="inv_rorelsekapital",
                 help=(
-                    "Kapital som binds i lager och kundfordringar när investeringen "
-                    "startar. Betalas ut år 0 och frigörs (kommer tillbaka) sista året."
+                    t("Kapital som binds i lager och kundfordringar när investeringen "
+                    "startar. Betalas ut år 0 och frigörs (kommer tillbaka) sista året.")
                 ),
             )
-            inv_basic_form_submit = st.form_submit_button("Uppdatera värden", type="primary")
+            inv_basic_form_submit = st.form_submit_button(t("Uppdatera värden"), type="primary")
 
         # Autosave Tab 1 inputs
         save_state(
@@ -422,64 +423,67 @@ with tab1:
         annuitet_val = annuity(grundinvestering, rate, antal_ar)
 
         # KPI cards
-        irr_str = format_percent(irr_val) if irr_val is not None else "Ej beräkningsbar"
+        irr_str = format_percent(irr_val) if irr_val is not None else t("Ej beräkningsbar")
         irr_variant = (
             "success" if (irr_val is not None and irr_val >= rate) else "danger"
         )
-        pb_str = format_years(payback_val) if payback_val is not None else "Ej återbetald"
+        pb_str = format_years(payback_val) if payback_val is not None else t("Ej återbetald")
 
         render_kpi_row([
             kpi_card(
-                "Nuvärde (NPV)",
+                t("Nuvärde (NPV)"),
                 format_sek(npv_val),
                 variant="success" if npv_val >= 0 else "danger",
             ),
             kpi_card(
-                "Internränta (IRR)",
+                t("Internränta (IRR)"),
                 irr_str,
                 variant=irr_variant if irr_val is not None else "default",
             ),
-            kpi_card("Återbetalningstid", pb_str),
-            kpi_card("Annuitet", format_sek(annuitet_val) + "/år"),
+            kpi_card(t("Återbetalningstid"), pb_str),
+            kpi_card(t("Annuitet"), format_sek(annuitet_val) + t("/år")),
         ])
         if restvarde or rorelsekapital:
             st.caption(
-                f"Med i kalkylen: rörelsekapital {format_sek(rorelsekapital)} binds år 0 "
-                f"(total utbetalning {format_sek(total_initial)}) och frigörs år {antal_ar} "
-                f"tillsammans med restvärdet {format_sek(restvarde)}. Annuiteten avser "
-                "grundinvesteringens kapitalkostnad per år."
+                t(
+                    "Med i kalkylen: rörelsekapital {0} binds år 0 (total utbetalning {1}) och frigörs år {2} tillsammans med restvärdet {3}. Annuiteten avser grundinvesteringens kapitalkostnad per år.",
+                    format_sek(rorelsekapital),
+                    format_sek(total_initial),
+                    antal_ar,
+                    format_sek(restvarde),
+                )
             )
 
         # Recommendation banner
         if npv_val > 0:
             st.success(
-                f"Investeringen rekommenderas. NPV = {format_sek(npv_val)}, vilket är positivt "
-                f"vid kalkylräntan {kalkylranta} %. Investeringen skapar värde utöver avkastningskravet."
+                t(
+                    "Investeringen rekommenderas. NPV = {0}, vilket är positivt vid kalkylräntan {1} %. Investeringen skapar värde utöver avkastningskravet.",
+                    format_sek(npv_val),
+                    kalkylranta,
+                )
             )
         elif npv_val < 0:
             if irr_val is not None and irr_val < rate:
                 st.error(
-                    f"Investeringen rekommenderas inte. NPV = {format_sek(npv_val)}, "
-                    f"vilket är negativt vid kalkylräntan {kalkylranta} %. "
-                    f"De diskonterade kassaflödena täcker inte grundinvesteringen vid "
-                    f"detta avkastningskrav: kapitalet kostar mer än vad investeringen "
-                    f"genererar. Investeringens internränta är "
-                    f"{format_percent(irr_val)}, vilket är den högsta kalkylränta "
-                    f"investeringen klarar. Med en kalkylränta på högst "
-                    f"{format_percent(irr_val)} blir NPV noll, och en lägre kalkylränta "
-                    f"än så gör investeringen lönsam. Kan avkastningskravet inte "
-                    f"sänkas behöver kassaflödena förbättras eller grundinvesteringen minskas."
+                    t(
+                        "Investeringen rekommenderas inte. NPV = {0}, vilket är negativt vid kalkylräntan {1} %. De diskonterade kassaflödena täcker inte grundinvesteringen vid detta avkastningskrav: kapitalet kostar mer än vad investeringen genererar. Investeringens internränta är {2}, vilket är den högsta kalkylränta investeringen klarar. Med en kalkylränta på högst {3} blir NPV noll, och en lägre kalkylränta än så gör investeringen lönsam. Kan avkastningskravet inte sänkas behöver kassaflödena förbättras eller grundinvesteringen minskas.",
+                        format_sek(npv_val),
+                        kalkylranta,
+                        format_percent(irr_val),
+                        format_percent(irr_val),
+                    )
                 )
             else:
                 st.error(
-                    f"Investeringen rekommenderas inte. NPV = {format_sek(npv_val)}, "
-                    f"vilket är negativt vid kalkylräntan {kalkylranta} %. "
-                    f"Kassaflödena räcker inte för att täcka grundinvesteringen oavsett "
-                    f"kalkylränta. En lönsam version kräver högre kassaflöden eller en "
-                    f"lägre grundinvestering."
+                    t(
+                        "Investeringen rekommenderas inte. NPV = {0}, vilket är negativt vid kalkylräntan {1} %. Kassaflödena räcker inte för att täcka grundinvesteringen oavsett kalkylränta. En lönsam version kräver högre kassaflöden eller en lägre grundinvestering.",
+                        format_sek(npv_val),
+                        kalkylranta,
+                    )
                 )
         else:
-            st.info("Investeringen är precis på gränsen (NPV = 0). Övriga faktorer avgör.")
+            st.info(t("Investeringen är precis på gränsen (NPV = 0). Övriga faktorer avgör."))
 
         # Bar chart (cash flows) + cumulative discounted line
         years = list(range(1, antal_ar + 1))
@@ -497,14 +501,14 @@ with tab1:
         fig1.add_trace(go.Bar(
             x=years,
             y=cash_flows,
-            name="Kassaflöde (kr)",
+            name=t("Kassaflöde (kr)"),
             marker_color=bar_colors,
             opacity=0.85,
         ))
         fig1.add_trace(go.Scatter(
             x=years,
             y=cumulative_disc,
-            name="Kumulativt nuvärde (kr)",
+            name=t("Kumulativt nuvärde (kr)"),
             mode="lines+markers",
             line=dict(
                 color=COLORS["success"] if npv_val >= 0 else COLORS["danger"],
@@ -519,7 +523,7 @@ with tab1:
         fig1.update_layout(
             yaxis=dict(
                 title=dict(
-                    text="Kassaflöde (kr)",
+                    text=t("Kassaflöde (kr)"),
                     font=dict(color=COLORS["primary"]),
                 ),
             ),
@@ -527,20 +531,20 @@ with tab1:
                 overlaying="y",
                 side="right",
                 title=dict(
-                    text="Kumulativt nuvärde (kr)",
+                    text=t("Kumulativt nuvärde (kr)"),
                     font=dict(
                         color=COLORS["success"] if npv_val >= 0 else COLORS["danger"]
                     ),
                 ),
             ),
         )
-        apply_layout(fig1, title="Kassaflöden och kumulativt nuvärde", height=380)
+        apply_layout(fig1, title=t("Kassaflöden och kumulativt nuvärde"), height=380)
         st.plotly_chart(fig1, use_container_width=True)
 
         disc_pb_txt = (
-            f"Diskonterad återbetalningstid: {format_years(payback_disc_val)}"
+            t("Diskonterad återbetalningstid: {0}", format_years(payback_disc_val))
             if payback_disc_val is not None
-            else "Diskonterad återbetalningstid: ej återbetald inom perioden"
+            else t("Diskonterad återbetalningstid: ej återbetald inom perioden")
         )
         st.caption(disc_pb_txt)
 
@@ -554,27 +558,27 @@ with tab1:
             x=[r * 100 for r in profile_rates],
             y=profile_npvs,
             mode="lines",
-            name="NPV",
+            name=t("NPV"),
             line=dict(color=COLORS["primary"], width=2),
-            hovertemplate="Kalkylränta %{x:.1f} %<br>NPV %{y:,.0f} kr<extra></extra>",
+            hovertemplate=t("Kalkylränta") + " %{x:.1f} %<br>NPV %{y:,.0f} kr<extra></extra>",
         ))
         fig_prof.add_hline(y=0, line_dash="dot", line_color=COLORS["neutral"], line_width=1)
         fig_prof.add_trace(go.Scatter(
-            x=[kalkylranta], y=[npv_val], mode="markers", name="Vald kalkylränta",
+            x=[kalkylranta], y=[npv_val], mode="markers", name=t("Vald kalkylränta"),
             marker=dict(color=COLORS["warning"], size=10, symbol="diamond"),
         ))
         if irr_val is not None and 0 <= irr_val <= profile_rates[-1]:
             fig_prof.add_trace(go.Scatter(
-                x=[irr_val * 100], y=[0], mode="markers", name="IRR (NPV = 0)",
+                x=[irr_val * 100], y=[0], mode="markers", name=t("IRR (NPV = 0)"),
                 marker=dict(color=COLORS["danger"], size=11, symbol="circle"),
             ))
-        apply_layout(fig_prof, title="NPV-profil: nuvärde vid olika kalkylräntor", height=340)
-        fig_prof.update_xaxes(title_text="Kalkylränta (%)")
-        fig_prof.update_yaxes(title_text="NPV (kr)")
+        apply_layout(fig_prof, title=t("NPV-profil: nuvärde vid olika kalkylräntor"), height=340)
+        fig_prof.update_xaxes(title_text=t("Kalkylränta (%)"))
+        fig_prof.update_yaxes(title_text=t("NPV (kr)"))
         st.plotly_chart(fig_prof, use_container_width=True)
         st.caption(
-            "Där kurvan skär noll ligger internräntan. Så länge kalkylräntan är "
-            "lägre än IRR är NPV positivt."
+            t("Där kurvan skär noll ligger internräntan. Så länge kalkylräntan är "
+            "lägre än IRR är NPV positivt.")
         )
 
     # Excel export
@@ -634,7 +638,7 @@ with tab1:
         }],
     }
     st.download_button(
-        "Exportera till Excel",
+        t("Exportera till Excel"),
         data=export_to_excel(
             {"Resultat": export_rows, "Kassaflöden": export_cf, "NPV-profil": export_profile},
             header_lines=inv_export_header or None,
@@ -673,7 +677,7 @@ with tab1:
         interpretation=interpret_npv(npv_val, rate, irr_val, payback_val, antal_ar),
     )
 
-    if st.button("Återställ till standardvärden", key="inv_basic_reset_autosave"):
+    if st.button(t("Återställ till standardvärden"), key="inv_basic_reset_autosave"):
         clear_state("investering_basic")
         st.session_state["_reset_inv_basic"] = True
         st.rerun()
@@ -686,8 +690,8 @@ with tab1:
 
 with tab2:
     st.markdown(
-        "Analysera hur NPV förändras när en enskild parameter varieras, allt annat lika. "
-        "Identifiera kritisk variation och investeringens robusthet."
+        t("Analysera hur NPV förändras när en enskild parameter varieras, allt annat lika. "
+        "Identifiera kritisk variation och investeringens robusthet.")
     )
 
     # Autosave defaults for sensitivity tab
@@ -713,13 +717,20 @@ with tab2:
     base_cfs, base_inv = _effective_investment()
     base_rate = st.session_state["inv_rate"] / 100.0
 
+    _includes_extra = (
+        base_inv != float(st.session_state["inv_initial"])
+        or bool(st.session_state.get("inv_restvarde"))
+    )
     st.caption(
-        "Basparametrar från **Grundläggande metoder**: "
-        f"grundinvestering {format_sek(base_inv)} • "
-        f"kalkylränta {format_percent(base_rate)} • "
-        f"livslängd {st.session_state['inv_years']} år"
-        + (" (inklusive restvärde och rörelsekapital)" if base_inv != float(st.session_state["inv_initial"]) or st.session_state.get("inv_restvarde") else "")
-        + ". Ändra dem i den första fliken för att uppdatera känslighetsanalysen."
+        t(
+            "Basparametrar från **Grundläggande metoder**: grundinvestering {0} • "
+            "kalkylränta {1} • livslängd {2} år{3}. Ändra dem i den första fliken "
+            "för att uppdatera känslighetsanalysen.",
+            format_sek(base_inv),
+            format_percent(base_rate),
+            st.session_state["inv_years"],
+            t(" (inklusive restvärde och rörelsekapital)") if _includes_extra else "",
+        )
     )
 
     col_sa_in, col_sa_res = st.columns([1, 3], gap="large")
@@ -728,32 +739,32 @@ with tab2:
         _sa_param_opts = ["cash_flows", "discount_rate", "initial_investment"]
         with st.form("inv_sens_form"):
             sa_param = st.selectbox(
-                "Parameter att variera",
+                t("Parameter att variera"),
                 options=_sa_param_opts,
-                format_func=lambda x: {
+                format_func=lambda x: t({
                     "cash_flows": "Kassaflöden",
                     "discount_rate": "Kalkylränta",
                     "initial_investment": "Grundinvestering",
-                }[x],
-                help="Välj vilken parameter som skall varieras med alla andra fasta",
+                }[x]),
+                help=t("Välj vilken parameter som skall varieras med alla andra fasta"),
                 key="sa_param",
             )
 
             sa_min = st.slider(
-                "Lägsta variation (%)",
+                t("Lägsta variation (%)"),
                 min_value=-50,
                 max_value=0,
-                help="Nedre gräns för parametervariation",
+                help=t("Nedre gräns för parametervariation"),
                 key="sa_min",
             )
             sa_max = st.slider(
-                "Högsta variation (%)",
+                t("Högsta variation (%)"),
                 min_value=0,
                 max_value=100,
-                help="Övre gräns för parametervariation",
+                help=t("Övre gräns för parametervariation"),
                 key="sa_max",
             )
-            inv_sens_form_submit = st.form_submit_button("Uppdatera värden", type="primary")
+            inv_sens_form_submit = st.form_submit_button(t("Uppdatera värden"), type="primary")
 
         # Autosave sensitivity inputs
         save_state(
@@ -768,7 +779,7 @@ with tab2:
 
     with col_sa_res:
         if not base_cfs:
-            st.warning("Ange kassaflöden i fliken 'Grundläggande metoder' först.")
+            st.warning(t("Ange kassaflöden i fliken 'Grundläggande metoder' först."))
         else:
             sa_df = sensitivity_analysis(
                 base_cfs,
@@ -793,7 +804,7 @@ with tab2:
                 x=sa_df["variation_pct"],
                 y=sa_df["npv"],
                 mode="lines+markers",
-                name="NPV",
+                name=t("NPV"),
                 line=dict(color=COLORS["primary"], width=2),
                 marker=dict(size=4),
             ))
@@ -801,18 +812,18 @@ with tab2:
                 y=0,
                 line_dash="dash",
                 line_color=COLORS["danger"],
-                annotation_text="NPV = 0 (nollpunkten)",
+                annotation_text=t("NPV = 0 (nollpunkten)"),
                 annotation_position="top right",
             )
             fig2.add_trace(go.Scatter(
                 x=[0],
                 y=[base_npv],
                 mode="markers",
-                name="Basfall (0 %)",
+                name=t("Basfall (0 %)"),
                 marker=dict(color=COLORS["warning"], size=10, symbol="diamond"),
             ))
 
-            apply_layout(fig2, title=f"NPV-känslighet: {param_label}", height=420)
+            apply_layout(fig2, title=t("NPV-känslighet: {0}", t(param_label)), height=420)
             st.plotly_chart(fig2, use_container_width=True)
 
             # Locate critical variation via linear interpolation across the sign change
@@ -828,33 +839,37 @@ with tab2:
                         critical_var = v1 + (-n1) * (v2 - v1) / (n2 - n1)
                         break
                 if critical_var is not None:
-                    direction = "nedåt" if critical_var < 0 else "uppåt"
+                    direction = t("nedåt") if critical_var < 0 else t("uppåt")
                     st.info(
-                        f"Kritisk variation: {critical_var:.1f} %. "
-                        f"Om {param_label.lower()} ändras med mer än "
-                        f"{abs(critical_var):.1f} % {direction} från basfallet blir NPV negativt."
+                        t(
+                            "Kritisk variation: {0} %. Om {1} ändras med mer än {2} % {3} från basfallet blir NPV negativt.",
+                            format(critical_var, ".1f"),
+                            t(param_label).lower(),
+                            format(abs(critical_var), ".1f"),
+                            direction,
+                        )
                     )
             elif not pos_mask.any():
-                st.error("NPV är negativt i hela variationsintervallet. Investeringen är känslig.")
+                st.error(t("NPV är negativt i hela variationsintervallet. Investeringen är känslig."))
             else:
                 st.success(
-                    "NPV är positivt i hela variationsintervallet. Investeringen är robust."
+                    t("NPV är positivt i hela variationsintervallet. Investeringen är robust.")
                 )
 
     # Tornado overview: all three parameters flexed by the same relative
     # variation in one chart.
     if base_cfs:
-        st.markdown("#### Tornadodiagram: alla parametrar samtidigt")
+        st.markdown(t("#### Tornadodiagram: alla parametrar samtidigt"))
         tornado_var = st.slider(
-            "Variation per parameter (± %)",
+            t("Variation per parameter (± %)"),
             min_value=5,
             max_value=50,
             value=20,
             step=5,
             key="sa_tornado_var",
             help=(
-                "Varje parameter varieras med samma relativa avvikelse, "
-                "allt annat lika. Längst stapel = mest avgörande parameter."
+                t("Varje parameter varieras med samma relativa avvikelse, "
+                "allt annat lika. Längst stapel = mest avgörande parameter.")
             ),
         )
         tor_df = tornado_analysis(
@@ -870,7 +885,7 @@ with tab2:
             x=tor_lo - tor_base_npv,
             base=tor_base_npv,
             orientation="h",
-            name="Nedsida",
+            name=t("Nedsida"),
             marker_color=COLORS["danger"],
         ))
         fig_tor.add_trace(go.Bar(
@@ -878,21 +893,21 @@ with tab2:
             x=tor_hi - tor_base_npv,
             base=tor_base_npv,
             orientation="h",
-            name="Uppsida",
+            name=t("Uppsida"),
             marker_color=COLORS["success"],
         ))
         fig_tor.add_vline(
             x=tor_base_npv,
             line_dash="dash",
             line_color=COLORS["neutral"],
-            annotation_text="Bas-NPV",
+            annotation_text=t("Bas-NPV"),
             annotation_position="top",
         )
         fig_tor.update_layout(barmode="overlay")
         fig_tor.update_yaxes(autorange="reversed")
         apply_layout(
             fig_tor,
-            title=f"NPV-intervall vid ±{tornado_var} % per parameter",
+            title=t("NPV-intervall vid ±{0} % per parameter", tornado_var),
             height=320,
         )
         st.plotly_chart(fig_tor, use_container_width=True)
@@ -912,7 +927,7 @@ with tab2:
         interpretation=interpret_sensitivity(base_npv, critical_var, param_label),
     )
 
-    if st.button("Återställ till standardvärden", key="inv_sens_reset_autosave"):
+    if st.button(t("Återställ till standardvärden"), key="inv_sens_reset_autosave"):
         clear_state("investering_sensitivity")
         st.session_state["_reset_inv_sens"] = True
         st.rerun()
@@ -925,8 +940,8 @@ with tab2:
 
 with tab3:
     st.markdown(
-        "Beräkna investeringsvärdet med hänsyn till inflation och bolagsskatt. "
-        "Den nominella kalkylräntan härleds via Fishers ekvation."
+        t("Beräkna investeringsvärdet med hänsyn till inflation och bolagsskatt. "
+        "Den nominella kalkylräntan härleds via Fishers ekvation.")
     )
 
     # Autosave defaults for inflation tab
@@ -956,7 +971,7 @@ with tab3:
     # write their session keys before they are created.
     _it_pull_col, _it_cap_col = st.columns([1, 3])
     with _it_pull_col:
-        if st.button("Hämta värden från Grundläggande metoder", key="it_pull_tab1",
+        if st.button(t("Hämta värden från Grundläggande metoder"), key="it_pull_tab1",
                      use_container_width=True):
             st.session_state["it_real_rate_pct"] = float(st.session_state["inv_rate"])
             st.session_state["it_depreciation"] = float(st.session_state["inv_initial"]) / max(
@@ -964,67 +979,67 @@ with tab3:
             )
     with _it_cap_col:
         st.caption(
-            "Real kalkylränta och avskrivning följer inte automatiskt med när du "
-            f"ändrar flik 1 (kalkylränta just nu: {st.session_state['inv_rate']:.1f} %, "
-            "rak avskrivning "
-            f"{format_sek(float(st.session_state['inv_initial']) / max(int(st.session_state['inv_years']), 1))}/år). "
-            "Tryck på knappen för att hämta dem."
+            t(
+                "Real kalkylränta och avskrivning följer inte automatiskt med när du ändrar flik 1 (kalkylränta just nu: {0} %, rak avskrivning {1}/år). Tryck på knappen för att hämta dem.",
+                format(st.session_state['inv_rate'], ".1f"),
+                format_sek(float(st.session_state['inv_initial']) / max(int(st.session_state['inv_years']), 1)),
+            )
         )
 
     col_it_in, col_it_res = st.columns([1, 2], gap="large")
 
     with col_it_in:
-        st.markdown("**Nominella kassaflöden**")
+        st.markdown(t("**Nominella kassaflöden**"))
         st.caption(
-            "Synkat från fliken **Grundläggande metoder**. Ändra kassaflöden "
-            "där så uppdateras inflations- och skattekalkylen automatiskt."
+            t("Synkat från fliken **Grundläggande metoder**. Ändra kassaflöden "
+            "där så uppdateras inflations- och skattekalkylen automatiskt.")
         )
         _tab3_display_cf = st.session_state["inv_cf_df"].rename(
             columns={"Kassaflöde (kr)": "Nominellt kassaflöde (kr)"}
         )
         st.dataframe(
-            _tab3_display_cf,
+            t_frame(_tab3_display_cf),
             use_container_width=True,
             hide_index=True,
         )
         it_cf_df = st.session_state["inv_cf_df"]
         with st.form("inv_inflation_form"):
             real_rate_pct = st.number_input(
-                "Real kalkylränta (%)",
+                t("Real kalkylränta (%)"),
                 min_value=0.0,
                 max_value=50.0,
                 step=0.5,
                 format="%.1f",
-                help="Avkastningskrav exklusive inflation (real kalkylränta)",
+                help=t("Avkastningskrav exklusive inflation (real kalkylränta)"),
                 key="it_real_rate_pct",
             )
             inflation_pct = st.number_input(
-                "Inflationstakt (%)",
+                t("Inflationstakt (%)"),
                 min_value=0.0,
                 max_value=30.0,
                 step=0.5,
                 format="%.1f",
-                help="Förväntad genomsnittlig KPI-inflation per år",
+                help=t("Förväntad genomsnittlig KPI-inflation per år"),
                 key="it_inflation_pct",
             )
             tax_pct = st.number_input(
-                "Bolagsskattesats (%)",
+                t("Bolagsskattesats (%)"),
                 min_value=0.0,
                 max_value=50.0,
                 step=0.1,
                 format="%.1f",
-                help="Aktuell svensk bolagsskattesats (20,6 %)",
+                help=t("Aktuell svensk bolagsskattesats (20,6 %)"),
                 key="it_tax_pct",
             )
             depreciation = st.number_input(
-                "Skattemässig avskrivning per år (kr)",
+                t("Skattemässig avskrivning per år (kr)"),
                 min_value=0.0,
                 step=10_000.0,
                 format="%.0f",
-                help="Avskrivning som dras av från skattepliktig inkomst (rak avskrivning)",
+                help=t("Avskrivning som dras av från skattepliktig inkomst (rak avskrivning)"),
                 key="it_depreciation",
             )
-            inv_inflation_form_submit = st.form_submit_button("Uppdatera värden", type="primary")
+            inv_inflation_form_submit = st.form_submit_button(t("Uppdatera värden"), type="primary")
 
         # Autosave inflation tab inputs (parameter values only)
         save_state(
@@ -1041,7 +1056,7 @@ with tab3:
         it_cfs = it_cf_df["Kassaflöde (kr)"].tolist()
 
         if not it_cfs:
-            st.warning("Inga kassaflöden angivna.")
+            st.warning(t("Inga kassaflöden angivna."))
         else:
             it_res = npv_with_inflation_tax(
                 it_cfs,
@@ -1055,18 +1070,18 @@ with tab3:
 
             render_kpi_row([
                 kpi_card(
-                    "Nominell kalkylränta",
+                    t("Nominell kalkylränta"),
                     format_percent(nom_rate),
-                    delta=f"Fishers ekvation: {nom_rate * 100:.2f}%",
+                    delta=t("Fishers ekvation: {0}%", format(nom_rate * 100, ".2f")),
                     delta_direction="flat",
                 ),
                 kpi_card(
-                    "NPV före skatt",
+                    t("NPV före skatt"),
                     format_sek(it_res["npv_before_tax"]),
                     variant="success" if it_res["npv_before_tax"] >= 0 else "danger",
                 ),
                 kpi_card(
-                    "NPV efter skatt",
+                    t("NPV efter skatt"),
                     format_sek(it_res["npv_after_tax"]),
                     variant="success" if it_res["npv_after_tax"] >= 0 else "danger",
                 ),
@@ -1075,20 +1090,24 @@ with tab3:
             tax_impact = it_res["npv_after_tax"] - it_res["npv_before_tax"]
             if tax_impact < 0:
                 st.error(
-                    f"Skatteeffekt: -{format_sek(abs(tax_impact))} "
-                    "(skatten reducerar investeringsvärdet)"
+                    t(
+                        "Skatteeffekt: -{0} (skatten reducerar investeringsvärdet)",
+                        format_sek(abs(tax_impact)),
+                    )
                 )
             else:
                 st.success(
-                    f"Skatteeffekt: +{format_sek(tax_impact)} "
-                    "(avskrivningsavsättningen ökar investeringsvärdet)"
+                    t(
+                        "Skatteeffekt: +{0} (avskrivningsavsättningen ökar investeringsvärdet)",
+                        format_sek(tax_impact),
+                    )
                 )
 
             # Waterfall: before tax → tax effect → after tax
             fig3 = go.Figure(go.Waterfall(
                 orientation="v",
                 measure=["absolute", "relative", "total"],
-                x=["NPV före skatt", "Skatteeffekt", "NPV efter skatt"],
+                x=[t("NPV före skatt"), t("Skatteeffekt"), t("NPV efter skatt")],
                 y=[
                     it_res["npv_before_tax"],
                     tax_impact,
@@ -1105,12 +1124,16 @@ with tab3:
                 ],
                 textposition="outside",
             ))
-            apply_layout(fig3, title="NPV före och efter skatt (vattenfall)", height=380)
+            apply_layout(fig3, title=t("NPV före och efter skatt (vattenfall)"), height=380)
             st.plotly_chart(fig3, use_container_width=True)
 
             st.caption(
-                f"Fishers ekvation: (1 + {real_rate_pct:.1f}%)(1 + {inflation_pct:.1f}%) - 1 "
-                f"= {nom_rate * 100:.2f}%"
+                t(
+                    "Fishers ekvation: (1 + {0}%)(1 + {1}%) - 1 = {2}%",
+                    format(real_rate_pct, ".1f"),
+                    format(inflation_pct, ".1f"),
+                    format(nom_rate * 100, ".2f"),
+                )
             )
 
     # LLM explanation and Q&A for Tab 3
@@ -1133,7 +1156,7 @@ with tab3:
             ),
         )
 
-    if st.button("Återställ till standardvärden", key="inv_inflation_reset_autosave"):
+    if st.button(t("Återställ till standardvärden"), key="inv_inflation_reset_autosave"):
         clear_state("investering_inflation")
         st.session_state["_reset_inv_inflation"] = True
         st.rerun()
@@ -1146,9 +1169,9 @@ with tab3:
 
 with tab4:
     st.markdown(
-        "Monte Carlo-simulering skattar NPV-fördelningen genom att slumpmässigt dra "
+        t("Monte Carlo-simulering skattar NPV-fördelningen genom att slumpmässigt dra "
         "grundinvestering, kassaflöden och kalkylränta från normala sannolikhetsfördelningar. "
-        "Resultatet visar riskprofilen och sannolikheten för positivt utfall."
+        "Resultatet visar riskprofilen och sannolikheten för positivt utfall.")
     )
 
     # Autosave defaults for Monte Carlo tab (parameters only, not results)
@@ -1186,7 +1209,7 @@ with tab4:
 
     _mc_pull_col, _mc_cap_col = st.columns([1, 3])
     with _mc_pull_col:
-        if st.button("Hämta värden från Grundläggande metoder", key="mc_pull_tab1",
+        if st.button(t("Hämta värden från Grundläggande metoder"), key="mc_pull_tab1",
                      use_container_width=True):
             _eff_flows, _eff_initial = _effective_investment()
             st.session_state["mc_inv_mean"] = _eff_initial
@@ -1196,78 +1219,78 @@ with tab4:
             st.session_state.pop("mc_last_result", None)
     with _mc_cap_col:
         st.caption(
-            "Grundinvestering, kalkylränta och kassaflöden följer inte automatiskt "
-            "med när du ändrar flik 1 (grundinvestering just nu: "
-            f"{format_sek(float(st.session_state['inv_initial']))}, kalkylränta "
-            f"{st.session_state['inv_rate']:.1f} %). Tryck på knappen för att hämta "
-            "dem, inklusive restvärde och rörelsekapital."
+            t(
+                "Grundinvestering, kalkylränta och kassaflöden följer inte automatiskt med när du ändrar flik 1 (grundinvestering just nu: {0}, kalkylränta {1} %). Tryck på knappen för att hämta dem, inklusive restvärde och rörelsekapital.",
+                format_sek(float(st.session_state['inv_initial'])),
+                format(st.session_state['inv_rate'], ".1f"),
+            )
         )
 
     col_mc_in, col_mc_res = st.columns([1, 2], gap="large")
 
     with col_mc_in:
-        st.markdown("**Grundinvestering**")
+        st.markdown(t("**Grundinvestering**"))
         mc_inv_mean = st.number_input(
-            "Förväntat grundinvesteringsbelopp (kr)",
+            t("Förväntat grundinvesteringsbelopp (kr)"),
             min_value=0.0,
             step=10_000.0,
             format="%.0f",
-            help="Medelvärde för grundinvesteringen",
+            help=t("Medelvärde för grundinvesteringen"),
             key="mc_inv_mean",
         )
         mc_inv_std = st.number_input(
-            "Standardavvikelse grundinvestering (kr)",
+            t("Standardavvikelse grundinvestering (kr)"),
             min_value=0.0,
             step=5_000.0,
             format="%.0f",
-            help="Osäkerhet (1 standardavvikelse) kring grundinvesteringens storlek",
+            help=t("Osäkerhet (1 standardavvikelse) kring grundinvesteringens storlek"),
             key="mc_inv_std",
         )
 
-        st.markdown("**Kalkylränta**")
+        st.markdown(t("**Kalkylränta**"))
         mc_rate_mean = st.number_input(
-            "Förväntad kalkylränta (%)",
+            t("Förväntad kalkylränta (%)"),
             min_value=0.0,
             max_value=50.0,
             step=0.5,
             format="%.1f",
-            help="Medelvärde för kalkylräntan",
+            help=t("Medelvärde för kalkylräntan"),
             key="mc_rate_mean",
         )
         mc_rate_std = st.number_input(
-            "Standardavvikelse kalkylränta (%)",
+            t("Standardavvikelse kalkylränta (%)"),
             min_value=0.0,
             max_value=20.0,
             step=0.5,
             format="%.1f",
-            help="Osäkerhet (1 standardavvikelse) kring kalkylräntan",
+            help=t("Osäkerhet (1 standardavvikelse) kring kalkylräntan"),
             key="mc_rate_std",
         )
 
         n_sims = st.slider(
-            "Antal simuleringar",
+            t("Antal simuleringar"),
             min_value=1_000,
             max_value=50_000,
             step=1_000,
-            help="Fler simuleringar ger precisare resultat men tar längre tid",
+            help=t("Fler simuleringar ger precisare resultat men tar längre tid"),
             key="mc_n_sims",
         )
 
         mc_corr = st.slider(
-            "Korrelation mellan årens kassaflöden",
+            t("Korrelation mellan årens kassaflöden"),
             min_value=0.0,
             max_value=0.9,
             step=0.1,
             help=(
-                "0 = åren är oberoende. Högre värden betyder att bra år "
+                t("0 = åren är oberoende. Högre värden betyder att bra år "
                 "tenderar att följas av bra år (dras via Cholesky-"
                 "faktorisering), vilket ger en bredare och mer realistisk "
-                "NPV-spridning."
+                "NPV-spridning.")
             ),
             key="mc_corr",
         )
 
-        st.markdown("**Kassaflöden per år (medelvärde och standardavvikelse)**")
+        st.markdown(t("**Kassaflöden per år (medelvärde och standardavvikelse)**"))
         n_mc_years = st.session_state["inv_years"]
         mc_cf_key = "mc_cf_df"
 
@@ -1280,9 +1303,9 @@ with tab4:
             use_container_width=True,
             num_rows="fixed",
             column_config={
-                "År": st.column_config.NumberColumn("År", disabled=True, width="small"),
-                "Medel (kr)": st.column_config.NumberColumn("Medel (kr)", format="%.0f"),
-                "Std (kr)": st.column_config.NumberColumn("Std (kr)", format="%.0f"),
+                "År": st.column_config.NumberColumn(t("År"), disabled=True, width="small"),
+                "Medel (kr)": st.column_config.NumberColumn(t("Medel (kr)"), format="%.0f"),
+                "Std (kr)": st.column_config.NumberColumn(t("Std (kr)"), format="%.0f"),
             },
         )
         st.session_state[mc_cf_key] = mc_cf_df
@@ -1301,7 +1324,7 @@ with tab4:
             },
         )
 
-        run_sim = st.button("Kör simulering", type="primary", use_container_width=True)
+        run_sim = st.button(t("Kör simulering"), type="primary", use_container_width=True)
 
     with col_mc_res:
         mc_cf_means_tup = tuple(mc_cf_df["Medel (kr)"].tolist())
@@ -1310,7 +1333,7 @@ with tab4:
         # Run only on explicit button press: no surprise
         # 10 000-draw simulation on first page visit.
         if run_sim:
-            with st.spinner("Kör Monte Carlo-simulering..."):
+            with st.spinner(t("Kör Monte Carlo-simulering...")):
                 mc_result = _run_monte_carlo(
                     inv_mean=mc_inv_mean,
                     inv_std=mc_inv_std,
@@ -1328,14 +1351,14 @@ with tab4:
         if mc_result is not None:
             # 4 KPI metrics
             render_kpi_row([
-                kpi_card("Medel-NPV", format_sek(mc_result["mean"])),
-                kpi_card("Median-NPV", format_sek(mc_result["median"])),
+                kpi_card(t("Medel-NPV"), format_sek(mc_result["mean"])),
+                kpi_card(t("Median-NPV"), format_sek(mc_result["median"])),
                 kpi_card(
-                    "P5 (pessimistiskt)", format_sek(mc_result["p5"]),
+                    t("P5 (pessimistiskt)"), format_sek(mc_result["p5"]),
                     variant="success" if mc_result["p5"] >= 0 else "danger",
                 ),
                 kpi_card(
-                    "P95 (optimistiskt)", format_sek(mc_result["p95"]),
+                    t("P95 (optimistiskt)"), format_sek(mc_result["p95"]),
                     variant="success" if mc_result["p95"] >= 0 else "danger",
                 ),
             ])
@@ -1359,7 +1382,7 @@ with tab4:
                         {prob_pct:.1f} %
                     </div>
                     <div style="font-size:1rem;color:#111827;margin-top:4px;">
-                        Sannolikhet för positivt NPV
+                        {t("Sannolikhet för positivt NPV")}
                     </div>
                 </div>
                 """,
@@ -1374,7 +1397,7 @@ with tab4:
             fig4.add_trace(go.Histogram(
                 x=npvs_list,
                 nbinsx=60,
-                name="NPV-fördelning",
+                name=t("NPV-fördelning"),
                 marker_color=COLORS["primary_light"],
                 opacity=0.75,
             ))
@@ -1402,7 +1425,7 @@ with tab4:
                     xshift=4 if val >= 0 else -4,
                 )
 
-            apply_layout(fig4, title="NPV-fördelning (Monte Carlo-histogram)", height=420)
+            apply_layout(fig4, title=t("NPV-fördelning (Monte Carlo-histogram)"), height=420)
             fig4.update_layout(margin={"t": 80})
             st.plotly_chart(fig4, use_container_width=True)
 
@@ -1410,33 +1433,39 @@ with tab4:
             fig5 = go.Figure()
             fig5.add_trace(go.Box(
                 y=npvs_list,
-                name="NPV",
+                name=t("NPV"),
                 marker_color=COLORS["primary"],
                 boxmean=True,
                 boxpoints=False,
             ))
-            apply_layout(fig5, title="NPV-spridning (lådagram)", height=300)
+            apply_layout(fig5, title=t("NPV-spridning (lådagram)"), height=300)
             st.plotly_chart(fig5, use_container_width=True)
 
             # Swedish decision text
             if prob_pct >= 70:
                 st.success(
-                    f"Stark sannolikhet för positivt utfall ({prob_pct:.1f} %). "
-                    "Investeringen förväntas skapa värde i det stora flertalet scenarier."
+                    t(
+                        "Stark sannolikhet för positivt utfall ({0} %). Investeringen förväntas skapa värde i det stora flertalet scenarier.",
+                        format(prob_pct, ".1f"),
+                    )
                 )
             elif prob_pct >= 50:
                 st.warning(
-                    f"Måttlig sannolikhet för positivt utfall ({prob_pct:.1f} %). "
-                    "Grundlig riskbedömning och känslighetsanalys rekommenderas före beslut."
+                    t(
+                        "Måttlig sannolikhet för positivt utfall ({0} %). Grundlig riskbedömning och känslighetsanalys rekommenderas före beslut.",
+                        format(prob_pct, ".1f"),
+                    )
                 )
             else:
                 st.error(
-                    f"Låg sannolikhet för positivt utfall ({prob_pct:.1f} %). "
-                    "Investeringen bedöms som riskfylld. Överväg alternativ eller omstrukturering."
+                    t(
+                        "Låg sannolikhet för positivt utfall ({0} %). Investeringen bedöms som riskfylld. Överväg alternativ eller omstrukturering.",
+                        format(prob_pct, ".1f"),
+                    )
                 )
 
             st.caption(
-                f"Simulering baserad på {n_sims:,} iterationer, seed = 42".replace(",", " ")
+                t("Simulering baserad på {0} iterationer, seed = 42", f"{n_sims:,}".replace(",", " "))
             )
 
             _npvs = np.asarray(mc_result["npvs"], dtype=float)
@@ -1459,7 +1488,7 @@ with tab4:
             })
             _mc_header = _header_lines()
             st.download_button(
-                "Exportera simuleringen till Excel",
+                t("Exportera simuleringen till Excel"),
                 data=export_to_excel(
                     {"Sammanfattning": mc_summary_df, "Percentiler": mc_pct_df},
                     header_lines=_mc_header or None,
@@ -1477,7 +1506,7 @@ with tab4:
                 key="mc_export",
             )
         else:
-            st.info("Tryck 'Kör simulering' för att starta Monte Carlo-analysen.")
+            st.info(t("Tryck 'Kör simulering' för att starta Monte Carlo-analysen."))
 
     # LLM explanation and Q&A for Tab 4
     if mc_result is not None:
@@ -1501,7 +1530,7 @@ with tab4:
             ),
         )
 
-    if st.button("Återställ till standardvärden", key="inv_mc_reset_autosave"):
+    if st.button(t("Återställ till standardvärden"), key="inv_mc_reset_autosave"):
         clear_state("investering_monte_carlo")
         st.session_state["_reset_inv_mc"] = True
         st.rerun()
@@ -1514,10 +1543,10 @@ with tab4:
 
 with tab5:
     st.markdown(
-        "Ställ två investeringsalternativ mot varandra med samma kalkylränta. "
+        t("Ställ två investeringsalternativ mot varandra med samma kalkylränta. "
         "Har alternativen samma livslängd avgör NPV. Har de olika livslängd "
         "jämförs i stället annuiteten av NPV, eftersom det längre alternativet "
-        "annars får fler år på sig att samla nuvärde."
+        "annars får fler år på sig att samla nuvärde.")
     )
 
     _CMP_DEFAULTS = {
@@ -1551,7 +1580,7 @@ with tab5:
                 else:
                     st.session_state[_k] = float(_cmp_saved[_k])
 
-    if st.button("Hämta alternativ A från Grundläggande metoder", key="cmp_pull_tab1"):
+    if st.button(t("Hämta alternativ A från Grundläggande metoder"), key="cmp_pull_tab1"):
         _eff_flows, _eff_initial = _effective_investment()
         st.session_state["cmp_rate"] = float(st.session_state["inv_rate"])
         st.session_state["cmp_a_initial"] = _eff_initial
@@ -1562,44 +1591,44 @@ with tab5:
 
     with st.form("inv_cmp_form"):
         cmp_rate = st.number_input(
-            "Gemensam kalkylränta (%)",
+            t("Gemensam kalkylränta (%)"),
             min_value=0.0,
             max_value=50.0,
             step=0.5,
             format="%.1f",
             key="cmp_rate",
-            help="Samma kalkylränta används för båda alternativen",
+            help=t("Samma kalkylränta används för båda alternativen"),
         )
         col_a, col_b = st.columns(2, gap="large")
         with col_a:
-            st.markdown("**Alternativ A**")
-            cmp_a_name = st.text_input("Namn", key="cmp_a_name")
+            st.markdown(t("**Alternativ A**"))
+            cmp_a_name = st.text_input(t("Namn"), key="cmp_a_name")
             cmp_a_initial = st.number_input(
-                "Grundinvestering (kr)",
+                t("Grundinvestering (kr)"),
                 min_value=0.0, step=50_000.0, format="%.0f", key="cmp_a_initial",
             )
             cmp_a_cf = st.number_input(
-                "Årligt kassaflöde (kr)",
+                t("Årligt kassaflöde (kr)"),
                 min_value=0.0, step=10_000.0, format="%.0f", key="cmp_a_cf",
             )
             cmp_a_years = st.number_input(
-                "Livslängd (år)", min_value=1, max_value=30, step=1, key="cmp_a_years",
+                t("Livslängd (år)"), min_value=1, max_value=30, step=1, key="cmp_a_years",
             )
         with col_b:
-            st.markdown("**Alternativ B**")
-            cmp_b_name = st.text_input("Namn", key="cmp_b_name")
+            st.markdown(t("**Alternativ B**"))
+            cmp_b_name = st.text_input(t("Namn"), key="cmp_b_name")
             cmp_b_initial = st.number_input(
-                "Grundinvestering (kr)",
+                t("Grundinvestering (kr)"),
                 min_value=0.0, step=50_000.0, format="%.0f", key="cmp_b_initial",
             )
             cmp_b_cf = st.number_input(
-                "Årligt kassaflöde (kr)",
+                t("Årligt kassaflöde (kr)"),
                 min_value=0.0, step=10_000.0, format="%.0f", key="cmp_b_cf",
             )
             cmp_b_years = st.number_input(
-                "Livslängd (år)", min_value=1, max_value=30, step=1, key="cmp_b_years",
+                t("Livslängd (år)"), min_value=1, max_value=30, step=1, key="cmp_b_years",
             )
-        st.form_submit_button("Uppdatera värden", type="primary")
+        st.form_submit_button(t("Uppdatera värden"), type="primary")
 
     save_state(
         "investering_jamforelse",
@@ -1640,13 +1669,13 @@ with tab5:
 
     render_kpi_row([
         kpi_card(
-            f"{'NPV' if criterion == 'npv' else 'Annuitet av NPV'}: {row['name']}",
-            format_sek(row[_value_col]) + ("" if criterion == "npv" else "/år"),
+            f"{'NPV' if criterion == 'npv' else t('Annuitet av NPV')}: {row['name']}",
+            format_sek(row[_value_col]) + ("" if criterion == "npv" else t("/år")),
             variant="success" if row["name"] == _best_row["name"] and row[_value_col] > 0 else (
                 "danger" if row[_value_col] < 0 else "default"
             ),
             delta=(
-                ("Högst nuvärde" if criterion == "npv" else "Högst annuitet")
+                (t("Högst nuvärde") if criterion == "npv" else t("Högst annuitet"))
                 if row["name"] == _best_row["name"] else None
             ),
             delta_direction="up",
@@ -1667,42 +1696,54 @@ with tab5:
             for _, row in cmp_df.iterrows()
         },
     })
-    st.dataframe(_cmp_table, use_container_width=True, hide_index=True)
+    st.dataframe(t_frame(_cmp_table), use_container_width=True, hide_index=True)
 
     if _best_row[_value_col] <= 0 and _other_row[_value_col] <= 0:
         st.error(
-            "Båda alternativen har negativt eller noll nuvärde vid "
-            f"{cmp_rate:.1f} % kalkylränta. Rekommendationen är att avstå."
+            t(
+                "Båda alternativen har negativt eller noll nuvärde vid {0} % kalkylränta. Rekommendationen är att avstå.",
+                format(cmp_rate, ".1f"),
+            )
         )
     elif criterion == "npv":
         st.success(
-            f"Rekommendation: **{_best_row['name']}** har högst nuvärde "
-            f"({format_sek(_best_row['npv'])} mot "
-            f"{format_sek(_other_row['npv'])}). Alternativen har samma "
-            "livslängd, så NPV är beslutskriteriet."
+            t(
+                "Rekommendation: **{0}** har högst nuvärde ({1} mot {2}). Alternativen har samma livslängd, så NPV är beslutskriteriet.",
+                _best_row['name'],
+                format_sek(_best_row['npv']),
+                format_sek(_other_row['npv']),
+            )
         )
     else:
         _npv_leader = cmp_df.sort_values("npv", ascending=False).iloc[0]
         _note = (
-            f" Observera att {_npv_leader['name']} har högst NPV, men bara för att "
-            "det löper fler år."
+            t(
+                " Observera att {0} har högst NPV, men bara för att det löper fler år.",
+                _npv_leader["name"],
+            )
             if _npv_leader["name"] != _best_row["name"] else ""
         )
         st.success(
-            f"Rekommendation: **{_best_row['name']}** har högst annuitet "
-            f"({format_sek(_best_row['annuity'])}/år mot "
-            f"{format_sek(_other_row['annuity'])}/år). Livslängderna skiljer sig "
-            f"({int(_best_row['years'])} och {int(_other_row['years'])} år), så "
-            "NPV går inte att jämföra direkt. Annuiteten fördelar nuvärdet jämnt "
-            "per år och förutsätter att alternativen kan upprepas." + _note
+            t(
+                "Rekommendation: **{0}** har högst annuitet ({1}/år mot {2}/år). "
+                "Livslängderna skiljer sig ({3} och {4} år), så NPV går inte att "
+                "jämföra direkt. Annuiteten fördelar nuvärdet jämnt per år och "
+                "förutsätter att alternativen kan upprepas.",
+                _best_row["name"],
+                format_sek(_best_row["annuity"]),
+                format_sek(_other_row["annuity"]),
+                int(_best_row["years"]),
+                int(_other_row["years"]),
+            )
+            + _note
         )
     if ranking_conflict(cmp_df):
         st.info(
-            "Observera: IRR rangordnar alternativen annorlunda än NPV. Det "
+            t("Observera: IRR rangordnar alternativen annorlunda än NPV. Det "
             "är den klassiska skalkonflikten: ett mindre projekt kan ha "
             "högre avkastning i procent medan ett större skapar mer värde "
             "i kronor. Vid val mellan alternativ är det nuvärdet i kronor "
-            "som maximerar förmögenheten."
+            "som maximerar förmögenheten.")
         )
 
     # NPV profiles of both alternatives. Where they cross (Fisher's
@@ -1721,7 +1762,7 @@ with tab5:
     fig_cmp.add_hline(y=0, line_dash="dot", line_color=COLORS["neutral"], line_width=1)
     fig_cmp.add_vline(
         x=cmp_rate, line_dash="dash", line_color=COLORS["neutral"],
-        annotation_text="Vald kalkylränta", annotation_position="top",
+        annotation_text=t("Vald kalkylränta"), annotation_position="top",
     )
     fisher = crossover_rate(
         _cmp_projects[0]["cash_flows"], _cmp_projects[0]["initial_investment"],
@@ -1733,20 +1774,21 @@ with tab5:
         )
         fig_cmp.add_trace(go.Scatter(
             x=[fisher * 100], y=[_fisher_npv], mode="markers",
-            name="Fishers skärningspunkt",
+            name=t("Fishers skärningspunkt"),
             marker=dict(color=COLORS["danger"], size=11),
         ))
-    apply_layout(fig_cmp, title="NPV-profiler för alternativen", height=380)
-    fig_cmp.update_xaxes(title_text="Kalkylränta (%)")
-    fig_cmp.update_yaxes(title_text="NPV (kr)")
+    apply_layout(fig_cmp, title=t("NPV-profiler för alternativen"), height=380)
+    fig_cmp.update_xaxes(title_text=t("Kalkylränta (%)"))
+    fig_cmp.update_yaxes(title_text=t("NPV (kr)"))
     st.plotly_chart(fig_cmp, use_container_width=True)
     if fisher is not None and 0 < fisher < _cmp_rates[-1]:
         _leader = cmp_df.sort_values("npv", ascending=False).iloc[0]["name"]
         st.caption(
-            f"Kurvorna skär varandra vid {format_percent(fisher)} (Fishers "
-            "skärningspunkt). På ena sidan om den räntan har det ena alternativet "
-            "högst NPV, på andra sidan det andra. Vid vald kalkylränta har "
-            f"{_leader} högst NPV."
+            t(
+                "Kurvorna skär varandra vid {0} (Fishers skärningspunkt). På ena sidan om den räntan har det ena alternativet högst NPV, på andra sidan det andra. Vid vald kalkylränta har {1} högst NPV.",
+                format_percent(fisher),
+                _leader,
+            )
         )
 
     _cmp_export = pd.DataFrame({
@@ -1759,7 +1801,7 @@ with tab5:
     })
     _cmp_header = _header_lines()
     st.download_button(
-        "Exportera jämförelsen till Excel",
+        t("Exportera jämförelsen till Excel"),
         data=export_to_excel(
             {"Jämförelse": _cmp_export},
             header_lines=_cmp_header or None,
@@ -1777,7 +1819,7 @@ with tab5:
         key="cmp_export",
     )
 
-    if st.button("Återställ till standardvärden", key="inv_cmp_reset_autosave"):
+    if st.button(t("Återställ till standardvärden"), key="inv_cmp_reset_autosave"):
         clear_state("investering_jamforelse")
         st.session_state["_reset_inv_cmp"] = True
         st.rerun()

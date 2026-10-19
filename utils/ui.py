@@ -13,6 +13,8 @@ import html
 
 import streamlit as st
 
+from utils.i18n import get_lang, sync_lang_param, t
+
 # ---------------------------------------------------------------------------
 # App metadata (single source of truth)
 #
@@ -1066,7 +1068,7 @@ def info_tooltip(label: str, text: str) -> str:
 
 def footer_note(version: str = "1.0", updated: str = "") -> str:
     """Page footer with version badge and optional updated date."""
-    label = f"Uppdaterad {updated}" if updated else "Ekonomistyrning Sandbox"
+    label = t("Uppdaterad {0}", updated) if updated else "Ekonomistyrning Sandbox"
     return (
         f'<div class="eks-footer">'
         f'<span class="eks-footer-label">{label}</span>'
@@ -1077,7 +1079,7 @@ def footer_note(version: str = "1.0", updated: str = "") -> str:
 
 def offline_badge() -> str:
     """Warning badge shown when the explanation service is unavailable."""
-    return f'<div class="eks-offline-badge">{LABELS["llm_offline"]}</div>'
+    return f'<div class="eks-offline-badge">{t(LABELS["llm_offline"])}</div>'
 
 
 def grounding_warning(cited_value: float, calc_value: float) -> str:
@@ -1172,15 +1174,15 @@ def _render_current_scenario_banner() -> None:
     difficulty_code = str(info.get("difficulty", "")).strip()
     difficulty_label = _DIFFICULTY_DISPLAY.get(difficulty_code, difficulty_code)
 
-    st.html('<span class="eks-sidebar-section-label">AKTUELLT FÖRETAG</span>')
+    st.html(f'<span class="eks-sidebar-section-label">{t("AKTUELLT FÖRETAG")}</span>')
     meta_bits: list[str] = []
     if source:
-        meta_bits.append(source)
+        meta_bits.append(t(source))
     if difficulty_label:
-        meta_bits.append(difficulty_label)
+        meta_bits.append(t(difficulty_label))
     st.html(scenario_banner_html(name, meta_bits, description))
     if st.button(
-        "Rensa aktuellt företag",
+        t("Rensa aktuellt företag"),
         key="eks_clear_current_scenario",
         use_container_width=True,
     ):
@@ -1209,11 +1211,11 @@ def _render_model_selector() -> None:
     if MODEL_SESSION_KEY not in st.session_state:
         st.session_state[MODEL_SESSION_KEY] = get_active_model()
     st.selectbox(
-        "Modell för förklaringar",
+        t("Modell för förklaringar"),
         options=list(SUPPORTED_MODELS),
         format_func=lambda m: m.split("/")[-1],
         key=MODEL_SESSION_KEY,
-        help=(
+        help=t(
             "Qwen3-8B är standard och snabbast. Qwen3-14B ger ofta något "
             "utförligare förklaringar men svarar långsammare."
         ),
@@ -1239,11 +1241,30 @@ def _render_llm_budget_meter() -> None:
         return
     remaining = get_session_calls_remaining()
     st.html(
-        '<span class="eks-sidebar-section-label">FÖRKLARINGAR</span>'
+        f'<span class="eks-sidebar-section-label">{t("FÖRKLARINGAR")}</span>'
         '<div style="padding:0 16px 4px 16px;font-family:\'IBM Plex Mono\','
         'monospace;font-size:11px;">'
-        f"Kvar denna session: {remaining}/{SESSION_CALL_CAP}</div>"
+        + t("Kvar denna session: {0}/{1}", remaining, SESSION_CALL_CAP)
+        + "</div>"
     )
+
+
+def _render_language_switch() -> None:
+    """Svenska / English switch for the interface.
+
+    The widget key is the same session key that utils.i18n reads, so the
+    whole page renders in the new language on the run after a click.
+    """
+    get_lang()  # seeds the key from the URL before the widget exists
+    st.radio(
+        "Språk / Language",
+        options=["sv", "en"],
+        format_func=lambda code: {"sv": "Svenska", "en": "English"}[code],
+        key="lang",
+        horizontal=True,
+        label_visibility="collapsed",
+    )
+    sync_lang_param()
 
 
 def render_sidebar(active_page: str) -> None:
@@ -1259,13 +1280,17 @@ def render_sidebar(active_page: str) -> None:
             '<div class="eks-brand-bar"></div>'
             '<span class="eks-brand-mark">EKS</span>'
             '<span class="eks-brand-title">Ekonomistyrning</span>'
-            '<span class="eks-brand-sub">Kalkyl &middot; Investering &middot; Budget &middot; Avvikelser</span>'
+            '<span class="eks-brand-sub">'
+            + t("Kalkyl &middot; Investering &middot; Budget &middot; Avvikelser")
+            + "</span>"
             "</div>"
         )
 
-        st.html('<span class="eks-sidebar-section-label">MODULER</span>')
+        _render_language_switch()
+
+        st.html(f'<span class="eks-sidebar-section-label">{t("MODULER")}</span>')
         for _key, label, path in _NAV_PAGES:
-            st.page_link(path, label=label)
+            st.page_link(path, label=t(label))
 
         _render_current_scenario_banner()
         _render_model_selector()
@@ -1284,5 +1309,5 @@ def render_session_cap_card() -> None:
 
     from utils.llm import SESSION_CAP_MESSAGE
 
-    st.info(SESSION_CAP_MESSAGE)
-    st.caption("Beräkningar och diagram fungerar normalt även utan förklaringar.")
+    st.info(t(SESSION_CAP_MESSAGE))
+    st.caption(t("Beräkningar och diagram fungerar normalt även utan förklaringar."))

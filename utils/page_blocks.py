@@ -14,6 +14,7 @@ import streamlit as st
 
 from utils.grounding_ui import show_grounding_warning
 from utils.humanizer import humanize
+from utils.i18n import t
 from utils.llm import (
     LLMSessionCapError,
     LLMUnavailableError,
@@ -77,17 +78,18 @@ def render_scenario_controls(
     cols = st.columns([2, 1, 1])
     with cols[0]:
         label = st.selectbox(
-            "Svårighetsgrad",
+            t("Svårighetsgrad"),
             DIFFICULTY_OPTIONS,
             index=1,
             key=f"{prefix}_scenario_difficulty",
-            help=SCENARIO_DIFFICULTY_HELP,
+            format_func=t,
+            help=t(SCENARIO_DIFFICULTY_HELP),
         )
     with cols[1]:
         st.write("")
         st.write("")
         generate = st.button(
-            "Generera ett exempelföretag",
+            t("Generera ett exempelföretag"),
             key=f"{prefix}_gen_scenario",
             use_container_width=True,
         )
@@ -97,7 +99,7 @@ def render_scenario_controls(
             st.write("")
             st.write("")
             reset = st.button(
-                reset_label, key=f"{prefix}_reset_defaults", use_container_width=True
+                t(reset_label), key=f"{prefix}_reset_defaults", use_container_width=True
             )
 
     adopt = render_adopt_button(module, f"{prefix}_adopt_scenario")
@@ -113,7 +115,7 @@ def render_scenario_controls(
     else:
         code = DIFFICULTY_MAP[label]
         company = None
-    with st.spinner("Genererar exempelföretag..."):
+    with st.spinner(t("Genererar exempelföretag...")):
         scenario = generate_scenario(module, code, company=company)
     return scenario, code, reset
 
@@ -139,7 +141,7 @@ def render_scenario_info(prefix: str, desc_key: str = "bransch_beskrivning") -> 
     """Show the generated company's name and description, if any."""
     info = st.session_state.get(f"{prefix}_scenario_info")
     if info:
-        st.info(f"**{info.get('foretag_namn', '')}**\n\n{info.get(desc_key, '')}")
+        st.info(f"**{info.get('foretag_namn', '')}**\n\n{t(str(info.get(desc_key, '')))}")
 
 
 # ---------------------------------------------------------------------------
@@ -170,7 +172,7 @@ def render_qa_chat(
             st.markdown(msg)
 
     if not is_llm_available():
-        st.caption(OFFLINE_CHAT_CAPTION)
+        st.caption(t(OFFLINE_CHAT_CAPTION))
         return
 
     question = st.chat_input(placeholder, key=input_key)
@@ -183,7 +185,7 @@ def render_qa_chat(
             context, inputs, outputs, question, chat_history=history
         )
         with st.chat_message("assistant"):
-            with st.spinner("Tänker..."):
+            with st.spinner(t("Tänker...")):
                 raw = cached_chat(sys_p, usr_p)
             result = humanize(raw)
             st.markdown(result.text)
@@ -196,9 +198,8 @@ def render_qa_chat(
                 if grounding["missing"]:
                     st.html(
                         '<div class="eks-grounding-warn">'
-                        "OBS: Svaret kan ha refererat fel siffra, "
-                        "verifiera mot beräkningen ovan."
-                        "</div>"
+                        + t("OBS: Svaret kan ha refererat fel siffra, verifiera mot beräkningen ovan.")
+                        + "</div>"
                     )
                 show_grounding_warning(grounding)
         history.append(("user", question))
@@ -210,8 +211,8 @@ def render_qa_chat(
     except LLMUnavailableError:
         with st.chat_message("assistant"):
             st.info(
-                "Förklaringstjänsten svarar inte just nu. Frågan sparades "
-                "inte, prova igen om en stund."
+                t("Förklaringstjänsten svarar inte just nu. Frågan sparades "
+                "inte, prova igen om en stund.")
             )
 
 
@@ -242,10 +243,10 @@ def render_share_link() -> None:
         base = str(st.context.url or "")
     except AttributeError:  # older Streamlit without st.context.url
         base = ""
-    with st.popover("Dela dina siffror"):
+    with st.popover(t("Dela dina siffror")):
         st.caption(
-            "Länken innehåller alla värden du har matat in här. Den som öppnar "
+            t("Länken innehåller alla värden du har matat in här. Den som öppnar "
             "den ser samma kalkyl, och du kan själv använda den för att komma "
-            "tillbaka senare."
+            "tillbaka senare.")
         )
         st.code(share_url(base, params), language=None, wrap_lines=True)

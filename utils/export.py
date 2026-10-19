@@ -16,6 +16,8 @@ from collections.abc import Iterable, Mapping, Sequence
 
 import pandas as pd
 
+from utils.i18n import get_lang, t_frame, translate
+
 _FORBIDDEN_SHEET_CHARS = re.compile(r"[\\/*?:\[\]]")
 
 
@@ -62,6 +64,9 @@ def export_to_excel(
         context_format = workbook.add_format({"bold": True, "italic": True})
 
         for sheet_name, df in sheets.items():
+            # Headers and text cells follow the interface language; the
+            # sheet names stay Swedish so chart specs keep matching them.
+            df = t_frame(df)
             safe_name = _safe_sheet_name(sheet_name)
             sheet_context = _resolve_header_lines(sheet_name, header_lines)
             offset = len(sheet_context)
@@ -139,21 +144,22 @@ def _add_chart(
         return f"='{sheet_name}'!{ref}"
 
     series: dict = {
-        "name": str(spec.get("title", "")),
+        "name": translate(str(spec.get("title", "")), get_lang()),
         "categories": _qualify(spec.get("categories", "A1:A2")),
         "values": _qualify(spec.get("values", "B1:B2")),
     }
     chart.add_series(series)
 
+    lang = get_lang()
     title = spec.get("title")
     if title:
-        chart.set_title({"name": str(title)})
+        chart.set_title({"name": translate(str(title), lang)})
     x_axis_title = spec.get("x_axis_title")
     if x_axis_title:
-        chart.set_x_axis({"name": str(x_axis_title)})
+        chart.set_x_axis({"name": translate(str(x_axis_title), lang)})
     y_axis_title = spec.get("y_axis_title")
     if y_axis_title:
-        chart.set_y_axis({"name": str(y_axis_title)})
+        chart.set_y_axis({"name": translate(str(y_axis_title), lang)})
 
     chart.set_style(11)
     chart.set_size({"width": 480, "height": 320})

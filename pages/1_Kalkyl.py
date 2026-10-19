@@ -23,6 +23,7 @@ from utils.explain import (
 )
 from utils.export import export_to_excel, table_range
 from utils.formatting import format_number, format_percent, format_sek
+from utils.i18n import t, t_frame
 from utils.kalkyl import (
     abc_calc,
     abc_unallocated,
@@ -122,7 +123,7 @@ def _render_llm_section(
     render_qa_chat(
         chat_key=f"{tab_key}_chat_history",
         input_key=f"{tab_key}_chat_input",
-        placeholder="Fråga om denna kalkyl",
+        placeholder=t("Fråga om denna kalkyl"),
         context=f"kalkyl ({calc_type})",
         inputs=inputs,
         outputs=outputs,
@@ -262,17 +263,17 @@ if "abc_prod_df" not in st.session_state:
 
 st.html(
     page_title(
-        eyebrow="KALKYLERING",
-        title="Kalkylering",
+        eyebrow=t("KALKYLERING"),
+        title=t("Kalkylering"),
         subtitle=(
-            "Tre kalkyleringsmetoder: självkostnadskalkyl (påläggsmetoden), "
-            "bidragskalkyl med nollpunktsanalys, och aktivitetsbaserad kalkylering (ABC)."
+            t("Tre kalkyleringsmetoder: självkostnadskalkyl (påläggsmetoden), "
+            "bidragskalkyl med nollpunktsanalys, och aktivitetsbaserad kalkylering (ABC).")
         ),
     )
 )
 
 tab_sj, tab_bid, tab_abc = st.tabs(
-    ["Självkostnadskalkyl", "Bidragskalkyl", "ABC-kalkyl"]
+    [t("Självkostnadskalkyl"), t("Bidragskalkyl"), t("ABC-kalkyl")]
 )
 
 # ===========================================================================
@@ -305,47 +306,47 @@ with tab_sj:
         c1, c2 = st.columns(2)
         with c1:
             dm = st.number_input(
-                "Direkt material (kr/styck)",
+                t("Direkt material (kr/styck)"),
                 min_value=0.0, step=10.0, key="sj_dm",
-                help="Direkt materialkostnad per tillverkad enhet",
+                help=t("Direkt materialkostnad per tillverkad enhet"),
             )
             dl = st.number_input(
-                "Direkt lön (kr/styck)",
+                t("Direkt lön (kr/styck)"),
                 min_value=0.0, step=10.0, key="sj_dl",
-                help="Direkt lönekostnad per tillverkad enhet",
+                help=t("Direkt lönekostnad per tillverkad enhet"),
             )
             mo_pct = st.number_input(
-                "MO (Materialomkostnad) (%)",
+                t("MO (Materialomkostnad) (%)"),
                 min_value=0.0, max_value=500.0, step=1.0, key="sj_mo",
-                help="Pålägg på direkt material för indirekta materialkostnader",
+                help=t("Pålägg på direkt material för indirekta materialkostnader"),
             )
             to_pct = st.number_input(
-                "TO (Tillverkningsomkostnad) (%)",
+                t("TO (Tillverkningsomkostnad) (%)"),
                 min_value=0.0, max_value=500.0, step=1.0, key="sj_to",
-                help="Pålägg på direkt lön för tillverkningsomkostnader",
+                help=t("Pålägg på direkt lön för tillverkningsomkostnader"),
             )
         with c2:
             ao_pct = st.number_input(
-                "AO (Administrationsomkostnad) (%)",
+                t("AO (Administrationsomkostnad) (%)"),
                 min_value=0.0, max_value=200.0, step=1.0, key="sj_ao",
-                help="Pålägg på tillverkningskostnad för administrationskostnader",
+                help=t("Pålägg på tillverkningskostnad för administrationskostnader"),
             )
             fo_pct = st.number_input(
-                "FO (Försäljningsomkostnad) (%)",
+                t("FO (Försäljningsomkostnad) (%)"),
                 min_value=0.0, max_value=200.0, step=1.0, key="sj_fo",
-                help="Pålägg på tillverkningskostnad för försäljningskostnader",
+                help=t("Pålägg på tillverkningskostnad för försäljningskostnader"),
             )
             units_sj = st.number_input(
-                "Antal enheter",
+                t("Antal enheter"),
                 min_value=1.0, step=100.0, key="sj_units",
-                help="Produktionsvolym per period",
+                help=t("Produktionsvolym per period"),
             )
             markup_pct = st.number_input(
-                "Vinstpålägg (%)",
+                t("Vinstpålägg (%)"),
                 min_value=0.0, max_value=500.0, step=1.0, key="sj_markup",
-                help="Pålägg på självkostnaden för att få fram ett pris (prissättning med självkostnad + vinst)",
+                help=t("Pålägg på självkostnaden för att få fram ett pris (prissättning med självkostnad + vinst)"),
             )
-        kalkyl_sj_form_submit = st.form_submit_button("Uppdatera värden", type="primary")
+        kalkyl_sj_form_submit = st.form_submit_button(t("Uppdatera värden"), type="primary")
 
     # Autosave current input values on every rerun (Streamlit rerun = keystroke commit)
     save_state(
@@ -366,23 +367,23 @@ with tab_sj:
     pricing = price_from_markup(sj["sjalvkostnad_per_styck"], markup_pct)
 
     render_kpi_row([
-        kpi_card("Självkostnad / styck", format_sek(sj["sjalvkostnad_per_styck"], decimals=2)),
-        kpi_card("Tillverkningskostnad", format_sek(sj["tillverkningskostnad"])),
-        kpi_card("Total självkostnad", format_sek(sj["sjalvkostnad_totalt"])),
+        kpi_card(t("Självkostnad / styck"), format_sek(sj["sjalvkostnad_per_styck"], decimals=2)),
+        kpi_card(t("Tillverkningskostnad"), format_sek(sj["tillverkningskostnad"])),
+        kpi_card(t("Total självkostnad"), format_sek(sj["sjalvkostnad_totalt"])),
     ])
     render_kpi_row([
         kpi_card(
-            "Föreslaget pris / styck",
+            t("Föreslaget pris / styck"),
             format_sek(pricing["pris"], decimals=2),
-            delta=f"självkostnad + {format_number(markup_pct, 0)} %",
+            delta=t("självkostnad + {0} %", format_number(markup_pct, 0)),
             delta_direction="flat",
         ),
-        kpi_card("Vinst / styck", format_sek(pricing["vinst_per_styck"], decimals=2)),
-        kpi_card("Vinstmarginal", format_percent(pricing["vinstmarginal"])),
+        kpi_card(t("Vinst / styck"), format_sek(pricing["vinst_per_styck"], decimals=2)),
+        kpi_card(t("Vinstmarginal"), format_percent(pricing["vinstmarginal"])),
     ])
     st.caption(
-        "Vinstmarginalen räknas på priset, så den blir lägre än vinstpålägget, "
-        "som räknas på självkostnaden."
+        t("Vinstmarginalen räknas på priset, så den blir lägre än vinstpålägget, "
+        "som räknas på självkostnaden.")
     )
 
     # Per-unit waterfall: DM -> +MO -> +DL -> +TO -> Tillv.kost. -> +AO -> +FO -> Självkost.
@@ -391,7 +392,7 @@ with tab_sj:
     fo_u = tvk_u * (fo_pct / 100)
 
     fig_wf = go.Figure(go.Waterfall(
-        x=["DM", "+MO", "+DL", "+TO", "Tillv.kost.", "+AO", "+FO", "Självkost."],
+        x=[t("DM"), t("+MO"), t("+DL"), t("+TO"), t("Tillv.kost."), t("+AO"), t("+FO"), t("Självkost.")],
         y=[
             dm,
             dm * (mo_pct / 100),
@@ -409,7 +410,7 @@ with tab_sj:
         texttemplate="%{y:,.0f} kr",
         textposition="outside",
     ))
-    apply_layout(fig_wf, title="Kostnadsuppbyggnad per styck (kr)", height=380)
+    apply_layout(fig_wf, title=t("Kostnadsuppbyggnad per styck (kr)"), height=380)
     st.plotly_chart(fig_wf, use_container_width=True)
 
     sj_df = pd.DataFrame({
@@ -431,8 +432,8 @@ with tab_sj:
         ],
     })
 
-    with st.expander("Detaljerad kostnadstabell"):
-        st.dataframe(sj_df, use_container_width=True, hide_index=True)
+    with st.expander(t("Detaljerad kostnadstabell")):
+        st.dataframe(t_frame(sj_df), use_container_width=True, hide_index=True)
 
     # Build inputs/outputs dicts for the explanation
     sj_inputs = {
@@ -487,16 +488,16 @@ with tab_sj:
         charts=sj_charts,
     )
     st.download_button(
-        label="Exportera till Excel",
+        label=t("Exportera till Excel"),
         data=xlsx_sj,
         file_name="sjalvkostnadskalkyl.xlsx",
         mime=_XLSX_MIME,
         key="sj_export",
     )
 
-    st.caption("Metod: Självkostnadskalkylering med påläggsmetoden")
+    st.caption(t("Metod: Självkostnadskalkylering med påläggsmetoden"))
 
-    if st.button("Återställ till standardvärden", key="sj_reset_autosave"):
+    if st.button(t("Återställ till standardvärden"), key="sj_reset_autosave"):
         clear_state("kalkyl_sjalvkostnad")
         st.session_state["_reset_sj"] = True
         st.rerun()
@@ -528,27 +529,27 @@ with tab_bid:
         c1, c2 = st.columns(2)
         with c1:
             pris = st.number_input(
-                "Försäljningspris (kr/styck)",
+                t("Försäljningspris (kr/styck)"),
                 min_value=0.0, step=10.0, key="bid_pris",
-                help="Pris per såld enhet",
+                help=t("Pris per såld enhet"),
             )
             rorlig = st.number_input(
-                "Rörlig kostnad (kr/styck)",
+                t("Rörlig kostnad (kr/styck)"),
                 min_value=0.0, step=10.0, key="bid_rorlig",
-                help="Total rörlig kostnad per enhet, inklusive inköp och distribution",
+                help=t("Total rörlig kostnad per enhet, inklusive inköp och distribution"),
             )
         with c2:
             fasta = st.number_input(
-                "Fasta kostnader (kr/period)",
+                t("Fasta kostnader (kr/period)"),
                 min_value=0.0, step=50_000.0, key="bid_fasta",
-                help="Totala fasta kostnader som inte varierar med volymen",
+                help=t("Totala fasta kostnader som inte varierar med volymen"),
             )
             units_bid = st.number_input(
-                "Volym (antal enheter)",
+                t("Volym (antal enheter)"),
                 min_value=1.0, step=500.0, key="bid_units",
-                help="Antal sålda/producerade enheter per period",
+                help=t("Antal sålda/producerade enheter per period"),
             )
-        kalkyl_bid_form_submit = st.form_submit_button("Uppdatera värden", type="primary")
+        kalkyl_bid_form_submit = st.form_submit_button(t("Uppdatera värden"), type="primary")
 
     # Autosave current input values on every rerun
     save_state(
@@ -566,25 +567,26 @@ with tab_bid:
 
     if tb <= 0:
         st.warning(
-            f"Täckningsbidrag per styck är {format_sek(tb, decimals=2)}, "
-            "negativt TB innebär att varje såld enhet ökar förlusten. "
-            "Nollpunktsanalys är inte tillämplig."
+            t(
+                "Täckningsbidrag per styck är {0}, negativt TB innebär att varje såld enhet ökar förlusten. Nollpunktsanalys är inte tillämplig.",
+                format_sek(tb, decimals=2),
+            )
         )
 
     render_kpi_row([
         kpi_card(
-            "Täckningsbidrag / styck",
+            t("Täckningsbidrag / styck"),
             format_sek(tb, decimals=2),
             variant="success" if tb > 0 else "danger",
         ),
-        kpi_card("Total täckningsbidrag", format_sek(bid["total_tackningsbidrag"])),
+        kpi_card(t("Total täckningsbidrag"), format_sek(bid["total_tackningsbidrag"])),
         kpi_card(
-            "Resultat",
+            t("Resultat"),
             format_sek(bid["resultat"]),
             variant="success" if bid["resultat"] >= 0 else "danger",
         ),
         kpi_card(
-            "Säkerhetsmarginal",
+            t("Säkerhetsmarginal"),
             format_percent(bid["sakerhetsmarginal_pct"]) if bid["sakerhetsmarginal_pct"] is not None else "-",
         ),
     ])
@@ -592,27 +594,27 @@ with tab_bid:
     if bid["breakeven_units"] is not None:
         render_kpi_row([
             kpi_card(
-                "Nollpunktsvolym",
-                f"{format_number(bid['breakeven_units'], 0)} st",
+                t("Nollpunktsvolym"),
+                t("{0} st", format_number(bid['breakeven_units'], 0)),
             ),
-            kpi_card("Nollpunktsintäkt", format_sek(bid["breakeven_revenue"])),
+            kpi_card(t("Nollpunktsintäkt"), format_sek(bid["breakeven_revenue"])),
             kpi_card(
-                "Säkerhetsmarginal (st)",
-                f"{format_number(bid['sakerhetsmarginal_units'], 0)} st",
+                t("Säkerhetsmarginal (st)"),
+                t("{0} st", format_number(bid['sakerhetsmarginal_units'], 0)),
             ),
         ])
 
     # Revenue/cost bar chart at current volume
     fig_bid = go.Figure(data=[
-        go.Bar(name="Total intäkt", x=["Utfall"], y=[bid["total_intakt"]], marker_color=COLORS["primary"]),
-        go.Bar(name="Rörliga kostnader", x=["Utfall"], y=[bid["total_rorlig_kostnad"]], marker_color=COLORS["warning"]),
-        go.Bar(name="Fasta kostnader", x=["Utfall"], y=[fasta], marker_color=COLORS["neutral"]),
+        go.Bar(name=t("Total intäkt"), x=[t("Utfall")], y=[bid["total_intakt"]], marker_color=COLORS["primary"]),
+        go.Bar(name=t("Rörliga kostnader"), x=[t("Utfall")], y=[bid["total_rorlig_kostnad"]], marker_color=COLORS["warning"]),
+        go.Bar(name=t("Fasta kostnader"), x=[t("Utfall")], y=[fasta], marker_color=COLORS["neutral"]),
         go.Bar(
-            name="Resultat", x=["Utfall"], y=[bid["resultat"]],
+            name=t("Resultat"), x=[t("Utfall")], y=[bid["resultat"]],
             marker_color=color_by_sign(bid["resultat"]),
         ),
     ])
-    apply_layout(fig_bid, title="Intäkter och kostnader vid aktuell volym (kr)", height=360)
+    apply_layout(fig_bid, title=t("Intäkter och kostnader vid aktuell volym (kr)"), height=360)
     st.plotly_chart(fig_bid, use_container_width=True)
 
     # Breakeven line chart
@@ -622,22 +624,22 @@ with tab_bid:
         fig_be = go.Figure()
         fig_be.add_trace(go.Scatter(
             x=vol_range, y=vol_range * pris,
-            name="Intäkt", line={"color": COLORS["primary"], "width": 2},
+            name=t("Intäkt"), line={"color": COLORS["primary"], "width": 2},
         ))
         fig_be.add_trace(go.Scatter(
             x=vol_range, y=fasta + vol_range * rorlig,
-            name="Total kostnad", line={"color": COLORS["danger"], "width": 2},
+            name=t("Total kostnad"), line={"color": COLORS["danger"], "width": 2},
         ))
         fig_be.add_vline(
             x=bid["breakeven_units"],
             line_dash="dash", line_color=COLORS["warning"],
-            annotation_text=f"Nollpunkt: {format_number(bid['breakeven_units'], 0)} st",
+            annotation_text=t("Nollpunkt: {0} st", format_number(bid['breakeven_units'], 0)),
             annotation_position="top right",
         )
         # Circular marker at the intersection of the revenue and cost lines.
         fig_be.add_trace(go.Scatter(
             x=[bid["breakeven_units"]], y=[bid["breakeven_revenue"]],
-            mode="markers", name="Nollpunkt",
+            mode="markers", name=t("Nollpunkt"),
             marker={
                 "size": 13,
                 "color": COLORS["warning"],
@@ -646,11 +648,11 @@ with tab_bid:
             },
             hovertemplate="Nollpunkt<br>%{x:,.0f} st<br>%{y:,.0f} kr<extra></extra>",
         ))
-        apply_layout(fig_be, title="Nollpunktsdiagram (kr vs antal enheter)", height=380)
+        apply_layout(fig_be, title=t("Nollpunktsdiagram (kr vs antal enheter)"), height=380)
         # Label both axes and let Plotly expand the margins so the tick labels
         # and titles are never clipped.
-        fig_be.update_xaxes(title_text="Antal enheter (st)", automargin=True)
-        fig_be.update_yaxes(title_text="Kronor (kr)", automargin=True)
+        fig_be.update_xaxes(title_text=t("Antal enheter (st)"), automargin=True)
+        fig_be.update_yaxes(title_text=t("Kronor (kr)"), automargin=True)
         # apply_layout places a horizontal legend below the plot (y=-0.25),
         # which collides with the x-axis title "Antal enheter (st)". In a
         # break-even chart both lines rise to the right, so the upper-left
@@ -672,17 +674,19 @@ with tab_bid:
         st.plotly_chart(fig_be, use_container_width=True)
 
     # What-if: one factor at a time, ±10 %, no new inputs needed.
-    st.markdown("**Känslighet: resultat vid ±10 %**")
+    st.markdown(t("**Känslighet: resultat vid ±10 %**"))
     sens_df = contribution_sensitivity(pris, rorlig, fasta, units_bid, step=0.10)
     st.dataframe(
-        sens_df.map(format_sek),
+        t_frame(sens_df.map(format_sek)),
         use_container_width=True,
     )
     _swing = (sens_df.iloc[:, 2] - sens_df.iloc[:, 0]).abs()
     st.caption(
-        f"Varje rad ändrar en faktor i taget, allt annat lika. Resultatet är mest "
-        f"känsligt för {_swing.idxmax().lower()}: ±10 % flyttar resultatet "
-        f"{format_sek(_swing.max() / 2)} åt vardera hållet."
+        t(
+            "Varje rad ändrar en faktor i taget, allt annat lika. Resultatet är mest känsligt för {0}: ±10 % flyttar resultatet {1} åt vardera hållet.",
+            t(_swing.idxmax()).lower(),
+            format_sek(_swing.max() / 2),
+        )
     )
 
     # Build inputs/outputs dicts for the explanation
@@ -762,16 +766,16 @@ with tab_bid:
         charts=bid_charts,
     )
     st.download_button(
-        label="Exportera till Excel",
+        label=t("Exportera till Excel"),
         data=xlsx_bid,
         file_name="bidragskalkyl.xlsx",
         mime=_XLSX_MIME,
         key="bid_export",
     )
 
-    st.caption("Metod: Bidragskalkyl och nollpunktsanalys")
+    st.caption(t("Metod: Bidragskalkyl och nollpunktsanalys"))
 
-    if st.button("Återställ till standardvärden", key="bid_reset_autosave"):
+    if st.button(t("Återställ till standardvärden"), key="bid_reset_autosave"):
         clear_state("kalkyl_bidrag")
         st.session_state["_reset_bid"] = True
         st.rerun()
@@ -812,9 +816,9 @@ with tab_abc:
 
     if st.session_state.pop("abc_scenario_warning", False):
         st.warning(
-            "Det genererade företaget hade ett oväntat format för "
+            t("Det genererade företaget hade ett oväntat format för "
             "aktiviteter/produkter, så tabellerna behåller sina tidigare "
-            "värden. Generera gärna ett nytt exempelföretag."
+            "värden. Generera gärna ett nytt exempelföretag.")
         )
     render_scenario_info("abc")
 
@@ -822,17 +826,17 @@ with tab_abc:
         col_a, col_b = st.columns(2)
 
         with col_a:
-            st.subheader("Aktiviteter")
+            st.subheader(t("Aktiviteter"))
             act_df: pd.DataFrame = st.data_editor(
                 st.session_state.abc_act_df,
                 num_rows="dynamic",
                 use_container_width=True,
                 key="abc_act_de",
                 column_config={
-                    "Aktivitet": st.column_config.TextColumn("Aktivitet", required=True),
-                    "Total kostnad (kr)": st.column_config.NumberColumn("Total kostnad (kr)", min_value=0.0),
-                    "Kostnadsdrivare": st.column_config.TextColumn("Kostnadsdrivare"),
-                    "Total drivvolym": st.column_config.NumberColumn("Total drivvolym", min_value=0.01),
+                    "Aktivitet": st.column_config.TextColumn(t("Aktivitet"), required=True),
+                    "Total kostnad (kr)": st.column_config.NumberColumn(t("Total kostnad (kr)"), min_value=0.0),
+                    "Kostnadsdrivare": st.column_config.TextColumn(t("Kostnadsdrivare")),
+                    "Total drivvolym": st.column_config.NumberColumn(t("Total drivvolym"), min_value=0.01),
                 },
             )
 
@@ -841,23 +845,23 @@ with tab_abc:
         ] if "Aktivitet" in act_df.columns else []
 
         with col_b:
-            st.subheader("Produkter / tjänster")
+            st.subheader(t("Produkter / tjänster"))
             prod_df: pd.DataFrame = st.data_editor(
                 _align_products(st.session_state.abc_prod_df, act_names_now),
                 num_rows="dynamic",
                 use_container_width=True,
                 key="abc_prod_de",
                 column_config={
-                    "Produkt": st.column_config.TextColumn("Produkt", required=True),
-                    "Direkt kostnad (kr)": st.column_config.NumberColumn("Direkt kostnad (kr)", min_value=0.0),
-                    "Enheter": st.column_config.NumberColumn("Enheter", min_value=0.01),
+                    "Produkt": st.column_config.TextColumn(t("Produkt"), required=True),
+                    "Direkt kostnad (kr)": st.column_config.NumberColumn(t("Direkt kostnad (kr)"), min_value=0.0),
+                    "Enheter": st.column_config.NumberColumn(t("Enheter"), min_value=0.01),
                 },
             )
             st.caption(
-                "Varje aktivitet får automatiskt en kolumn här. Fyll i hur mycket "
-                "av kostnadsdrivaren varje produkt förbrukar."
+                t("Varje aktivitet får automatiskt en kolumn här. Fyll i hur mycket "
+                "av kostnadsdrivaren varje produkt förbrukar.")
             )
-        kalkyl_abc_form_submit = st.form_submit_button("Uppdatera värden", type="primary")
+        kalkyl_abc_form_submit = st.form_submit_button(t("Uppdatera värden"), type="primary")
 
     # Autosave ABC tables as JSON serializable record lists
     save_state(
@@ -903,9 +907,9 @@ with tab_abc:
         })
 
     if not activities:
-        st.warning("Lägg till minst en aktivitet i tabellen ovan.")
+        st.warning(t("Lägg till minst en aktivitet i tabellen ovan."))
     elif not products_list:
-        st.warning("Lägg till minst en produkt/tjänst i tabellen ovan.")
+        st.warning(t("Lägg till minst en produkt/tjänst i tabellen ovan."))
     else:
         try:
             abc_result = abc_calc(activities, products_list)
@@ -914,9 +918,9 @@ with tab_abc:
             # Swedish UI.
             abc_result = None
             st.error(
-                "Beräkningen kunde inte genomföras. Kontrollera att alla "
+                t("Beräkningen kunde inte genomföras. Kontrollera att alla "
                 "aktiviteter har drivvolymer > 0 och att produkttabellens "
-                "kolumner matchar aktivitetsnamnen."
+                "kolumner matchar aktivitetsnamnen.")
             )
 
         if abc_result is not None:
@@ -926,24 +930,28 @@ with tab_abc:
             if gaps:
                 _gap_total = sum(g["unallocated"] for g in gaps)
                 _gap_lines = "\n".join(
-                    f"- **{g['name']}**: {format_sek(g['total_cost'])} i kostnad, "
-                    f"{format_sek(g['allocated'])} fördelat, "
-                    f"{format_sek(g['unallocated'])} "
-                    + ("ofördelat" if g["unallocated"] > 0 else "överfördelat")
+                    t(
+                        "- **{0}**: {1} i kostnad, {2} fördelat, {3} {4}",
+                        g["name"],
+                        format_sek(g["total_cost"]),
+                        format_sek(g["allocated"]),
+                        format_sek(g["unallocated"]),
+                        t("ofördelat") if g["unallocated"] > 0 else t("överfördelat"),
+                    )
                     for g in gaps
                 )
                 st.warning(
-                    f"Produkterna förbrukar inte hela drivvolymen, så "
-                    f"{format_sek(abs(_gap_total))} av aktivitetskostnaden "
-                    f"{'fördelas inte' if _gap_total > 0 else 'fördelas för mycket'}:\n\n"
-                    f"{_gap_lines}\n\n"
-                    "Kontrollera att produkternas förbrukning summerar till "
-                    "aktivitetens totala drivvolym."
+                    t(
+                        "Produkterna förbrukar inte hela drivvolymen, så {0} av aktivitetskostnaden {1}:\n\n{2}\n\nKontrollera att produkternas förbrukning summerar till aktivitetens totala drivvolym.",
+                        format_sek(abs(_gap_total)),
+                        t('fördelas inte') if _gap_total > 0 else t('fördelas för mycket'),
+                        _gap_lines,
+                    )
                 )
 
-            st.subheader("Kostnadsfördelning per produkt")
+            st.subheader(t("Kostnadsfördelning per produkt"))
             st.dataframe(
-                abc_result.style.format("{:,.0f}"),
+                t_frame(abc_result).style.format("{:,.0f}"),
                 use_container_width=True,
             )
 
@@ -951,7 +959,7 @@ with tab_abc:
             product_names = abc_result.index.tolist()
 
             fig_abc.add_trace(go.Bar(
-                name="Direkt kostnad",
+                name=t("Direkt kostnad"),
                 x=product_names,
                 y=abc_result["direkt_kostnad"].tolist(),
                 marker_color=COLORS["primary"],
@@ -966,13 +974,13 @@ with tab_abc:
                         marker_color=PALETTE[(i + 1) % len(PALETTE)],
                     ))
             fig_abc.update_layout(barmode="stack")
-            apply_layout(fig_abc, title="Kostnadsfördelning per produkt/tjänst (kr)", height=380)
+            apply_layout(fig_abc, title=t("Kostnadsfördelning per produkt/tjänst (kr)"), height=380)
             st.plotly_chart(fig_abc, use_container_width=True)
 
             # ABC against a traditional single overhead rate: the point of
             # ABC is to reveal which products the traditional method
             # cross-subsidises.
-            st.subheader("ABC jämfört med traditionell fördelning")
+            st.subheader(t("ABC jämfört med traditionell fördelning"))
             cmp = abc_vs_traditional(abc_result)
             cmp_display = pd.DataFrame({
                 "Omkostnader ABC": cmp["abc_overhead"].map(format_sek),
@@ -981,20 +989,20 @@ with tab_abc:
                 "Per styck ABC": cmp["abc_per_styck"].map(lambda v: format_sek(v, 2)),
                 "Per styck traditionell": cmp["traditionell_per_styck"].map(lambda v: format_sek(v, 2)),
             })
-            st.dataframe(cmp_display, use_container_width=True)
+            st.dataframe(t_frame(cmp_display), use_container_width=True)
             fig_cmp = go.Figure([
                 go.Bar(
-                    name="ABC", x=product_names, y=cmp["abc_per_styck"].tolist(),
+                    name=t("ABC"), x=product_names, y=cmp["abc_per_styck"].tolist(),
                     marker_color=COLORS["primary"],
                 ),
                 go.Bar(
-                    name="Traditionell", x=product_names,
+                    name=t("Traditionell"), x=product_names,
                     y=cmp["traditionell_per_styck"].tolist(),
                     marker_color=COLORS["neutral"],
                 ),
             ])
             fig_cmp.update_layout(barmode="group")
-            apply_layout(fig_cmp, title="Kostnad per styck: ABC vs traditionell (kr)", height=340)
+            apply_layout(fig_cmp, title=t("Kostnad per styck: ABC vs traditionell (kr)"), height=340)
             st.plotly_chart(fig_cmp, use_container_width=True)
             _cmp_rows = [
                 {
@@ -1008,8 +1016,8 @@ with tab_abc:
             abc_interpretation = interpret_abc(_cmp_rows)
             st.info(abc_interpretation)
             st.caption(
-                "Traditionell fördelning: samma totala omkostnader fördelas i "
-                "proportion till produkternas direkta kostnad (ett enda påläggstal)."
+                t("Traditionell fördelning: samma totala omkostnader fördelas i "
+                "proportion till produkternas direkta kostnad (ett enda påläggstal).")
             )
 
             # Build inputs/outputs dicts for the explanation
@@ -1076,16 +1084,16 @@ with tab_abc:
                 charts=abc_charts,
             )
             st.download_button(
-                label="Exportera till Excel",
+                label=t("Exportera till Excel"),
                 data=xlsx_abc,
                 file_name="abc_kalkyl.xlsx",
                 mime=_XLSX_MIME,
                 key="abc_export",
             )
 
-    st.caption("Metod: Aktivitetsbaserad kalkylering (ABC)")
+    st.caption(t("Metod: Aktivitetsbaserad kalkylering (ABC)"))
 
-    if st.button("Återställ till standardvärden", key="abc_reset_autosave"):
+    if st.button(t("Återställ till standardvärden"), key="abc_reset_autosave"):
         clear_state("kalkyl_abc")
         _set_abc_base(
             _activities_to_df(_ABC_DEFAULT_ACT),
