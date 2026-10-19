@@ -199,3 +199,115 @@ def abc_calc(activities: list[dict], products: list[dict]) -> pd.DataFrame:
         rows[product["name"]] = row
 
     return pd.DataFrame.from_dict(rows, orient="index")
+
+
+def abc_unallocated(activities: list[dict], products: list[dict]) -> list[dict]:
+    """Find activity cost that ABC does not allocate to any product.
+
+    abc_calc allocates rate × consumption, so an activity whose driver
+    volume is not fully consumed by the listed products leaves part of
+    its cost unallocated, and the product totals silently come out
+    lower than the real cost pool.
+
+    Returns one dict per affected activity with ``name``, ``total_cost``,
+    ``allocated`` and ``unallocated`` (kronor). Gaps below 1 kr are
+    ignored as rounding.
+    """
+    gaps = []
+    for act in activities:
+        volume = float(act.get("total_driver_volume") or 0)
+        cost = float(act.get("total_cost") or 0)
+        rate = cost / volume if volume else 0.0
+        used = sum(
+            float((p.get("driver_consumption") or {}).get(act["name"], 0.0) or 0.0)
+            for p in products
+        )
+        allocated = rate * used
+        if abs(cost - allocated) >= 1.0:
+            gaps.append({
+                "name": act["name"],
+                "total_cost": cost,
+                "allocated": allocated,
+                "unallocated": cost - allocated,
+            })
+    return gaps
+
+
+def abc_vs_traditional(abc_result: pd.DataFrame) -> pd.DataFrame:
+    """Compare ABC overhead with a traditional allocation.
+
+    The traditional method spreads the same total overhead in proportion
+    to each product's direct cost (a single overhead rate). The
+    difference shows which products the traditional method subsidises.
+
+    Args:
+        abc_result: DataFrame from :func:`abc_calc`.
+
+    Returns:
+        DataFrame indexed like ``abc_result`` with columns
+        ``abc_overhead``, ``traditional_overhead``, ``skillnad``
+        (ABC minus traditional), ``abc_per_styck`` and
+        ``traditionell_per_styck``.
+    """
+    direct = abc_result["direkt_kostnad"].astype(float)
+    overhead = abc_result["indirekt_kostnad_totalt"].astype(float)
+    total_direct = float(direct.sum())
+    total_overhead = float(overhead.sum())
+    if total_direct > 0:
+        traditional = direct / total_direct * total_overhead
+    else:
+        traditional = pd.Series(total_overhead / max(len(direct), 1), index=direct.index)
+    # abc_calc stores kostnad_per_styck = total / units, so units can be
+    # recovered without passing the product list again.
+    per_unit = abc_result["kostnad_per_styck"].astype(float).replace(0.0, float("nan"))
+    units = (abc_result["total_kostnad"].astype(float) / per_unit).fillna(1.0)
+    return pd.DataFrame({
+        "abc_overhead": overhead,
+        "traditional_overhead": traditional,
+        "skillnad": overhead - traditional,
+        "abc_per_styck": (direct + overhead) / units,
+        "traditionell_per_styck": (direct + traditional) / units,
+    })
+
+
+def price_from_markup(sjalvkostnad_per_styck: float, vinstpalagg_pct: float) -> dict:
+    """Suggested price from självkostnad plus a profit markup (vinstpålägg).
+
+    Returns ``pris``, ``vinst_per_styck`` and ``vinstmarginal`` (profit as
+    a share of the price, decimal).
+    """
+    vinst = sjalvkostnad_per_styck * vinstpalagg_pct / 100
+    pris = sjalvkostnad_per_styck + vinst
+    return {
+        "pris": pris,
+        "vinst_per_styck": vinst,
+        "vinstmarginal": vinst / pris if pris else 0.0,
+    }
+
+
+def contribution_sensitivity(
+    price_per_unit: float,
+    variable_cost_per_unit: float,
+    fixed_costs: float,
+    units: float,
+    step: float = 0.10,
+) -> pd.DataFrame:
+    """Result when price, volume or variable cost moves by ±step, one at a time.
+
+    Returns a DataFrame indexed by factor ("Pris", "Volym", "Rörlig
+    kostnad") with one column per change (e.g. "−10 %", "0 %", "+10 %").
+    """
+    def _result(p: float, v: float, q: float) -> float:
+        return (p - v) * q - fixed_costs
+
+    pct = int(round(step * 100))
+    cols = [f"−{pct} %", "0 %", f"+{pct} %"]
+    factors = (1 - step, 1.0, 1 + step)
+    rows = {
+        "Pris": [_result(price_per_unit * f, variable_cost_per_unit, units) for f in factors],
+        "Volym": [_result(price_per_unit, variable_cost_per_unit, units * f) for f in factors],
+        "Rörlig kostnad": [
+            _result(price_per_unit, variable_cost_per_unit * f, units) for f in factors
+        ],
+    }
+    return pd.DataFrame.from_dict(rows, orient="index", columns=cols)

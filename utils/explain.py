@@ -129,8 +129,8 @@ def steps_abc(
         rates[str(act["name"])] = rate
         driver = str(act.get("cost_driver") or "enhet")
         rate_lines.append(
-            f"{act['name']}: {_kr(cost)} / {_num(vol)} {driver} = "
-            f"**{_kr(rate, 2)} per {driver}**"
+            f"{act['name']}: {_kr(cost)} / {_num(vol)} ({driver}) = "
+            f"**{_kr(rate, 2)} per drivarenhet**"
         )
     text = "**Steg 1: kostnad per drivarenhet**\n\n" + _steps(rate_lines)
     text += "\n\n**Steg 2: fördela aktiviteterna till produkterna**\n"

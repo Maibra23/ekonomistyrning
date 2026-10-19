@@ -1,9 +1,11 @@
-"""Kalkylmodul - Sjalvkostnad, Bidragskalkyl, ABC-kalkyl.
+"""Kalkylmodul - Självkostnadskalkyl, Bidragskalkyl, ABC-kalkyl.
 
 Kapitel 4, 6, 7, 8 i Andersson, Ekonomistyrning: beslut och handling.
-All UI strings in Swedish. LLM tutor integration wired in Day 7.
+All UI strings in Swedish.
 """
 from __future__ import annotations
+
+from collections.abc import Callable
 
 import numpy as np
 import pandas as pd
@@ -11,27 +13,38 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from utils.charts import COLORS, PALETTE, apply_layout, color_by_sign
-from utils.export import export_to_excel
-from utils.formatting import format_percent, format_sek
-from utils.grounding_ui import show_grounding_warning
-from utils.humanizer import humanize
-from utils.kalkyl import abc_calc, contribution_calc, self_cost_palagg
-from utils.llm import (
-    LLMSessionCapError,
-    LLMUnavailableError,
-    cached_chat,
-    is_llm_available,
-    verify_grounding,
+from utils.explain import (
+    interpret_abc,
+    interpret_bidrag,
+    interpret_sjalvkostnad,
+    steps_abc,
+    steps_bidrag,
+    steps_sjalvkostnad,
+)
+from utils.export import export_to_excel, table_range
+from utils.formatting import format_number, format_percent, format_sek
+from utils.kalkyl import (
+    abc_calc,
+    abc_unallocated,
+    abc_vs_traditional,
+    contribution_calc,
+    contribution_sensitivity,
+    price_from_markup,
+    self_cost_palagg,
+)
+from utils.page_blocks import (
+    finish_scenario,
+    render_qa_chat,
+    render_scenario_controls,
+    render_scenario_info,
+    scenario_header_lines,
 )
 from utils.prompts import (
     FALLBACK_TEMPLATES,
     TUTOR_REQUIRED_SECTIONS,
     build_kalkyl_explanation_prompt,
     build_kalkyl_step_guide_prompt,
-    build_qa_prompt,
 )
-from utils.scenario_continuity import render_adopt_button
-from utils.scenarios import generate_scenario, set_current_scenario
 from utils.state_save import clear_state, load_state, save_state
 from utils.tutor import (
     get_cached_tutor_text,
@@ -40,36 +53,18 @@ from utils.tutor import (
 )
 from utils.ui import (
     APP_UPDATED,
-    SCENARIO_DIFFICULTY_HELP,
     footer_note,
     inject_css,
     kpi_card,
     page_title,
     render_kpi_row,
-    render_session_cap_card,
     render_sidebar,
 )
 
-# Difficulty label to API code mapping used by the LLM scenario generator
-_DIFFICULTY_OPTIONS = ("Lätt", "Medel", "Svår")
-_DIFFICULTY_MAP = {"Lätt": "latt", "Medel": "medel", "Svår": "svar"}
-
-
-def _scenario_header_lines(info: dict | None) -> list[str]:
-    """Build Excel header lines from a scenario info dict for export."""
-    if not info:
-        return []
-    name = str(info.get("foretag_namn", "")).strip()
-    desc = str(info.get("bransch_beskrivning", "")).strip()
-    lines: list[str] = []
-    if name:
-        lines.append(f"Företag: {name}")
-    if desc:
-        lines.append(f"Bransch: {desc}")
-    return lines
+_XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 # ---------------------------------------------------------------------------
-# LLM tutor helper - shared across all 3 tabs
+# Explanation block - shared across all 3 tabs
 # ---------------------------------------------------------------------------
 
 
@@ -79,12 +74,16 @@ def _render_llm_section(
     outputs: dict,
     tab_key: str,
     scenario_name: str | None = None,
-):
-    """Render LLM tutor explanation, step guide, and Q&A chat for a kalkyl tab.
+    *,
+    steps_text: Callable[[], str],
+    interpretation: str,
+) -> None:
+    """Render the explanation, step-by-step guide and Q&A chat for a tab.
 
-    The tutor explanation and step guide are on-demand: they only run when
-    the user presses a button. Generated text is cached in session state
-    and re-rendered on every rerun until the inputs change.
+    The explanation and the guide only run when the student presses a
+    button. Offline, the explanation uses the four-section template with
+    a rule-based interpretation, and the guide shows a worked example
+    built from the student's own numbers (``steps_text``).
     """
     expected_numbers = {
         k: v for k, v in outputs.items() if isinstance(v, (int, float))
@@ -98,18 +97,17 @@ def _render_llm_section(
             calc_type, inputs, outputs, scenario_name
         ),
         fallback_text=lambda: FALLBACK_TEMPLATES["kalkyl"](
-            calc_type, inputs, outputs
+            calc_type, inputs, outputs, interpretation=interpretation
         ),
         required_sections=TUTOR_REQUIRED_SECTIONS,
         expected_numbers=expected_numbers or None,
     )
 
-    # Sync to legacy key for Excel export compatibility
+    # Kept under a plain key so the Excel export can include the text.
     _cached = get_cached_tutor_text(f"{tab_key}_llm")
     if _cached is not None:
         st.session_state[f"{tab_key}_llm_text"] = _cached
 
-    # --- Step-by-step guide ---
     render_step_guide(
         state_key=f"{tab_key}_step_guide",
         inputs=inputs,
@@ -117,67 +115,17 @@ def _render_llm_section(
         build_prompt=lambda: build_kalkyl_step_guide_prompt(
             calc_type, inputs, outputs
         ),
+        fallback_text=steps_text,
     )
 
-    # --- Q&A chat ---
-    chat_key = f"{tab_key}_chat_history"
-    if chat_key not in st.session_state:
-        st.session_state[chat_key] = []
-
-    # Display history
-    for role, msg in st.session_state[chat_key]:
-        with st.chat_message(role):
-            st.markdown(msg)
-
-    user_question = st.chat_input(
-        "Fråga om denna kalkyl", key=f"{tab_key}_chat_input"
+    render_qa_chat(
+        chat_key=f"{tab_key}_chat_history",
+        input_key=f"{tab_key}_chat_input",
+        placeholder="Fråga om denna kalkyl",
+        context=f"kalkyl ({calc_type})",
+        inputs=inputs,
+        outputs=outputs,
     )
-    if user_question:
-        st.session_state[chat_key].append(("user", user_question))
-        with st.chat_message("user"):
-            st.markdown(user_question)
-
-        try:
-            if not is_llm_available():
-                raise LLMUnavailableError("Ingen token")
-            sys_p, usr_p = build_qa_prompt(
-                f"kalkyl ({calc_type})",
-                inputs,
-                outputs,
-                user_question,
-                chat_history=st.session_state[chat_key],
-            )
-            with st.chat_message("assistant"):
-                with st.spinner("Tänker..."):
-                    raw = cached_chat(sys_p, usr_p)
-                result = humanize(raw)
-                st.markdown(result.text)
-
-                # Grounding check on Q&A
-                expected = {
-                    k: v for k, v in outputs.items() if isinstance(v, (int, float))
-                }
-                if expected:
-                    grounding = verify_grounding(result.text, expected)
-                    if grounding["missing"]:
-                        st.html(
-                            '<div class="eks-grounding-warn">'
-                            "OBS: Förklaringen kan ha refererat fel siffra, "
-                            "verifiera mot beräkningen ovan."
-                            "</div>"
-                        )
-                    show_grounding_warning(grounding)
-            st.session_state[chat_key].append(("assistant", result.text))
-        except LLMSessionCapError:
-            # Must be caught before LLMUnavailableError (its parent class):
-            # a capped user should see the cap card, not "try again later"
-            # advice that can never help (review K4).
-            render_session_cap_card()
-        except LLMUnavailableError:
-            fallback_msg = "Tjänsten är tillfälligt otillgänglig. Försök igen senare."
-            with st.chat_message("assistant"):
-                st.info(fallback_msg)
-            st.session_state[chat_key].append(("assistant", fallback_msg))
 
 
 # ---------------------------------------------------------------------------
@@ -208,6 +156,22 @@ def _activities_to_df(activities: list[dict]) -> pd.DataFrame:
     ])
 
 
+def _align_products(prod_df: pd.DataFrame, act_names: list[str]) -> pd.DataFrame:
+    """Give the product table exactly one consumption column per activity.
+
+    A new row in the activity table gets a matching column (filled with
+    0) and a removed activity loses its column, so no activity is left
+    without a place to enter how much each product uses it.
+    """
+    base_cols = ["Produkt", "Direkt kostnad (kr)", "Enheter"]
+    out = prod_df.copy()
+    for name in act_names:
+        if name not in out.columns:
+            out[name] = 0.0
+    keep = [c for c in out.columns if c in base_cols or c in act_names]
+    return out[keep]
+
+
 def _products_to_df(products: list[dict], activities: list[dict]) -> pd.DataFrame:
     act_names = [a["name"] for a in activities]
     rows = []
@@ -231,6 +195,7 @@ def _products_to_df(products: list[dict], activities: list[dict]) -> pd.DataFram
 _SJ_INIT = {
     "sj_dm": 850.0, "sj_dl": 320.0, "sj_mo": 25.0,
     "sj_to": 80.0, "sj_ao": 12.0, "sj_fo": 8.0, "sj_units": 5000.0,
+    "sj_markup": 15.0,
 }
 _BID_INIT = {
     "bid_pris": 599.0, "bid_rorlig": 325.0,
@@ -270,6 +235,21 @@ _ABC_DEFAULT_PROD = [
     },
 ]
 
+# The ABC tables keep a fixed *base* DataFrame in session state and let
+# each data_editor hold the student's edits on top of it. Feeding the
+# edited frame back in as the next base would apply added rows twice.
+# The base only changes on generate/reset/restore, and then the editor
+# state is cleared.
+_ABC_EDITOR_KEYS = ("abc_act_de", "abc_prod_de")
+
+
+def _set_abc_base(act_df: pd.DataFrame, prod_df: pd.DataFrame) -> None:
+    st.session_state.abc_act_df = act_df
+    st.session_state.abc_prod_df = prod_df
+    for _key in _ABC_EDITOR_KEYS:
+        st.session_state.pop(_key, None)
+
+
 if "abc_act_df" not in st.session_state:
     st.session_state.abc_act_df = _activities_to_df(_ABC_DEFAULT_ACT)
 if "abc_prod_df" not in st.session_state:
@@ -302,62 +282,23 @@ with tab_sj:
     # Autosave: restore saved input values into session_state before widgets render
     _sj_saved = load_state("kalkyl_sjalvkostnad")
     if _sj_saved is not None:
-        for _k in ("sj_dm", "sj_dl", "sj_mo", "sj_to", "sj_ao", "sj_fo", "sj_units"):
+        for _k in _SJ_INIT:
             if _k in _sj_saved:
                 st.session_state[_k] = float(_sj_saved[_k])
 
-    # LLM driven scenario generator (Task 10.13). We write generated values
-    # directly into widget session_state keys before the widgets render so
-    # the existing autosave block picks them up on the next save cycle.
-    sj_gen_cols = st.columns([2, 1, 1])
-    with sj_gen_cols[0]:
-        sj_difficulty_label = st.selectbox(
-            "Svårighetsgrad",
-            _DIFFICULTY_OPTIONS,
-            index=1,
-            key="sj_scenario_difficulty",
-            help=SCENARIO_DIFFICULTY_HELP,
-        )
-    with sj_gen_cols[1]:
-        st.write("")
-        st.write("")
-        sj_generate_clicked = st.button(
-            "Generera ett exempelföretag", key="sj_gen_scenario", use_container_width=True
-        )
-    _sj_adopt = render_adopt_button("kalkyl_sjalvkostnad", "sj_adopt_scenario")
-    if sj_generate_clicked or _sj_adopt:
-        if _sj_adopt:
-            _sj_difficulty_code = _sj_adopt["difficulty"]
-            _sj_company = {
-                "foretag_namn": _sj_adopt["foretag_namn"],
-                "beskrivning": _sj_adopt["beskrivning"],
-            }
-        else:
-            _sj_difficulty_code = _DIFFICULTY_MAP[sj_difficulty_label]
-            _sj_company = None
-        with st.spinner("Genererar exempelföretag..."):
-            scenario = generate_scenario(
-                "kalkyl_sjalvkostnad", _sj_difficulty_code, company=_sj_company
-            )
-        st.session_state.sj_dm = float(scenario.get("direkt_material", 0))
-        st.session_state.sj_dl = float(scenario.get("direkt_lon", 0))
-        st.session_state.sj_mo = float(scenario.get("mo_pct", 0))
-        st.session_state.sj_to = float(scenario.get("to_pct", 0))
-        st.session_state.sj_ao = float(scenario.get("ao_pct", 0))
-        st.session_state.sj_fo = float(scenario.get("fo_pct", 0))
-        st.session_state.sj_units = float(scenario.get("volym", 1))
-        st.session_state["sj_scenario_info"] = {
-            "foretag_namn": scenario.get("foretag_namn", "Exempelföretag"),
-            "bransch_beskrivning": scenario.get("bransch_beskrivning", ""),
-        }
-        set_current_scenario("kalkyl_sjalvkostnad", scenario, _sj_difficulty_code)
-        st.rerun()
-
-    sj_info = st.session_state.get("sj_scenario_info")
-    if sj_info:
-        st.info(
-            f"**{sj_info['foretag_namn']}**\n\n{sj_info['bransch_beskrivning']}"
-        )
+    # Generated values go straight into the widget keys before the widgets
+    # render, so the autosave below records them on the same run.
+    _sj_scenario, _sj_code, _ = render_scenario_controls("sj", "kalkyl_sjalvkostnad")
+    if _sj_scenario is not None:
+        st.session_state.sj_dm = float(_sj_scenario.get("direkt_material", 0))
+        st.session_state.sj_dl = float(_sj_scenario.get("direkt_lon", 0))
+        st.session_state.sj_mo = float(_sj_scenario.get("mo_pct", 0))
+        st.session_state.sj_to = float(_sj_scenario.get("to_pct", 0))
+        st.session_state.sj_ao = float(_sj_scenario.get("ao_pct", 0))
+        st.session_state.sj_fo = float(_sj_scenario.get("fo_pct", 0))
+        st.session_state.sj_units = float(_sj_scenario.get("volym", 1))
+        finish_scenario("sj", "kalkyl_sjalvkostnad", _sj_scenario, _sj_code)
+    render_scenario_info("sj")
 
     with st.form("kalkyl_sj_form"):
         c1, c2 = st.columns(2)
@@ -398,6 +339,11 @@ with tab_sj:
                 min_value=1.0, step=100.0, key="sj_units",
                 help="Produktionsvolym per period",
             )
+            markup_pct = st.number_input(
+                "Vinstpålägg (%)",
+                min_value=0.0, max_value=500.0, step=1.0, key="sj_markup",
+                help="Pålägg på självkostnaden för att få fram ett pris (prissättning med självkostnad + vinst)",
+            )
         kalkyl_sj_form_submit = st.form_submit_button("Uppdatera värden", type="primary")
 
     # Autosave current input values on every rerun (Streamlit rerun = keystroke commit)
@@ -411,16 +357,32 @@ with tab_sj:
             "sj_ao": ao_pct,
             "sj_fo": fo_pct,
             "sj_units": units_sj,
+            "sj_markup": markup_pct,
         },
     )
 
     sj = self_cost_palagg(dm, dl, mo_pct, to_pct, ao_pct, fo_pct, int(units_sj))
+    pricing = price_from_markup(sj["sjalvkostnad_per_styck"], markup_pct)
 
     render_kpi_row([
         kpi_card("Självkostnad / styck", format_sek(sj["sjalvkostnad_per_styck"], decimals=2)),
         kpi_card("Tillverkningskostnad", format_sek(sj["tillverkningskostnad"])),
         kpi_card("Total självkostnad", format_sek(sj["sjalvkostnad_totalt"])),
     ])
+    render_kpi_row([
+        kpi_card(
+            "Föreslaget pris / styck",
+            format_sek(pricing["pris"], decimals=2),
+            delta=f"självkostnad + {format_number(markup_pct, 0)} %",
+            delta_direction="flat",
+        ),
+        kpi_card("Vinst / styck", format_sek(pricing["vinst_per_styck"], decimals=2)),
+        kpi_card("Vinstmarginal", format_percent(pricing["vinstmarginal"])),
+    ])
+    st.caption(
+        "Vinstmarginalen räknas på priset, så den blir lägre än vinstpålägget, "
+        "som räknas på självkostnaden."
+    )
 
     # Per-unit waterfall: DM -> +MO -> +DL -> +TO -> Tillv.kost. -> +AO -> +FO -> Självkost.
     tvk_u = dm + dm * (mo_pct / 100) + dl + dl * (to_pct / 100)
@@ -456,6 +418,7 @@ with tab_sj:
             "Tillverkningskostnad",
             "Administrationsomkostnad (AO)", "Försäljningsomkostnad (FO)",
             "Självkostnad totalt", "Självkostnad per styck",
+            "Vinst per styck", "Föreslaget pris per styck",
         ],
         "Belopp (kr)": [
             sj["direkt_material"], sj["materialomkostnad"],
@@ -463,13 +426,14 @@ with tab_sj:
             sj["tillverkningskostnad"],
             sj["administrationsomkostnad"], sj["forsaljningsomkostnad"],
             sj["sjalvkostnad_totalt"], sj["sjalvkostnad_per_styck"],
+            pricing["vinst_per_styck"], pricing["pris"],
         ],
     })
 
     with st.expander("Detaljerad kostnadstabell"):
         st.dataframe(sj_df, use_container_width=True, hide_index=True)
 
-    # Build inputs/outputs dicts for LLM
+    # Build inputs/outputs dicts for the explanation
     sj_inputs = {
         "direkt_material_per_styck": dm,
         "direkt_lon_per_styck": dl,
@@ -491,6 +455,8 @@ with tab_sj:
         sj_outputs,
         "sj",
         scenario_name=_sj_info_for_llm["foretag_namn"] if _sj_info_for_llm else None,
+        steps_text=lambda: steps_sjalvkostnad(dm, dl, mo_pct, to_pct, ao_pct, fo_pct, units_sj),
+        interpretation=interpret_sjalvkostnad(dm, dl, mo_pct, to_pct, ao_pct, fo_pct),
     )
 
     # Build export sheets
@@ -498,22 +464,17 @@ with tab_sj:
     if "sj_llm_text" in st.session_state:
         llm_df = pd.DataFrame({"Förklaring": [st.session_state["sj_llm_text"]]})
         sj_export_sheets["Förklaring"] = llm_df
-    sj_info_export = st.session_state.get("sj_scenario_info")
-    sj_header_lines = _scenario_header_lines(sj_info_export)
-    # Column chart of the four primary cost components (Task 10.9).
-    # Data layout: header at row offset+1, then 9 data rows. The first
-    # four data rows are DM, MO, DL, TO. Excel rows are 1-indexed.
-    _sj_offset = len(sj_header_lines)
-    _sj_first_data_row = _sj_offset + 2
-    _sj_chart_pos_row = _sj_offset + 2  # place chart next to the table
+    sj_header_lines = scenario_header_lines(st.session_state.get("sj_scenario_info"))
+    # Column chart of the four primary cost components (the first four
+    # data rows: DM, MO, DL, TO).
     sj_charts = {
         "Sjalvkostnad": [
             {
                 "type": "column",
                 "title": "Kostnadskomponenter",
-                "categories": f"A{_sj_first_data_row}:A{_sj_first_data_row + 3}",
-                "values": f"B{_sj_first_data_row}:B{_sj_first_data_row + 3}",
-                "position": f"D{_sj_chart_pos_row}",
+                "categories": table_range("A", 4, sj_header_lines),
+                "values": table_range("B", 4, sj_header_lines),
+                "position": f"D{len(sj_header_lines) + 2}",
                 "x_axis_title": "Kostnadspost",
                 "y_axis_title": "Belopp (kr)",
             }
@@ -528,7 +489,7 @@ with tab_sj:
         label="Exportera till Excel",
         data=xlsx_sj,
         file_name="sjalvkostnadskalkyl.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        mime=_XLSX_MIME,
         key="sj_export",
     )
 
@@ -553,52 +514,14 @@ with tab_bid:
             if _k in _bid_saved:
                 st.session_state[_k] = float(_bid_saved[_k])
 
-    bid_gen_cols = st.columns([2, 1, 1])
-    with bid_gen_cols[0]:
-        bid_difficulty_label = st.selectbox(
-            "Svårighetsgrad",
-            _DIFFICULTY_OPTIONS,
-            index=1,
-            key="bid_scenario_difficulty",
-            help=SCENARIO_DIFFICULTY_HELP,
-        )
-    with bid_gen_cols[1]:
-        st.write("")
-        st.write("")
-        bid_generate_clicked = st.button(
-            "Generera ett exempelföretag", key="bid_gen_scenario", use_container_width=True
-        )
-    _bid_adopt = render_adopt_button("kalkyl_bidrag", "bid_adopt_scenario")
-    if bid_generate_clicked or _bid_adopt:
-        if _bid_adopt:
-            _bid_difficulty_code = _bid_adopt["difficulty"]
-            _bid_company = {
-                "foretag_namn": _bid_adopt["foretag_namn"],
-                "beskrivning": _bid_adopt["beskrivning"],
-            }
-        else:
-            _bid_difficulty_code = _DIFFICULTY_MAP[bid_difficulty_label]
-            _bid_company = None
-        with st.spinner("Genererar exempelföretag..."):
-            scenario = generate_scenario(
-                "kalkyl_bidrag", _bid_difficulty_code, company=_bid_company
-            )
-        st.session_state.bid_pris = float(scenario.get("pris_per_styck", 0))
-        st.session_state.bid_rorlig = float(scenario.get("rorlig_kostnad_per_styck", 0))
-        st.session_state.bid_fasta = float(scenario.get("fasta_kostnader", 0))
-        st.session_state.bid_units = float(scenario.get("volym", 1))
-        st.session_state["bid_scenario_info"] = {
-            "foretag_namn": scenario.get("foretag_namn", "Exempelföretag"),
-            "bransch_beskrivning": scenario.get("bransch_beskrivning", ""),
-        }
-        set_current_scenario("kalkyl_bidrag", scenario, _bid_difficulty_code)
-        st.rerun()
-
-    bid_info = st.session_state.get("bid_scenario_info")
-    if bid_info:
-        st.info(
-            f"**{bid_info['foretag_namn']}**\n\n{bid_info['bransch_beskrivning']}"
-        )
+    _bid_scenario, _bid_code, _ = render_scenario_controls("bid", "kalkyl_bidrag")
+    if _bid_scenario is not None:
+        st.session_state.bid_pris = float(_bid_scenario.get("pris_per_styck", 0))
+        st.session_state.bid_rorlig = float(_bid_scenario.get("rorlig_kostnad_per_styck", 0))
+        st.session_state.bid_fasta = float(_bid_scenario.get("fasta_kostnader", 0))
+        st.session_state.bid_units = float(_bid_scenario.get("volym", 1))
+        finish_scenario("bid", "kalkyl_bidrag", _bid_scenario, _bid_code)
+    render_scenario_info("bid")
 
     with st.form("kalkyl_bid_form"):
         c1, c2 = st.columns(2)
@@ -669,12 +592,12 @@ with tab_bid:
         render_kpi_row([
             kpi_card(
                 "Nollpunktsvolym",
-                f"{int(bid['breakeven_units']):,} st".replace(",", " "),
+                f"{format_number(bid['breakeven_units'], 0)} st",
             ),
             kpi_card("Nollpunktsintäkt", format_sek(bid["breakeven_revenue"])),
             kpi_card(
                 "Säkerhetsmarginal (st)",
-                f"{int(bid['sakerhetsmarginal_units']):,} st".replace(",", " "),
+                f"{format_number(bid['sakerhetsmarginal_units'], 0)} st",
             ),
         ])
 
@@ -707,7 +630,7 @@ with tab_bid:
         fig_be.add_vline(
             x=bid["breakeven_units"],
             line_dash="dash", line_color=COLORS["warning"],
-            annotation_text=f"Nollpunkt: {int(bid['breakeven_units'])} st",
+            annotation_text=f"Nollpunkt: {format_number(bid['breakeven_units'], 0)} st",
             annotation_position="top right",
         )
         # Circular marker at the intersection of the revenue and cost lines.
@@ -747,7 +670,21 @@ with tab_bid:
         )
         st.plotly_chart(fig_be, use_container_width=True)
 
-    # Build inputs/outputs dicts for LLM
+    # What-if: one factor at a time, ±10 %, no new inputs needed.
+    st.markdown("**Känslighet: resultat vid ±10 %**")
+    sens_df = contribution_sensitivity(pris, rorlig, fasta, units_bid, step=0.10)
+    st.dataframe(
+        sens_df.map(format_sek),
+        use_container_width=True,
+    )
+    _swing = (sens_df.iloc[:, 2] - sens_df.iloc[:, 0]).abs()
+    st.caption(
+        f"Varje rad ändrar en faktor i taget, allt annat lika. Resultatet är mest "
+        f"känsligt för {_swing.idxmax().lower()}: ±10 % flyttar resultatet "
+        f"{format_sek(_swing.max() / 2)} åt vardera hållet."
+    )
+
+    # Build inputs/outputs dicts for the explanation
     bid_inputs = {
         "pris_per_styck": pris,
         "rorlig_kostnad_per_styck": rorlig,
@@ -765,7 +702,9 @@ with tab_bid:
         bid_inputs,
         bid_outputs,
         "bid",
-        scenario_name=st.session_state.get("bid_scenario_info", {}).get("foretag_namn"),
+        scenario_name=(st.session_state.get("bid_scenario_info") or {}).get("foretag_namn"),
+        steps_text=lambda: steps_bidrag(pris, rorlig, fasta, units_bid),
+        interpretation=interpret_bidrag(pris, rorlig, fasta, units_bid),
     )
 
     bid_df = pd.DataFrame({
@@ -792,17 +731,40 @@ with tab_bid:
             format_percent(bid["sakerhetsmarginal_pct"]) if bid["sakerhetsmarginal_pct"] else "-",
         ],
     })
-    bid_info_export = st.session_state.get("bid_scenario_info")
-    bid_header_lines = _scenario_header_lines(bid_info_export)
+    # The key-figure sheet holds formatted text, so the chart reads from a
+    # numeric overview sheet instead.
+    bid_overview = pd.DataFrame({
+        "Post": ["Total intäkt", "Rörliga kostnader", "Fasta kostnader", "Resultat"],
+        "Belopp (kr)": [
+            bid["total_intakt"], bid["total_rorlig_kostnad"], fasta, bid["resultat"],
+        ],
+    })
+    bid_sens_export = sens_df.reset_index().rename(columns={"index": "Faktor"})
+    bid_header_lines = scenario_header_lines(st.session_state.get("bid_scenario_info"))
+    bid_charts = {
+        "Resultatoversikt": [{
+            "type": "column",
+            "title": "Intäkter, kostnader och resultat",
+            "categories": table_range("A", len(bid_overview), bid_header_lines),
+            "values": table_range("B", len(bid_overview), bid_header_lines),
+            "position": "D2",
+            "y_axis_title": "Belopp (kr)",
+        }],
+    }
     xlsx_bid = export_to_excel(
-        {"Bidragskalkyl": bid_df},
-        header_lines={"Bidragskalkyl": bid_header_lines} if bid_header_lines else None,
+        {
+            "Bidragskalkyl": bid_df,
+            "Resultatoversikt": bid_overview,
+            "Kanslighet": bid_sens_export,
+        },
+        header_lines=bid_header_lines or None,
+        charts=bid_charts,
     )
     st.download_button(
         label="Exportera till Excel",
         data=xlsx_bid,
         file_name="bidragskalkyl.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        mime=_XLSX_MIME,
         key="bid_export",
     )
 
@@ -824,58 +786,28 @@ with tab_abc:
     _abc_saved = load_state("kalkyl_abc")
     if _abc_saved is not None:
         try:
-            if "abc_act_records" in _abc_saved:
-                st.session_state.abc_act_df = pd.DataFrame(_abc_saved["abc_act_records"])
-            if "abc_prod_records" in _abc_saved:
-                st.session_state.abc_prod_df = pd.DataFrame(_abc_saved["abc_prod_records"])
+            _set_abc_base(
+                pd.DataFrame(_abc_saved.get("abc_act_records") or [])
+                if "abc_act_records" in _abc_saved else st.session_state.abc_act_df,
+                pd.DataFrame(_abc_saved.get("abc_prod_records") or [])
+                if "abc_prod_records" in _abc_saved else st.session_state.abc_prod_df,
+            )
         except (ValueError, TypeError):
             pass
 
-    abc_gen_cols = st.columns([2, 1, 1])
-    with abc_gen_cols[0]:
-        abc_difficulty_label = st.selectbox(
-            "Svårighetsgrad",
-            _DIFFICULTY_OPTIONS,
-            index=1,
-            key="abc_scenario_difficulty",
-            help=SCENARIO_DIFFICULTY_HELP,
-        )
-    with abc_gen_cols[1]:
-        st.write("")
-        st.write("")
-        abc_generate_clicked = st.button(
-            "Generera ett exempelföretag", key="abc_gen_scenario", use_container_width=True
-        )
-    _abc_adopt = render_adopt_button("kalkyl_abc", "abc_adopt_scenario")
-    if abc_generate_clicked or _abc_adopt:
-        if _abc_adopt:
-            _abc_difficulty_code = _abc_adopt["difficulty"]
-            _abc_company = {
-                "foretag_namn": _abc_adopt["foretag_namn"],
-                "beskrivning": _abc_adopt["beskrivning"],
-            }
-        else:
-            _abc_difficulty_code = _DIFFICULTY_MAP[abc_difficulty_label]
-            _abc_company = None
-        with st.spinner("Genererar exempelföretag..."):
-            scenario = generate_scenario(
-                "kalkyl_abc", _abc_difficulty_code, company=_abc_company
-            )
+    _abc_scenario, _abc_code, _ = render_scenario_controls("abc", "kalkyl_abc")
+    if _abc_scenario is not None:
         try:
-            activities = scenario.get("activities", [])
-            products = scenario.get("products", [])
-            st.session_state.abc_act_df = _activities_to_df(activities)
-            st.session_state.abc_prod_df = _products_to_df(products, activities)
+            _gen_acts = _abc_scenario.get("activities", [])
+            _set_abc_base(
+                _activities_to_df(_gen_acts),
+                _products_to_df(_abc_scenario.get("products", []), _gen_acts),
+            )
         except (KeyError, TypeError, ValueError):
-            # Surface after the rerun: a silent pass left the old tables
-            # on screen with no explanation (review K2).
+            # Surfaced after the rerun so the student knows why the tables
+            # did not change.
             st.session_state["abc_scenario_warning"] = True
-        st.session_state["abc_scenario_info"] = {
-            "foretag_namn": scenario.get("foretag_namn", "Exempelföretag"),
-            "bransch_beskrivning": scenario.get("bransch_beskrivning", ""),
-        }
-        set_current_scenario("kalkyl_abc", scenario, _abc_difficulty_code)
-        st.rerun()
+        finish_scenario("abc", "kalkyl_abc", _abc_scenario, _abc_code)
 
     if st.session_state.pop("abc_scenario_warning", False):
         st.warning(
@@ -883,12 +815,7 @@ with tab_abc:
             "aktiviteter/produkter, så tabellerna behåller sina tidigare "
             "värden. Generera gärna ett nytt exempelföretag."
         )
-
-    abc_info = st.session_state.get("abc_scenario_info")
-    if abc_info:
-        st.info(
-            f"**{abc_info['foretag_namn']}**\n\n{abc_info['bransch_beskrivning']}"
-        )
+    render_scenario_info("abc")
 
     with st.form("kalkyl_abc_form"):
         col_a, col_b = st.columns(2)
@@ -907,12 +834,15 @@ with tab_abc:
                     "Total drivvolym": st.column_config.NumberColumn("Total drivvolym", min_value=0.01),
                 },
             )
-            st.session_state.abc_act_df = act_df
+
+        act_names_now = [
+            str(n) for n in act_df["Aktivitet"].tolist() if isinstance(n, str) and n.strip()
+        ] if "Aktivitet" in act_df.columns else []
 
         with col_b:
             st.subheader("Produkter / tjänster")
             prod_df: pd.DataFrame = st.data_editor(
-                st.session_state.abc_prod_df,
+                _align_products(st.session_state.abc_prod_df, act_names_now),
                 num_rows="dynamic",
                 use_container_width=True,
                 key="abc_prod_de",
@@ -922,7 +852,10 @@ with tab_abc:
                     "Enheter": st.column_config.NumberColumn("Enheter", min_value=0.01),
                 },
             )
-            st.session_state.abc_prod_df = prod_df
+            st.caption(
+                "Varje aktivitet får automatiskt en kolumn här. Fyll i hur mycket "
+                "av kostnadsdrivaren varje produkt förbrukar."
+            )
         kalkyl_abc_form_submit = st.form_submit_button("Uppdatera värden", type="primary")
 
     # Autosave ABC tables as JSON serializable record lists
@@ -934,31 +867,38 @@ with tab_abc:
         },
     )
 
+    def _num(value: object, default: float) -> float:
+        try:
+            out = float(value)  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            return default
+        return default if pd.isna(out) else out
+
     activities = [
         {
             "name": str(row["Aktivitet"]),
-            "total_cost": float(row["Total kostnad (kr)"] or 0),
+            "total_cost": _num(row.get("Total kostnad (kr)"), 0.0),
             "cost_driver": str(row.get("Kostnadsdrivare") or ""),
-            "total_driver_volume": float(row["Total drivvolym"] or 1),
+            "total_driver_volume": _num(row.get("Total drivvolym"), 1.0) or 1.0,
         }
         for _, row in act_df.iterrows()
-        if row.get("Aktivitet")
+        if isinstance(row.get("Aktivitet"), str) and row.get("Aktivitet").strip()
     ]
     act_names = [a["name"] for a in activities]
 
     products_list = []
     for _, row in prod_df.iterrows():
-        if not row.get("Produkt"):
+        if not isinstance(row.get("Produkt"), str) or not row.get("Produkt").strip():
             continue
         consumption = {
-            name: float(row[name] if name in prod_df.columns and row[name] is not None else 0)
+            name: _num(row[name], 0.0) if name in prod_df.columns else 0.0
             for name in act_names
         }
         products_list.append({
             "name": str(row["Produkt"]),
-            "direct_cost": float(row.get("Direkt kostnad (kr)") or 0),
+            "direct_cost": _num(row.get("Direkt kostnad (kr)"), 0.0),
             "driver_consumption": consumption,
-            "units": float(row.get("Enheter") or 1),
+            "units": _num(row.get("Enheter"), 1.0) or 1.0,
         })
 
     if not activities:
@@ -968,6 +908,37 @@ with tab_abc:
     else:
         try:
             abc_result = abc_calc(activities, products_list)
+        except (KeyError, TypeError, ValueError, ZeroDivisionError):
+            # No str(exc): raw technical detail must not leak into the
+            # Swedish UI.
+            abc_result = None
+            st.error(
+                "Beräkningen kunde inte genomföras. Kontrollera att alla "
+                "aktiviteter har drivvolymer > 0 och att produkttabellens "
+                "kolumner matchar aktivitetsnamnen."
+            )
+
+        if abc_result is not None:
+            # Cost the products do not consume is never allocated, and the
+            # totals would just come out lower without a word.
+            gaps = abc_unallocated(activities, products_list)
+            if gaps:
+                _gap_total = sum(g["unallocated"] for g in gaps)
+                _gap_lines = "\n".join(
+                    f"- **{g['name']}**: {format_sek(g['total_cost'])} i kostnad, "
+                    f"{format_sek(g['allocated'])} fördelat, "
+                    f"{format_sek(g['unallocated'])} "
+                    + ("ofördelat" if g["unallocated"] > 0 else "överfördelat")
+                    for g in gaps
+                )
+                st.warning(
+                    f"Produkterna förbrukar inte hela drivvolymen, så "
+                    f"{format_sek(abs(_gap_total))} av aktivitetskostnaden "
+                    f"{'fördelas inte' if _gap_total > 0 else 'fördelas för mycket'}:\n\n"
+                    f"{_gap_lines}\n\n"
+                    "Kontrollera att produkternas förbrukning summerar till "
+                    "aktivitetens totala drivvolym."
+                )
 
             st.subheader("Kostnadsfördelning per produkt")
             st.dataframe(
@@ -997,7 +968,50 @@ with tab_abc:
             apply_layout(fig_abc, title="Kostnadsfördelning per produkt/tjänst (kr)", height=380)
             st.plotly_chart(fig_abc, use_container_width=True)
 
-            # Build inputs/outputs dicts for LLM
+            # ABC against a traditional single overhead rate: the point of
+            # ABC is to reveal which products the traditional method
+            # cross-subsidises.
+            st.subheader("ABC jämfört med traditionell fördelning")
+            cmp = abc_vs_traditional(abc_result)
+            cmp_display = pd.DataFrame({
+                "Omkostnader ABC": cmp["abc_overhead"].map(format_sek),
+                "Omkostnader traditionell": cmp["traditional_overhead"].map(format_sek),
+                "Skillnad (ABC − trad.)": cmp["skillnad"].map(format_sek),
+                "Per styck ABC": cmp["abc_per_styck"].map(lambda v: format_sek(v, 2)),
+                "Per styck traditionell": cmp["traditionell_per_styck"].map(lambda v: format_sek(v, 2)),
+            })
+            st.dataframe(cmp_display, use_container_width=True)
+            fig_cmp = go.Figure([
+                go.Bar(
+                    name="ABC", x=product_names, y=cmp["abc_per_styck"].tolist(),
+                    marker_color=COLORS["primary"],
+                ),
+                go.Bar(
+                    name="Traditionell", x=product_names,
+                    y=cmp["traditionell_per_styck"].tolist(),
+                    marker_color=COLORS["neutral"],
+                ),
+            ])
+            fig_cmp.update_layout(barmode="group")
+            apply_layout(fig_cmp, title="Kostnad per styck: ABC vs traditionell (kr)", height=340)
+            st.plotly_chart(fig_cmp, use_container_width=True)
+            _cmp_rows = [
+                {
+                    "name": name,
+                    "abc_overhead": float(cmp.loc[name, "abc_overhead"]),
+                    "traditional_overhead": float(cmp.loc[name, "traditional_overhead"]),
+                    "kostnad_per_styck": float(abc_result.loc[name, "kostnad_per_styck"]),
+                }
+                for name in product_names
+            ]
+            abc_interpretation = interpret_abc(_cmp_rows)
+            st.info(abc_interpretation)
+            st.caption(
+                "Traditionell fördelning: samma totala omkostnader fördelas i "
+                "proportion till produkternas direkta kostnad (ett enda påläggstal)."
+            )
+
+            # Build inputs/outputs dicts for the explanation
             abc_inputs_llm = {
                 "aktiviteter": str([a["name"] for a in activities]),
                 "produkter": str([p["name"] for p in products_list]),
@@ -1016,58 +1030,66 @@ with tab_abc:
                 abc_inputs_llm,
                 abc_outputs_llm,
                 "abc",
-                scenario_name=st.session_state.get("abc_scenario_info", {}).get("foretag_namn"),
+                scenario_name=(st.session_state.get("abc_scenario_info") or {}).get("foretag_namn"),
+                steps_text=lambda: steps_abc(activities, products_list),
+                interpretation=abc_interpretation,
             )
 
             abc_export_df = abc_result.reset_index().rename(columns={"index": "Produkt"})
-            abc_info_export = st.session_state.get("abc_scenario_info")
-            abc_header_lines = _scenario_header_lines(abc_info_export)
-            # Column chart of total kostnad per produkt (Task 10.9)
-            _abc_offset = len(abc_header_lines)
-            _abc_first_data_row = _abc_offset + 2
-            _abc_last_data_row = _abc_first_data_row + len(abc_export_df) - 1
-            _abc_total_col_idx = list(abc_export_df.columns).index("total_kostnad") if "total_kostnad" in abc_export_df.columns else 1
+            abc_cmp_export = cmp.reset_index().rename(columns={
+                "index": "Produkt",
+                "abc_overhead": "Omkostnader ABC",
+                "traditional_overhead": "Omkostnader traditionell",
+                "skillnad": "Skillnad",
+                "abc_per_styck": "Per styck ABC",
+                "traditionell_per_styck": "Per styck traditionell",
+            })
+            abc_header_lines = scenario_header_lines(st.session_state.get("abc_scenario_info"))
+            _abc_total_col_idx = list(abc_export_df.columns).index("total_kostnad")
             _abc_total_col_letter = chr(ord("A") + _abc_total_col_idx)
             abc_charts = {
                 "ABC-kalkyl": [
                     {
                         "type": "column",
                         "title": "Total kostnad per produkt",
-                        "categories": f"A{_abc_first_data_row}:A{_abc_last_data_row}",
-                        "values": f"{_abc_total_col_letter}{_abc_first_data_row}:{_abc_total_col_letter}{_abc_last_data_row}",
-                        "position": f"H{_abc_first_data_row}",
+                        "categories": table_range("A", len(abc_export_df), abc_header_lines),
+                        "values": table_range(_abc_total_col_letter, len(abc_export_df), abc_header_lines),
+                        "position": f"A{len(abc_header_lines) + len(abc_export_df) + 4}",
                         "y_axis_title": "Belopp (kr)",
                     }
-                ]
+                ],
+                "ABC vs traditionell": [
+                    {
+                        "type": "column",
+                        "title": "Skillnad i omkostnader (ABC − traditionell)",
+                        "categories": table_range("A", len(abc_cmp_export), abc_header_lines),
+                        "values": table_range("D", len(abc_cmp_export), abc_header_lines),
+                        "position": f"A{len(abc_header_lines) + len(abc_cmp_export) + 4}",
+                        "y_axis_title": "Belopp (kr)",
+                    }
+                ],
             }
             xlsx_abc = export_to_excel(
-                {"ABC-kalkyl": abc_export_df},
-                header_lines={"ABC-kalkyl": abc_header_lines} if abc_header_lines else None,
+                {"ABC-kalkyl": abc_export_df, "ABC vs traditionell": abc_cmp_export},
+                header_lines=abc_header_lines or None,
                 charts=abc_charts,
             )
             st.download_button(
                 label="Exportera till Excel",
                 data=xlsx_abc,
                 file_name="abc_kalkyl.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                mime=_XLSX_MIME,
                 key="abc_export",
-            )
-
-        except Exception:
-            # No str(exc): raw English/technical detail must not leak into
-            # the Swedish UI (review K3).
-            st.error(
-                "Beräkningen kunde inte genomföras. Kontrollera att alla "
-                "aktiviteter har drivvolymer > 0 och att produkttabellens "
-                "kolumner matchar aktivitetsnamnen."
             )
 
     st.caption("Metod: Aktivitetsbaserad kalkylering (ABC)")
 
     if st.button("Återställ till standardvärden", key="abc_reset_autosave"):
         clear_state("kalkyl_abc")
-        st.session_state.abc_act_df = _activities_to_df(_ABC_DEFAULT_ACT)
-        st.session_state.abc_prod_df = _products_to_df(_ABC_DEFAULT_PROD, _ABC_DEFAULT_ACT)
+        _set_abc_base(
+            _activities_to_df(_ABC_DEFAULT_ACT),
+            _products_to_df(_ABC_DEFAULT_PROD, _ABC_DEFAULT_ACT),
+        )
         st.rerun()
 
     st.html(footer_note(updated=APP_UPDATED))
