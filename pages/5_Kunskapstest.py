@@ -1,14 +1,18 @@
-"""Kunskapstest - Dynamic quiz with LLM generation and deterministic verification.
+"""Kunskapstest - quiz with generated questions and deterministic verification.
 
 Kapitel 4-17 i Andersson, Ekonomistyrning: beslut och handling.
 
-The quiz uses a single combined LLM call per question (generation + self
-rating in one JSON envelope) instead of two sequential calls, with a hard
-retry cap of 2 attempts. Worst case is 2 LLM calls per "Generera fråga"
-click instead of the previous 10.
+With the explanation service, a question is generated in one combined
+call (question + self rating in one JSON envelope), at most two attempts
+per click. Without it, numeric questions come from the parametrised
+generator in utils/quiz_generator.py, whose answers are computed by the
+app's own calculators, and multiple-choice questions alternate between
+the static bank and the generator. Questions already shown in the
+session are not repeated.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import random
 from pathlib import Path
@@ -31,6 +35,7 @@ from utils.prompts import (
     contains_forbidden_terms,
     validate_kapitel_referens,
 )
+from utils.quiz_generator import generate_question
 from utils.quiz_progress import (
     VALID_CLUSTERS,
     cluster_stats,
@@ -207,12 +212,9 @@ st.html(
     )
 )
 
-# Session state for score tracking
-if "quiz_score" not in st.session_state:
-    st.session_state["quiz_score"] = {"total": 0, "correct": 0}
-
-# Per-cluster progression (review gap 8): restored once per session from
-# the autosave/URL mirror, so it survives a browser reload.
+# Per-cluster progression, restored once per session from the autosave/URL
+# mirror so it survives a browser reload. The score on the page is derived
+# from it, so the two can never disagree.
 _progress_saved = load_state("quiz_progress")
 if _progress_saved is not None:
     st.session_state["quiz_progress"] = _progress_saved
@@ -222,6 +224,8 @@ if "quiz_current" not in st.session_state:
     st.session_state["quiz_current"] = None
 if "quiz_answered" not in st.session_state:
     st.session_state["quiz_answered"] = False
+if "quiz_seen" not in st.session_state:
+    st.session_state["quiz_seen"] = []
 
 # Controls
 col1, col2, col3 = st.columns(3)
@@ -272,35 +276,47 @@ def _verify_numeric_answer(question: dict) -> bool:
         return False
 
 
-def _get_fallback_question(kluster: str, diff: str, qtype: str) -> dict | None:
-    """Pick a random matching question from the static fallback bank.
+def _bank_id(question: dict) -> str:
+    return "bank-" + hashlib.sha1(str(question.get("fraga", "")).encode("utf-8")).hexdigest()[:12]
 
-    Marks the result with ``_source = "fallback"`` and, when the bank had
-    no exact (difficulty, type) match, ``_degraded = True`` so the UI can
-    say so instead of silently serving the wrong difficulty (review Q6).
+
+def _mark_seen(question: dict) -> None:
+    """Remember a shown question so it is not served again this session."""
+    qid = question.get("id")
+    if qid:
+        seen: list = st.session_state.setdefault("quiz_seen", [])
+        if qid not in seen:
+            seen.append(qid)
+
+
+def _offline_question(kluster: str, diff: str, qtype: str) -> dict:
+    """A question without the explanation service.
+
+    Numeric questions always come from the generator, so there is an
+    unlimited supply at every difficulty. Multiple-choice questions take
+    an unseen bank question with the exact area, difficulty and type half
+    of the time (the bank has conceptual questions the generator cannot
+    make) and a generated one otherwise or when the bank is used up.
     """
-    matches = [
-        q for q in FALLBACK_BANK
-        if q.get("kapitelkluster") == kluster
-        and q.get("difficulty", "medel") == diff
-        and q.get("question_type", "flerval") == qtype
-    ]
-    degraded = False
-    if not matches:
-        degraded = True
-        matches = [
+    seen = set(st.session_state.get("quiz_seen", []))
+    if qtype == "flerval":
+        unseen = [
             q for q in FALLBACK_BANK
             if q.get("kapitelkluster") == kluster
-            and q.get("question_type", "flerval") == qtype
+            and q.get("difficulty", "medel") == diff
+            and q.get("question_type", "flerval") == "flerval"
+            and _bank_id(q) not in seen
         ]
-    if not matches:
-        matches = [q for q in FALLBACK_BANK if q.get("kapitelkluster") == kluster]
-    if not matches:
-        return None
-    chosen = dict(random.choice(matches))
-    chosen["_source"] = "fallback"
-    chosen["_degraded"] = degraded
-    return chosen
+        if unseen and random.random() < 0.5:
+            chosen = dict(random.choice(unseen))
+            chosen["id"] = _bank_id(chosen)
+            chosen["_source"] = "fallback"
+            return chosen
+    for _ in range(5):
+        generated = generate_question(kluster, diff, qtype)
+        if generated["id"] not in seen:
+            return generated
+    return generated
 
 
 def _parse_quiz_json(raw: str) -> dict | None:
@@ -372,7 +388,7 @@ def _generate_question(kluster: str, diff: str, qtype: str) -> dict | None:
     attempt failed and LLM is unavailable.
     """
     if not is_llm_available() or get_session_calls_remaining() <= 0:
-        return _get_fallback_question(kluster, diff, qtype)
+        return _offline_question(kluster, diff, qtype)
 
     quality_log = st.session_state.setdefault("quiz_quality_log", [])
     last_candidate: dict | None = None
@@ -434,7 +450,7 @@ def _generate_question(kluster: str, diff: str, qtype: str) -> dict | None:
             last_candidate["quality"] = quality
         return last_candidate
 
-    return _get_fallback_question(kluster, diff, qtype)
+    return _offline_question(kluster, diff, qtype)
 
 
 # ---------------------------------------------------------------------------
@@ -463,22 +479,22 @@ if st.button("Generera fråga", type="primary", use_container_width=True):
 # ---------------------------------------------------------------------------
 
 # Answer letters, defined at module scope: the wrong-answer message also
-# uses them outside the flerval branch (review Q5).
+# uses them outside the flerval branch.
 _ANSWER_LETTERS = ["A", "B", "C", "D", "E", "F"]
 
 q = st.session_state.get("quiz_current")
 if q:
-    # All LLM-derived text is escaped inside quiz_card_html (XSS guard).
+    _mark_seen(q)
+    # All generated text is escaped inside quiz_card_html (XSS guard).
     st.html(quiz_card_html(q))
 
     if q.get("_source") == "fallback":
-        note = "Frågan kommer från den inbyggda frågebanken (AI ej tillgänglig)."
-        if q.get("_degraded"):
-            note += (
-                " Banken saknade en exakt träff, så svårighetsgrad eller "
-                "frågetyp kan avvika från ditt val."
-            )
-        st.caption(note)
+        st.caption("Frågan kommer från den inbyggda frågebanken.")
+    elif q.get("_source") == "generator":
+        st.caption(
+            "Frågan är skapad med slumpade siffror och svaret är uträknat med "
+            "appens egna kalkylatorer."
+        )
 
     # Answer input
     qtype = q.get("question_type", "flerval")
@@ -495,8 +511,8 @@ if q:
     else:
         enhet = q.get("enhet") or ""
         enhet_hint = f"Svaret anges i {enhet}." if enhet else None
-        # value=None: 0,00 must not be pre-filled as a submittable answer
-        # (review Q3); mirrors the flerval radio's index=None.
+        # value=None: 0,00 must not be pre-filled as a submittable answer;
+        # mirrors the flerval radio's index=None.
         user_answer = st.number_input(
             "Ditt svar:",
             value=None,
@@ -523,7 +539,6 @@ if q:
         type="primary",
     ):
         st.session_state["quiz_answered"] = True
-        st.session_state["quiz_score"]["total"] += 1
 
         correct = False
         if qtype == "flerval":
@@ -547,7 +562,6 @@ if q:
         save_state("quiz_progress", st.session_state["quiz_progress"])
 
         if correct:
-            st.session_state["quiz_score"]["correct"] += 1
             st.success("Rätt svar!")
         else:
             if qtype == "flerval" and q.get("alternativ"):
@@ -629,7 +643,9 @@ if q:
                     st.session_state.pop("quiz_answer_num", None)
                     st.rerun()
         with bcol3:
-            if st.button("Förklara djupare", key="quiz_explain"):
+            # Only with the explanation service: offline the button could
+            # never do more than say it is unavailable.
+            if is_llm_available() and st.button("Förklara djupare", key="quiz_explain"):
                 try:
                     if not is_llm_available():
                         raise LLMUnavailableError("Ingen token")
@@ -643,15 +659,14 @@ if q:
                         raw = cached_chat(sys_p, usr_p)
                     result = humanize(raw)
                     # Persist so the next interaction does not erase the
-                    # answer (review Q2); rendered below for the current
-                    # question.
+                    # answer; rendered below for the current question.
                     st.session_state["quiz_deeper"] = {
                         "fraga": q.get("fraga", ""),
                         "text": result.text,
                     }
                 except LLMSessionCapError:
-                    # Before LLMUnavailableError: subclass must win or the
-                    # capped user gets advice that never helps (review K4).
+                    # Before LLMUnavailableError: the subclass must win or a
+                    # capped user gets advice that never helps.
                     render_session_cap_card()
                 except LLMUnavailableError:
                     st.info("Djupare förklaring är inte tillgänglig just nu.")
@@ -671,12 +686,13 @@ if q:
 # ---------------------------------------------------------------------------
 
 st.divider()
-score = st.session_state["quiz_score"]
+_progress_now = st.session_state.get("quiz_progress") or {}
+score = {"total": 0, "correct": 0}
+for _c in VALID_CLUSTERS:
+    _s = cluster_stats(_progress_now, _c)
+    score["total"] += _s["total"]
+    score["correct"] += _s["correct"]
 if score["total"] > 0:
-    if st.button("Nollställ statistik", key="quiz_reset_score"):
-        st.session_state["quiz_score"] = {"total": 0, "correct": 0}
-        st.rerun()
-
     pct = (score["correct"] / score["total"]) * 100
 
     render_kpi_row(
@@ -760,8 +776,9 @@ if _any_progress:
         f"{_CLUSTER_LABELS[kapitelkluster]}: {_sel_mastery['beskrivning']} "
         "Progressionen sparas i webbadressen och överlever en omladdning."
     )
-    if st.button("Nollställ progression", key="quiz_reset_progress"):
+    if st.button("Nollställ resultat och progression", key="quiz_reset_progress"):
         st.session_state["quiz_progress"] = {}
+        st.session_state["quiz_seen"] = []
         clear_state("quiz_progress")
         st.rerun()
 else:
