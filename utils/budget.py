@@ -269,3 +269,233 @@ def validate_budget_balance(balansbudget_df: pd.DataFrame) -> tuple[bool, float]
     is_balanced = abs(difference) <= 1.0
 
     return (is_balanced, difference)
+
+
+# ---------------------------------------------------------------------------
+# Opening balance helpers
+# ---------------------------------------------------------------------------
+
+_IB_ASSET_KEYS = ("Anläggningstillgångar", "Lager", "Kundfordringar", "Likvida medel")
+_IB_CLAIM_KEYS = ("Eget kapital", "Långsiktiga skulder", "Leverantörsskulder")
+
+
+def opening_balance_totals(opening_balance: dict[str, float]) -> tuple[float, float]:
+    """Return (summa tillgångar, summa skulder + EK) for an opening balance."""
+    assets = sum(float(opening_balance.get(k, 0.0)) for k in _IB_ASSET_KEYS)
+    claims = sum(float(opening_balance.get(k, 0.0)) for k in _IB_CLAIM_KEYS)
+    return assets, claims
+
+
+def balance_opening_equity(opening_balance: dict[str, float]) -> dict[str, float]:
+    """Return a copy where Eget kapital absorbs any opening imbalance.
+
+    Generated companies are scaled and rounded post by post, so their
+    opening balance can be off by a few hundred kronor. Equity is the
+    residual post of a balance sheet, so it is the one adjusted.
+    """
+    balanced = dict(opening_balance)
+    assets, claims = opening_balance_totals(balanced)
+    balanced["Eget kapital"] = float(balanced.get("Eget kapital", 0.0)) + (assets - claims)
+    return balanced
+
+
+# ---------------------------------------------------------------------------
+# Key ratios
+# ---------------------------------------------------------------------------
+
+
+def _post_value(df: pd.DataFrame, post: str, column: str = "Belopp") -> float:
+    row = df.loc[df["Post"] == post, column]
+    return float(row.values[0]) if len(row) > 0 else 0.0
+
+
+def compute_key_ratios(
+    resultat_df: pd.DataFrame, balans_df: pd.DataFrame
+) -> dict[str, float | None]:
+    """Compute the standard key ratios from the budgets.
+
+    Ratios are decimals (0.25 = 25 %). A ratio whose denominator is zero
+    is None. Definitions follow the usual Swedish textbook conventions:
+
+        Soliditet          = EK UB / summa tillgångar UB
+        Rörelsemarginal    = rörelseresultat / försäljning
+        Balanslikviditet   = omsättningstillgångar / kortfristiga skulder
+        Kassalikviditet    = (omsättningstillgångar - lager) / kortfristiga skulder
+        Avkastning på EK   = årets resultat / genomsnittligt EK
+        Avkastning på TK   = rörelseresultat / genomsnittligt totalt kapital
+    """
+
+    def _div(num: float, den: float) -> float | None:
+        return num / den if abs(den) > 1e-9 else None
+
+    forsaljning = _post_value(resultat_df, "Försäljning")
+    rorelseresultat = _post_value(resultat_df, "Rörelseresultat")
+    arets_resultat = _post_value(resultat_df, "Årets resultat")
+
+    ek_ib = _post_value(balans_df, "Eget kapital", "Ingaende")
+    ek_ub = _post_value(balans_df, "Eget kapital", "Utgaende")
+    tk_ib = _post_value(balans_df, "Summa tillgångar", "Ingaende")
+    tk_ub = _post_value(balans_df, "Summa tillgångar", "Utgaende")
+    lager = _post_value(balans_df, "Lager", "Utgaende")
+    kundfordringar = _post_value(balans_df, "Kundfordringar", "Utgaende")
+    likvida = _post_value(balans_df, "Likvida medel", "Utgaende")
+    kortfristiga = _post_value(balans_df, "Leverantörsskulder", "Utgaende")
+
+    omsattning = lager + kundfordringar + likvida
+    return {
+        "soliditet": _div(ek_ub, tk_ub),
+        "rorelsemarginal": _div(rorelseresultat, forsaljning),
+        "balanslikviditet": _div(omsattning, kortfristiga),
+        "kassalikviditet": _div(omsattning - lager, kortfristiga),
+        "avkastning_ek": _div(arets_resultat, (ek_ib + ek_ub) / 2),
+        "avkastning_tk": _div(rorelseresultat, (tk_ib + tk_ub) / 2),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Monthly likviditetsbudget
+# ---------------------------------------------------------------------------
+
+MONTHS = ("Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec")
+
+# Share of annual sales per month, in percent. Each profile sums to 100.
+SEASON_PROFILES: dict[str, tuple[float, ...]] = {
+    "Jämn": (8.4, 8.3, 8.3, 8.4, 8.3, 8.3, 8.4, 8.3, 8.3, 8.4, 8.3, 8.3),
+    "Sommartopp": (5.0, 5.0, 6.0, 8.0, 10.0, 13.0, 14.0, 12.0, 9.0, 7.0, 6.0, 5.0),
+    "Julhandel": (6.0, 6.0, 7.0, 7.0, 7.0, 7.0, 6.0, 7.0, 8.0, 9.0, 12.0, 18.0),
+    "Vinterhalvår": (12.0, 11.0, 10.0, 8.0, 6.0, 5.0, 4.0, 5.0, 7.0, 9.0, 11.0, 12.0),
+}
+
+
+def normalize_season(weights: list[float] | tuple[float, ...]) -> list[float]:
+    """Scale 12 non-negative weights so they sum to 1.
+
+    Missing months count as zero; an all-zero profile falls back to an
+    even split so the budget never divides by zero.
+    """
+    vals = [max(float(w or 0.0), 0.0) for w in list(weights)[:12]]
+    vals += [0.0] * (12 - len(vals))
+    total = sum(vals)
+    if total <= 0:
+        return [1 / 12] * 12
+    return [v / total for v in vals]
+
+
+def _lagged(amounts: list[float], lag_days: float) -> tuple[list[float], float]:
+    """Shift monthly amounts by a payment lag in days (30-day months).
+
+    A 45-day lag pays half of a month's amount one month later and half
+    two months later. Returns (payments per month, amount still unpaid at
+    year end).
+    """
+    lag_months = max(float(lag_days), 0.0) / 30.0
+    whole = int(lag_months)
+    frac = lag_months - whole
+    paid = [0.0] * 12
+    unpaid = 0.0
+    for m, amount in enumerate(amounts):
+        for offset, share in ((whole, 1.0 - frac), (whole + 1, frac)):
+            if share <= 0:
+                continue
+            if m + offset < 12:
+                paid[m + offset] += amount * share
+            else:
+                unpaid += amount * share
+    return paid, unpaid
+
+
+def _spread_opening(amount: float, lag_days: float) -> list[float]:
+    """Settle an opening receivable or payable over the first months.
+
+    What is outstanding on day one is paid within one credit period, so
+    it is spread evenly over ceil(lag / 30) months (at least one).
+    """
+    days = max(int(round(float(lag_days))), 0)
+    months = max(1, min(12, -(-days // 30)))
+    out = [0.0] * 12
+    for m in range(months):
+        out[m] = amount / months
+    return out
+
+
+def build_manadsbudget(
+    *,
+    forsaljning: float,
+    inkop: float,
+    personal: float,
+    lokal: float,
+    ovriga: float,
+    finansiella: float,
+    skatt: float,
+    season: list[float] | tuple[float, ...],
+    kundfordringar_dagar: float,
+    leverantorsskulder_dagar: float,
+    ib_kundfordringar: float,
+    ib_leverantorsskulder: float,
+    opening_cash: float,
+    investering: float = 0.0,
+    investering_manad: int = 1,
+    finansiering: float = 0.0,
+    finansiering_manad: int = 1,
+) -> pd.DataFrame:
+    """Build a monthly cash budget (likviditetsbudget per månad).
+
+    Sales and purchases follow the seasonal profile. Customers pay after
+    ``kundfordringar_dagar`` and suppliers are paid after
+    ``leverantorsskulder_dagar``; opening receivables and payables are
+    settled during the first credit period. Personnel, premises, other
+    costs, interest and preliminary tax are paid evenly over the year.
+    Investment and financing land in their chosen month (1-12).
+
+    Returns a DataFrame indexed by post with one column per month plus
+    "Totalt". The last two rows hold each month's opening and closing
+    cash; their "Totalt" is the year's opening and closing cash.
+    """
+    weights = normalize_season(season)
+    sales = [forsaljning * w for w in weights]
+    purchases = [inkop * w for w in weights]
+
+    receipts, _ = _lagged(sales, kundfordringar_dagar)
+    opening_rec = _spread_opening(ib_kundfordringar, kundfordringar_dagar)
+    receipts = [a + b for a, b in zip(receipts, opening_rec, strict=True)]
+    supplier, _ = _lagged(purchases, leverantorsskulder_dagar)
+    opening_pay = _spread_opening(ib_leverantorsskulder, leverantorsskulder_dagar)
+    supplier = [a + b for a, b in zip(supplier, opening_pay, strict=True)]
+
+    def _even(total: float) -> list[float]:
+        return [-total / 12] * 12
+
+    def _in_month(total: float, month: int) -> list[float]:
+        out = [0.0] * 12
+        out[min(max(int(month), 1), 12) - 1] = total
+        return out
+
+    rows: dict[str, list[float]] = {
+        "Inbetalningar från kunder": receipts,
+        "Utbetalningar till leverantörer": [-v for v in supplier],
+        "Personalkostnader": _even(personal),
+        "Lokalkostnader": _even(lokal),
+        "Övriga kostnader": _even(ovriga),
+        "Räntor": _even(finansiella),
+        "Preliminärskatt": _even(skatt),
+        "Investeringar": _in_month(-investering, investering_manad),
+        "Finansiering": _in_month(finansiering, finansiering_manad),
+    }
+    netto = [sum(col) for col in zip(*rows.values(), strict=True)]
+    ib: list[float] = []
+    ub: list[float] = []
+    cash = float(opening_cash)
+    for flow in netto:
+        ib.append(cash)
+        cash += flow
+        ub.append(cash)
+    rows["Nettoflöde"] = netto
+    rows["Likvida medel IB"] = ib
+    rows["Likvida medel UB"] = ub
+
+    df = pd.DataFrame(rows, index=list(MONTHS)).T
+    df["Totalt"] = df.sum(axis=1)
+    df.loc["Likvida medel IB", "Totalt"] = ib[0]
+    df.loc["Likvida medel UB", "Totalt"] = ub[-1]
+    df.index.name = "Post"
+    return df

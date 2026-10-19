@@ -1,7 +1,12 @@
-"""Budget och budgetering - Three-step budget wizard.
+"""Budget och budgetering - three linked budgets plus a monthly cash budget.
 
 Kapitel 13-15 i Andersson, Ekonomistyrning: beslut och handling.
-All UI strings in Swedish. LLM sections are placeholders (wired in Day 7).
+All UI strings in Swedish.
+
+Steg 1-3 build resultat-, likviditets- and balansbudget for the year.
+Inputs that mean the same thing in two steps (investments, depreciation,
+opening cash) are entered once and shown read-only in the later step, so
+the balance sheet always balances when the opening balance does.
 """
 from __future__ import annotations
 
@@ -10,35 +15,38 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from utils.budget import (
+    MONTHS,
+    SEASON_PROFILES,
+    balance_opening_equity,
     build_balansbudget,
     build_likviditetsbudget,
+    build_manadsbudget,
     build_resultatbudget,
+    compute_key_ratios,
+    opening_balance_totals,
     validate_budget_balance,
 )
 from utils.charts import COLORS, apply_layout
-from utils.export import export_to_excel
-from utils.formatting import format_sek
-from utils.humanizer import humanize
-from utils.llm import (
-    LLMSessionCapError,
-    LLMUnavailableError,
-    cached_chat,
-    is_llm_available,
+from utils.explain import interpret_budget
+from utils.export import export_to_excel, table_range
+from utils.formatting import format_number, format_percent, format_sek
+from utils.page_blocks import (
+    finish_scenario,
+    render_qa_chat,
+    render_scenario_controls,
+    render_scenario_info,
+    scenario_header_lines,
 )
 from utils.prompts import (
     FALLBACK_TEMPLATES,
     TUTOR_REQUIRED_SECTIONS,
     build_budget_consistency_prompt,
-    build_qa_prompt,
 )
-from utils.scenario_continuity import render_adopt_button
-from utils.scenarios import generate_scenario, set_current_scenario
 from utils.state_save import clear_state, load_state, save_state
 from utils.tutor import render_tutor_explanation
 from utils.ui import (
     APP_UPDATED,
     BUDGET_VS_RAKNING_HELP,
-    SCENARIO_DIFFICULTY_HELP,
     footer_note,
     info_tooltip,
     inject_css,
@@ -46,7 +54,6 @@ from utils.ui import (
     page_title,
     pipeline_steps,
     render_kpi_row,
-    render_session_cap_card,
     render_sidebar,
 )
 
@@ -91,8 +98,9 @@ _DEFAULT_LEVERANTORSSKULDER_DAGAR = 30.0
 _DEFAULT_LAGER_DAGAR = 45.0
 _DEFAULT_INVESTERINGAR = 500_000.0
 _DEFAULT_FINANSIERING = 300_000.0
-_DEFAULT_NYANSKAFFNING = 500_000.0
-_DEFAULT_AVSKRIVNINGAR_BALANS = 600_000.0
+_DEFAULT_SEASON = "Jämn"
+_DEFAULT_INV_MANAD = 3
+_DEFAULT_FIN_MANAD = 3
 
 
 def _load_defaults() -> None:
@@ -118,8 +126,10 @@ def _load_defaults() -> None:
     st.session_state["bud_ob_eget_kapital"] = _DEFAULT_OPENING_BALANCE["Eget kapital"]
     st.session_state["bud_ob_langsiktiga"] = _DEFAULT_OPENING_BALANCE["Långsiktiga skulder"]
     st.session_state["bud_ob_leverantorsskulder"] = _DEFAULT_OPENING_BALANCE["Leverantörsskulder"]
-    st.session_state["bud_nyanskaffning"] = _DEFAULT_NYANSKAFFNING
-    st.session_state["bud_avskrivningar_balans"] = _DEFAULT_AVSKRIVNINGAR_BALANS
+    st.session_state["bud_season_profile"] = _DEFAULT_SEASON
+    st.session_state["bud_season_weights"] = list(SEASON_PROFILES[_DEFAULT_SEASON])
+    st.session_state["bud_inv_manad"] = _DEFAULT_INV_MANAD
+    st.session_state["bud_fin_manad"] = _DEFAULT_FIN_MANAD
 
 
 # ---------------------------------------------------------------------------
@@ -129,8 +139,7 @@ def _load_defaults() -> None:
 if "bud_forsaljning" not in st.session_state:
     _load_defaults()
 
-# All budget input keys, used by autosave (review B1: Budget was the only
-# module without save_state/load_state).
+# Numeric budget inputs, used by autosave.
 _BUD_STATE_KEYS: tuple[str, ...] = (
     "bud_forsaljning", "bud_rorliga", "bud_personal", "bud_lokal",
     "bud_avskrivningar", "bud_ovriga", "bud_finansiella", "bud_skattesats",
@@ -138,8 +147,13 @@ _BUD_STATE_KEYS: tuple[str, ...] = (
     "bud_investeringar", "bud_finansiering", "bud_ob_anlaggning",
     "bud_ob_lager", "bud_ob_kundfordringar", "bud_ob_likvida",
     "bud_ob_eget_kapital", "bud_ob_langsiktiga", "bud_ob_leverantorsskulder",
-    "bud_nyanskaffning", "bud_avskrivningar_balans",
 )
+
+# Monthly-budget inputs (not plain floats) live next to them.
+st.session_state.setdefault("bud_season_profile", _DEFAULT_SEASON)
+st.session_state.setdefault("bud_season_weights", list(SEASON_PROFILES[_DEFAULT_SEASON]))
+st.session_state.setdefault("bud_inv_manad", _DEFAULT_INV_MANAD)
+st.session_state.setdefault("bud_fin_manad", _DEFAULT_FIN_MANAD)
 
 # Autosave: restore saved values once per session, before widgets render.
 _bud_saved = load_state("budget")
@@ -147,6 +161,15 @@ if _bud_saved is not None:
     for _k in _BUD_STATE_KEYS:
         if _k in _bud_saved:
             st.session_state[_k] = float(_bud_saved[_k])
+    _profile = str(_bud_saved.get("bud_season_profile", ""))
+    if _profile in SEASON_PROFILES or _profile == "Egen":
+        st.session_state["bud_season_profile"] = _profile
+    _weights = _bud_saved.get("bud_season_weights")
+    if isinstance(_weights, list) and len(_weights) == 12:
+        st.session_state["bud_season_weights"] = [float(x or 0) for x in _weights]
+    for _k in ("bud_inv_manad", "bud_fin_manad"):
+        if _k in _bud_saved:
+            st.session_state[_k] = min(max(int(_bud_saved[_k]), 1), 12)
 
 # ---------------------------------------------------------------------------
 # Page header
@@ -165,7 +188,9 @@ st.html(
 
 # Pipeline visualization
 st.html(
-    pipeline_steps(["Resultatbudget", "Likviditetsbudget", "Balansbudget"])
+    pipeline_steps([
+        "Resultatbudget", "Likviditetsbudget", "Balansbudget", "Nyckeltal", "Månadsbudget",
+    ])
 )
 
 # Hover tooltip clarifying budget (plan) vs. resultaträkning/balansräkning (utfall)
@@ -177,48 +202,11 @@ st.html(
 # Scenario controls at top: LLM driven exempelföretag plus deterministic preset
 # ---------------------------------------------------------------------------
 
-# Difficulty label to API code mapping used by the LLM scenario generator
-_DIFFICULTY_OPTIONS = ("Lätt", "Medel", "Svår")
-_DIFFICULTY_MAP = {"Lätt": "latt", "Medel": "medel", "Svår": "svar"}
-
-
-def _scenario_header_lines(info: dict | None) -> list[str]:
-    """Build Excel header lines from a scenario info dict for export."""
-    if not info:
-        return []
-    name = str(info.get("foretag_namn", "")).strip()
-    desc = str(info.get("bransch_beskrivning", "")).strip()
-    lines: list[str] = []
-    if name:
-        lines.append(f"Företag: {name}")
-    if desc:
-        lines.append(f"Bransch: {desc}")
-    return lines
-
-
 # Writes generated values directly into the bud_* session_state keys before
-# widgets render so the existing default initialization picks them up.
-bud_gen_cols = st.columns([2, 1, 1])
-with bud_gen_cols[0]:
-    bud_difficulty_label = st.selectbox(
-        "Svårighetsgrad",
-        _DIFFICULTY_OPTIONS,
-        index=1,
-        key="bud_scenario_difficulty",
-        help=SCENARIO_DIFFICULTY_HELP,
-    )
-with bud_gen_cols[1]:
-    st.write("")
-    st.write("")
-    bud_generate_clicked = st.button(
-        "Generera ett exempelföretag", key="bud_gen_scenario", use_container_width=True
-    )
-with bud_gen_cols[2]:
-    st.write("")
-    st.write("")
-    bud_reset_clicked = st.button(
-        "Återställ standardvärden", key="bud_reset_defaults", use_container_width=True
-    )
+# the widgets render, so the forms below pick them up.
+_bud_scenario, _bud_code, bud_reset_clicked = render_scenario_controls(
+    "bud", "budget", reset_label="Återställ standardvärden"
+)
 
 if bud_reset_clicked:
     clear_state("budget")
@@ -226,50 +214,53 @@ if bud_reset_clicked:
     st.session_state.pop("bud_scenario_info", None)
     st.rerun()
 
-_bud_adopt = render_adopt_button("budget", "bud_adopt_scenario")
-if bud_generate_clicked or _bud_adopt:
-    if _bud_adopt:
-        _bud_difficulty_code = _bud_adopt["difficulty"]
-        _bud_company = {
-            "foretag_namn": _bud_adopt["foretag_namn"],
-            "beskrivning": _bud_adopt["beskrivning"],
-        }
-    else:
-        _bud_difficulty_code = _DIFFICULTY_MAP[bud_difficulty_label]
-        _bud_company = None
-    with st.spinner("Genererar exempelföretag..."):
-        scenario = generate_scenario(
-            "budget", _bud_difficulty_code, company=_bud_company
-        )
-    intakter = scenario.get("intakter") or {}
-    kostnader = scenario.get("kostnader") or {}
-    balansposter = scenario.get("balansposter") or {}
-    st.session_state["bud_forsaljning"] = float(intakter.get("Försäljning", _DEFAULT_REVENUES["Försäljning"]))
-    st.session_state["bud_rorliga"] = float(kostnader.get("Rörliga kostnader", _DEFAULT_COSTS["Rörliga kostnader"]))
-    st.session_state["bud_personal"] = float(kostnader.get("Personalkostnader", _DEFAULT_COSTS["Personalkostnader"]))
-    st.session_state["bud_lokal"] = float(kostnader.get("Lokalkostnader", _DEFAULT_COSTS["Lokalkostnader"]))
-    st.session_state["bud_avskrivningar"] = float(kostnader.get("Avskrivningar", _DEFAULT_COSTS["Avskrivningar"]))
-    st.session_state["bud_ovriga"] = float(kostnader.get("Övriga kostnader", _DEFAULT_COSTS["Övriga kostnader"]))
-    st.session_state["bud_finansiella"] = float(kostnader.get("Finansiella kostnader", _DEFAULT_COSTS["Finansiella kostnader"]))
-    st.session_state["bud_ob_anlaggning"] = float(balansposter.get("Anläggningstillgångar", _DEFAULT_OPENING_BALANCE["Anläggningstillgångar"]))
-    st.session_state["bud_ob_lager"] = float(balansposter.get("Lager", _DEFAULT_OPENING_BALANCE["Lager"]))
-    st.session_state["bud_ob_kundfordringar"] = float(balansposter.get("Kundfordringar", _DEFAULT_OPENING_BALANCE["Kundfordringar"]))
-    st.session_state["bud_ob_likvida"] = float(balansposter.get("Likvida medel", _DEFAULT_OPENING_BALANCE["Likvida medel"]))
-    st.session_state["bud_ob_eget_kapital"] = float(balansposter.get("Eget kapital", _DEFAULT_OPENING_BALANCE["Eget kapital"]))
-    st.session_state["bud_ob_langsiktiga"] = float(balansposter.get("Långsiktiga skulder", _DEFAULT_OPENING_BALANCE["Långsiktiga skulder"]))
-    st.session_state["bud_ob_leverantorsskulder"] = float(balansposter.get("Leverantörsskulder", _DEFAULT_OPENING_BALANCE["Leverantörsskulder"]))
-    st.session_state["bud_scenario_info"] = {
-        "foretag_namn": scenario.get("foretag_namn", "Exempelföretag"),
-        "bransch_beskrivning": scenario.get("bransch_beskrivning", ""),
-    }
-    set_current_scenario("budget", scenario, _bud_difficulty_code)
-    st.rerun()
 
-bud_info = st.session_state.get("bud_scenario_info")
-if bud_info:
-    st.info(
-        f"**{bud_info['foretag_namn']}**\n\n{bud_info['bransch_beskrivning']}"
+def _num_or(src: dict, key: str, default: float) -> float:
+    try:
+        return float(src.get(key, default))
+    except (TypeError, ValueError):
+        return default
+
+
+if _bud_scenario is not None:
+    intakter = _bud_scenario.get("intakter") or {}
+    kostnader = _bud_scenario.get("kostnader") or {}
+    balansposter = _bud_scenario.get("balansposter") or {}
+    st.session_state["bud_forsaljning"] = _num_or(
+        intakter, "Försäljning", _DEFAULT_REVENUES["Försäljning"]
     )
+    for _state_key, _post in (
+        ("bud_rorliga", "Rörliga kostnader"),
+        ("bud_personal", "Personalkostnader"),
+        ("bud_lokal", "Lokalkostnader"),
+        ("bud_avskrivningar", "Avskrivningar"),
+        ("bud_ovriga", "Övriga kostnader"),
+        ("bud_finansiella", "Finansiella kostnader"),
+    ):
+        st.session_state[_state_key] = _num_or(kostnader, _post, _DEFAULT_COSTS[_post])
+    # A generated company is scaled and rounded post by post, so its
+    # opening balance can be a few hundred kronor off. Equity absorbs the
+    # difference, otherwise the closing balance could never balance.
+    _ob = balance_opening_equity({
+        _post: _num_or(balansposter, _post, _DEFAULT_OPENING_BALANCE[_post])
+        for _post in _DEFAULT_OPENING_BALANCE
+    })
+    for _state_key, _post in (
+        ("bud_ob_anlaggning", "Anläggningstillgångar"),
+        ("bud_ob_lager", "Lager"),
+        ("bud_ob_kundfordringar", "Kundfordringar"),
+        ("bud_ob_likvida", "Likvida medel"),
+        ("bud_ob_eget_kapital", "Eget kapital"),
+        ("bud_ob_langsiktiga", "Långsiktiga skulder"),
+        ("bud_ob_leverantorsskulder", "Leverantörsskulder"),
+    ):
+        st.session_state[_state_key] = _ob[_post]
+    # Steg 2 owns the opening cash and steg 3 mirrors it, so the company's
+    # cash goes into the steg 2 key to keep its opening balance intact.
+    st.session_state["bud_opening_cash"] = _ob["Likvida medel"]
+    finish_scenario("bud", "budget", _bud_scenario, _bud_code)
+
+render_scenario_info("bud")
 
 # ===========================================================================
 # STEG 1 — RESULTATBUDGET
@@ -730,28 +721,27 @@ with st.expander("Steg 3: Balansbudget", expanded=True):
             )
             st.session_state["bud_ob_leverantorsskulder"] = ob_leverantorsskulder
 
-            st.markdown("**Investeringar (balansbudget)**")
-            nyanskaffning = st.number_input(
+            # Same figures as in steg 1 and 2, shown read-only: entering them
+            # twice was how a budget ended up unbalanced.
+            st.markdown("**Anläggningstillgångarnas förändring**")
+            nyanskaffning = float(investeringar_belopp)
+            avskrivningar_balans = float(avskrivningar)
+            st.number_input(
                 "Nyanskaffning (kr)",
-                min_value=0.0,
-                value=float(st.session_state["bud_nyanskaffning"]),
-                step=50_000.0,
+                value=nyanskaffning,
                 format="%.0f",
                 key="inp_nyanskaffning",
-                help="Nyanskaffade anläggningstillgångar under perioden",
+                help="Synkroniserad från Steg 2 (Investeringar)",
+                disabled=True,
             )
-            st.session_state["bud_nyanskaffning"] = nyanskaffning
-
-            avskrivningar_balans = st.number_input(
-                "Avskrivningar (balans) (kr)",
-                min_value=0.0,
-                value=float(st.session_state["bud_avskrivningar_balans"]),
-                step=50_000.0,
+            st.number_input(
+                "Avskrivningar (kr)",
+                value=avskrivningar_balans,
                 format="%.0f",
                 key="inp_avskrivningar_balans",
-                help="Periodens avskrivningar (bör stämma med resultatbudgetens avskrivningar)",
+                help="Synkroniserad från Steg 1 (Avskrivningar)",
+                disabled=True,
             )
-            st.session_state["bud_avskrivningar_balans"] = avskrivningar_balans
             bud_step3_form_submit = st.form_submit_button("Uppdatera värden", type="primary")
 
     with col_res3:
@@ -776,16 +766,27 @@ with st.expander("Steg 3: Balansbudget", expanded=True):
             investeringar=investeringar_dict,
         )
 
-        # Validate balance
+        # Validate balance. With investments, depreciation and opening cash
+        # linked between the steps, the closing balance can only be off if
+        # the opening balance already is, so check that first and blame the
+        # right step.
         is_balanced, difference = validate_budget_balance(balans_df)
+        ib_tillgangar, ib_skulder_ek = opening_balance_totals(opening_balance)
+        ib_diff = ib_tillgangar - ib_skulder_ek
 
-        if is_balanced:
+        if abs(ib_diff) > 1.0:
+            st.error(
+                f"Ingående balans går inte ihop: tillgångar {format_sek(ib_tillgangar)} "
+                f"≠ skulder och eget kapital {format_sek(ib_skulder_ek)} "
+                f"(differens {format_sek(ib_diff)}). Justera de ingående posterna, "
+                "till exempel eget kapital, så att båda sidorna blir lika stora. "
+                "Utgående balans kan inte gå ihop förrän ingående balans gör det."
+            )
+        elif is_balanced:
             st.success("Balansbudgeten är i balans. Tillgångar = Skulder + Eget kapital.")
         else:
             st.error(
-                f"Balansbudgeten är INTE i balans. Differens: {format_sek(difference)}. "
-                "Trolig orsak: Kontrollera att likvida medel IB, investeringar och "
-                "avskrivningar stämmer överens mellan stegen."
+                f"Balansbudgeten är INTE i balans. Differens: {format_sek(difference)}."
             )
 
         # Display as formatted table — show side by side
@@ -882,7 +883,238 @@ with st.expander("Steg 3: Balansbudget", expanded=True):
         st.plotly_chart(fig_balans, use_container_width=True)
 
 # ===========================================================================
-# LLM SAMMANFATTANDE ANALYS
+# NYCKELTAL
+# ===========================================================================
+
+st.markdown("### Nyckeltal")
+key_ratios = compute_key_ratios(resultat_df, balans_df)
+
+
+def _ratio(value: float | None) -> str:
+    return format_percent(value) if value is not None else "-"
+
+
+def _times(value: float | None) -> str:
+    return f"{format_number(value, 2)} ggr" if value is not None else "-"
+
+
+_RATIO_HELP = {
+    "soliditet": "Eget kapital / totala tillgångar vid årets slut. Visar hur stor del "
+    "av tillgångarna som finansieras med eget kapital. Under 20 % räknas oftast som svagt.",
+    "rorelsemarginal": "Rörelseresultat / försäljning. Hur många öre i rörelseresultat "
+    "varje försäljningskrona ger.",
+    "balanslikviditet": "Omsättningstillgångar / kortfristiga skulder. Över 2 ggr (200 %) "
+    "brukar anses tryggt.",
+    "kassalikviditet": "(Omsättningstillgångar − lager) / kortfristiga skulder. Över 1 ggr "
+    "(100 %) betyder att de kortfristiga skulderna kan betalas utan att sälja lagret.",
+    "avkastning_ek": "Årets resultat / genomsnittligt eget kapital. Ägarnas avkastning.",
+    "avkastning_tk": "Rörelseresultat / genomsnittligt totalt kapital. Hur väl alla "
+    "tillgångar förräntas, oavsett finansiering.",
+}
+
+render_kpi_row([
+    kpi_card(
+        "Soliditet",
+        _ratio(key_ratios["soliditet"]),
+        variant="success" if (key_ratios["soliditet"] or 0) >= 0.2 else "warning",
+    ),
+    kpi_card(
+        "Rörelsemarginal",
+        _ratio(key_ratios["rorelsemarginal"]),
+        variant="success" if (key_ratios["rorelsemarginal"] or 0) > 0 else "danger",
+    ),
+    kpi_card(
+        "Balanslikviditet",
+        _times(key_ratios["balanslikviditet"]),
+        variant="success" if (key_ratios["balanslikviditet"] or 0) >= 2 else "warning",
+    ),
+])
+render_kpi_row([
+    kpi_card(
+        "Kassalikviditet",
+        _times(key_ratios["kassalikviditet"]),
+        variant="success" if (key_ratios["kassalikviditet"] or 0) >= 1 else "warning",
+    ),
+    kpi_card("Avkastning på eget kapital", _ratio(key_ratios["avkastning_ek"])),
+    kpi_card("Avkastning på totalt kapital", _ratio(key_ratios["avkastning_tk"])),
+])
+with st.expander("Så räknas nyckeltalen"):
+    st.markdown("\n".join(
+        f"- **{label}:** {_RATIO_HELP[key]}"
+        for key, label in (
+            ("soliditet", "Soliditet"),
+            ("rorelsemarginal", "Rörelsemarginal"),
+            ("balanslikviditet", "Balanslikviditet"),
+            ("kassalikviditet", "Kassalikviditet"),
+            ("avkastning_ek", "Avkastning på eget kapital"),
+            ("avkastning_tk", "Avkastning på totalt kapital"),
+        )
+    ))
+    st.caption(
+        "Kortfristiga skulder är här lika med leverantörsskulderna, eftersom "
+        "budgeten inte har andra kortfristiga skulder."
+    )
+
+# ===========================================================================
+# STEG 4 -- LIKVIDITETSBUDGET PER MÅNAD
+# ===========================================================================
+
+_SEASON_OPTIONS = [*SEASON_PROFILES, "Egen"]
+
+with st.expander("Steg 4: Likviditetsbudget per månad", expanded=False):
+    st.markdown(
+        "Årsbudgeten visar om kassan räcker vid årets slut, men inte om den "
+        "räcker *under* året. Här fördelas försäljning och inköp efter en "
+        "säsongsprofil och betalningarna förskjuts med kredittiderna från steg 2."
+    )
+    col_in4, col_res4 = st.columns([1, 2], gap="large")
+
+    with col_in4:
+        season_choice = st.selectbox(
+            "Säsongsprofil",
+            _SEASON_OPTIONS,
+            index=_SEASON_OPTIONS.index(st.session_state["bud_season_profile"])
+            if st.session_state["bud_season_profile"] in _SEASON_OPTIONS
+            else 0,
+            key="inp_season_profile",
+            help="Andel av årets försäljning per månad. Välj Egen för att skriva in egna andelar.",
+        )
+        if season_choice != st.session_state["bud_season_profile"]:
+            st.session_state["bud_season_profile"] = season_choice
+            if season_choice in SEASON_PROFILES:
+                st.session_state["bud_season_weights"] = list(SEASON_PROFILES[season_choice])
+            st.session_state.pop("bud_season_editor", None)
+
+        season_df = pd.DataFrame({
+            "Månad": list(MONTHS),
+            "Andel (%)": st.session_state["bud_season_weights"],
+        })
+        edited_season = st.data_editor(
+            season_df,
+            hide_index=True,
+            use_container_width=True,
+            disabled=["Månad"] if season_choice == "Egen" else True,
+            key="bud_season_editor",
+            column_config={
+                "Andel (%)": st.column_config.NumberColumn(
+                    "Andel (%)", min_value=0.0, max_value=100.0, format="%.1f"
+                ),
+            },
+        )
+        season_weights = [float(v or 0) for v in edited_season["Andel (%)"].tolist()]
+        if season_choice == "Egen":
+            st.session_state["bud_season_weights"] = season_weights
+        _season_sum = sum(season_weights)
+        if season_choice == "Egen" and abs(_season_sum - 100) > 0.5:
+            st.caption(
+                f"Andelarna summerar till {format_number(_season_sum, 1)} %. De "
+                "skalas om så att de blir 100 %."
+            )
+
+        _month_opts = list(range(1, 13))
+        inv_manad = st.selectbox(
+            "Investeringen betalas i",
+            _month_opts,
+            index=int(st.session_state["bud_inv_manad"]) - 1,
+            format_func=lambda m: MONTHS[m - 1],
+            key="inp_inv_manad",
+        )
+        st.session_state["bud_inv_manad"] = inv_manad
+        fin_manad = st.selectbox(
+            "Finansieringen kommer in i",
+            _month_opts,
+            index=int(st.session_state["bud_fin_manad"]) - 1,
+            format_func=lambda m: MONTHS[m - 1],
+            key="inp_fin_manad",
+        )
+        st.session_state["bud_fin_manad"] = fin_manad
+
+    with col_res4:
+        _skatt = abs(float(resultat_df.loc[resultat_df["Post"] == "Skatt", "Belopp"].values[0]))
+        manad_df = build_manadsbudget(
+            forsaljning=forsaljning,
+            inkop=inkop,
+            personal=personal,
+            lokal=lokal,
+            ovriga=ovriga,
+            finansiella=finansiella,
+            skatt=_skatt,
+            season=season_weights,
+            kundfordringar_dagar=kf_dagar,
+            leverantorsskulder_dagar=ls_dagar,
+            ib_kundfordringar=ob_kundfordringar,
+            ib_leverantorsskulder=ob_leverantorsskulder,
+            opening_cash=opening_cash,
+            investering=investeringar_belopp,
+            investering_manad=inv_manad,
+            finansiering=finansiering_belopp,
+            finansiering_manad=fin_manad,
+        )
+        _ub_row = manad_df.loc["Likvida medel UB", list(MONTHS)]
+        _lowest_month = str(_ub_row.idxmin())
+        _lowest = float(_ub_row.min())
+        _negative_months = [m for m in MONTHS if float(_ub_row[m]) < 0]
+
+        render_kpi_row([
+            kpi_card(
+                "Lägsta saldo",
+                format_sek(_lowest),
+                delta=f"i {_lowest_month}",
+                delta_direction="flat",
+                variant="success" if _lowest >= 0 else "danger",
+            ),
+            kpi_card(
+                "Saldo i december",
+                format_sek(float(_ub_row["Dec"])),
+                variant="success" if float(_ub_row["Dec"]) >= 0 else "danger",
+            ),
+            kpi_card(
+                "Månader med underskott",
+                str(len(_negative_months)),
+                variant="success" if not _negative_months else "danger",
+            ),
+        ])
+        if _negative_months:
+            st.error(
+                f"Kassan blir negativ i {', '.join(_negative_months)}. Företaget "
+                f"behöver en checkkredit på minst {format_sek(abs(_lowest))}, "
+                "eller kan flytta investeringen till en starkare månad."
+            )
+
+        _netto = manad_df.loc["Nettoflöde", list(MONTHS)].tolist()
+        fig_manad = go.Figure()
+        fig_manad.add_trace(go.Bar(
+            x=list(MONTHS),
+            y=_netto,
+            name="Nettoflöde",
+            marker_color=[COLORS["success"] if v >= 0 else COLORS["danger"] for v in _netto],
+            opacity=0.8,
+        ))
+        fig_manad.add_trace(go.Scatter(
+            x=list(MONTHS),
+            y=_ub_row.tolist(),
+            name="Likvida medel UB",
+            mode="lines+markers",
+            line=dict(color=COLORS["primary"], width=2),
+        ))
+        fig_manad.add_hline(y=0, line_dash="dot", line_color=COLORS["neutral"], line_width=1)
+        apply_layout(fig_manad, title="Kassaflöde och saldo per månad", height=380)
+        st.plotly_chart(fig_manad, use_container_width=True)
+
+        st.dataframe(
+            manad_df.map(lambda v: format_number(float(v), 0)),
+            use_container_width=True,
+        )
+        st.caption(
+            "Inbetalningar och leverantörsbetalningar förskjuts med kredittiderna "
+            "(30 dagar = en månad). Personal, lokaler, övrigt, räntor och "
+            "preliminärskatt betalas med en tolftedel per månad. Saldot i december "
+            "kan skilja sig från Likvida medel UB i steg 2, eftersom årsbudgeten "
+            "räknar med lageruppbyggnad och ett förenklat rörelsekapital."
+        )
+
+# ===========================================================================
+# SAMMANFATTANDE ANALYS
 # ===========================================================================
 
 st.markdown("### Sammanfattande analys")
@@ -929,7 +1161,11 @@ render_tutor_explanation(
         is_balanced, difference,
     ),
     fallback_text=lambda: FALLBACK_TEMPLATES["budget"](
-        "budget", _budget_fallback_inputs, _budget_fallback_outputs
+        "budget", _budget_fallback_inputs, _budget_fallback_outputs,
+        interpretation=interpret_budget(
+            forsaljning, rorelseresultat, likvida_ub, is_balanced,
+            key_ratios["soliditet"],
+        ),
     ),
     required_sections=TUTOR_REQUIRED_SECTIONS,
     expected_numbers={
@@ -942,44 +1178,15 @@ render_tutor_explanation(
     spinner_label="Analyserar budgetkonsistens...",
 )
 
-# Q&A chat
-if "budget_chat_history" not in st.session_state:
-    st.session_state["budget_chat_history"] = []
-
-for role, msg in st.session_state["budget_chat_history"]:
-    with st.chat_message(role):
-        st.markdown(msg)
-
-user_q = st.chat_input("Fråga om budgeten")
-if user_q:
-    st.session_state["budget_chat_history"].append(("user", user_q))
-    with st.chat_message("user"):
-        st.markdown(user_q)
-    try:
-        if not is_llm_available():
-            raise LLMUnavailableError("Ingen token")
-        budget_ctx_inputs = {"forsaljning": forsaljning, "arets_resultat": arets_resultat}
-        budget_ctx_outputs = {"likvida_medel_ub": likvida_ub, "balanserad": is_balanced}
-        sys_p, usr_p = build_qa_prompt(
-            "budget", budget_ctx_inputs, budget_ctx_outputs, user_q,
-            chat_history=st.session_state["budget_chat_history"],
-        )
-        with st.chat_message("assistant"):
-            with st.spinner("Tänker..."):
-                raw = cached_chat(sys_p, usr_p)
-            result = humanize(raw)
-            st.markdown(result.text)
-        st.session_state["budget_chat_history"].append(("assistant", result.text))
-    except LLMSessionCapError:
-        # Must be caught before LLMUnavailableError (its parent class):
-        # a capped user should see the cap card, not "try again later"
-        # advice that can never help (review K4).
-        render_session_cap_card()
-    except LLMUnavailableError:
-        msg = "Tjänsten är tillfälligt otillgänglig. Försök igen senare."
-        with st.chat_message("assistant"):
-            st.info(msg)
-        st.session_state["budget_chat_history"].append(("assistant", msg))
+render_qa_chat(
+    chat_key="budget_chat_history",
+    input_key="budget_chat_input",
+    placeholder="Fråga om budgeten",
+    context="budget",
+    inputs={"forsaljning": forsaljning, "arets_resultat": arets_resultat},
+    outputs={"likvida_medel_ub": likvida_ub, "balanserad": is_balanced},
+    ground=False,
+)
 
 # ===========================================================================
 # BOTTOM -- EXPORT
@@ -987,52 +1194,60 @@ if user_q:
 
 st.divider()
 
-# Charts per sheet (Task 10.9): one chart for each budget DataFrame
-_res_rows = len(resultat_df)
-_liq_rows = len(likviditet_df)
-_bal_rows = len(balans_df)
+_bud_header = scenario_header_lines(st.session_state.get("bud_scenario_info"))
+nyckeltal_df = pd.DataFrame({
+    "Nyckeltal": [
+        "Soliditet", "Rörelsemarginal", "Balanslikviditet", "Kassalikviditet",
+        "Avkastning på eget kapital", "Avkastning på totalt kapital",
+    ],
+    "Värde": [
+        _ratio(key_ratios["soliditet"]),
+        _ratio(key_ratios["rorelsemarginal"]),
+        _times(key_ratios["balanslikviditet"]),
+        _times(key_ratios["kassalikviditet"]),
+        _ratio(key_ratios["avkastning_ek"]),
+        _ratio(key_ratios["avkastning_tk"]),
+    ],
+})
+manad_export = manad_df.reset_index()
 budget_charts = {
-    "Resultatbudget": [
-        {
-            "type": "column",
-            "title": "Resultatbudget per post",
-            "categories": f"A2:A{1 + _res_rows}",
-            "values": f"B2:B{1 + _res_rows}",
-            "position": "D2",
-            "y_axis_title": "Belopp (kr)",
-        }
-    ],
-    "Likviditetsbudget": [
-        {
-            "type": "column",
-            "title": "Likviditetsflöden",
-            "categories": f"A2:A{1 + _liq_rows}",
-            "values": f"B2:B{1 + _liq_rows}",
-            "position": "D2",
-            "y_axis_title": "Belopp (kr)",
-        }
-    ],
-    "Balansbudget": [
-        {
-            "type": "bar",
-            "title": "Balansposter",
-            "categories": f"A2:A{1 + _bal_rows}",
-            "values": f"B2:B{1 + _bal_rows}",
-            "position": "F2",
-            "x_axis_title": "Belopp (kr)",
-        }
-    ],
+    "Resultatbudget": [{
+        "type": "column",
+        "title": "Resultatbudget per post",
+        "categories": table_range("A", len(resultat_df), _bud_header),
+        "values": table_range("B", len(resultat_df), _bud_header),
+        "position": "D2",
+        "y_axis_title": "Belopp (kr)",
+    }],
+    "Likviditetsbudget": [{
+        "type": "column",
+        "title": "Likviditetsflöden",
+        "categories": table_range("A", len(likviditet_df), _bud_header),
+        "values": table_range("B", len(likviditet_df), _bud_header),
+        "position": "D2",
+        "y_axis_title": "Belopp (kr)",
+    }],
+    "Balansbudget": [{
+        "type": "bar",
+        "title": "Utgående balansposter",
+        "categories": table_range("A", len(balans_df), _bud_header),
+        "values": table_range("C", len(balans_df), _bud_header),
+        "position": "F2",
+        "x_axis_title": "Belopp (kr)",
+    }],
 }
 
-# Excel export with all three budgets
 st.download_button(
-    "Exportera alla tre till Excel",
+    "Exportera budgetarna till Excel",
     data=export_to_excel(
         {
             "Resultatbudget": resultat_df,
             "Likviditetsbudget": likviditet_df,
             "Balansbudget": balans_df,
+            "Nyckeltal": nyckeltal_df,
+            "Manadsbudget": manad_export,
         },
+        header_lines=_bud_header or None,
         charts=budget_charts,
     ),
     file_name="budget_helhetsplan.xlsx",
@@ -1040,6 +1255,15 @@ st.download_button(
 )
 
 # Autosave current input values on every rerun.
-save_state("budget", {_k: st.session_state.get(_k) for _k in _BUD_STATE_KEYS})
+save_state(
+    "budget",
+    {
+        **{_k: st.session_state.get(_k) for _k in _BUD_STATE_KEYS},
+        "bud_season_profile": st.session_state["bud_season_profile"],
+        "bud_season_weights": [float(w) for w in st.session_state["bud_season_weights"]],
+        "bud_inv_manad": int(st.session_state["bud_inv_manad"]),
+        "bud_fin_manad": int(st.session_state["bud_fin_manad"]),
+    },
+)
 
 st.html(footer_note(updated=APP_UPDATED))

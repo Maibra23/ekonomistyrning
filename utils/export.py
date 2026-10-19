@@ -3,10 +3,10 @@
 Builds an in-memory xlsx file from a dict of sheet_name -> DataFrame.
 Returns bytes suitable for use with st.download_button.
 
-From Task 10.13 an optional ``header_lines`` argument lets callers
-inject contextual lines (e.g. foretag_namn and bransch_beskrivning)
-above the data rows so a student exporting the sheet keeps the
-scenario context.
+An optional ``header_lines`` argument writes contextual lines (company
+name and description) above the data rows, so an exported sheet keeps
+the scenario context. Charts are positioned with :func:`table_range`,
+which accounts for those lines.
 """
 from __future__ import annotations
 
@@ -89,7 +89,7 @@ def export_to_excel(
                 )
                 worksheet.set_column(col_idx, col_idx, min(max_width + 2, 50))
 
-            # Charts (Task 10.9). Skip silently if no specs target this sheet.
+            # Charts. Skip silently if no specs target this sheet.
             sheet_charts = (charts or {}).get(sheet_name)
             if not sheet_charts:
                 sheet_charts = (charts or {}).get(safe_name)
@@ -98,6 +98,19 @@ def export_to_excel(
                     _add_chart(workbook, worksheet, safe_name, spec)
 
     return buffer.getvalue()
+
+
+def table_range(
+    column: str, n_rows: int, header_lines: Sequence[str] | None = None, skip: int = 0
+) -> str:
+    """Excel range for the data cells of ``column`` in a sheet from export_to_excel.
+
+    Data starts below the optional context lines and the column header,
+    so chart specs must shift when a company header is added. ``skip``
+    leaves out that many leading data rows.
+    """
+    first = len(header_lines or []) + 2 + skip
+    return f"{column}{first}:{column}{first + max(n_rows - skip, 1) - 1}"
 
 
 def _add_chart(

@@ -521,11 +521,35 @@ def build_quiz_generation_prompt(
 
 
 # Deterministic fallback templates used when the LLM is unavailable.
-# These produce competent but less rich four section explanations using
-# the user's actual numbers and a fixed structure.
+# They keep the four-section structure and the user's actual numbers.
+# Pages pass a rule-based ``interpretation`` (utils.explain) so the
+# "Tolkning" section says what the numbers mean instead of a generic hint.
+
+_KALKYL_DEFAULT_TOLKNING = (
+    "Resultatet visar hur kostnaderna fördelas och summeras enligt vald "
+    "kalkylmetod. Studera särskilt vilka kostnadsslag som dominerar."
+)
+_INVESTERING_DEFAULT_TOLKNING = (
+    "Använd beslutsregeln för vald metod. Jämför resultatet mot kalkylräntan "
+    "eller andra alternativa investeringar."
+)
+_BUDGET_DEFAULT_TOLKNING = (
+    "Kontrollera att de tre delbudgetarna är inbördes konsistenta. Resultatbudgetens "
+    "årsresultat ska återspeglas i balansbudgetens förändring av eget kapital, och "
+    "likviditetsbudgetens kassaförändring ska stämma med balansbudgetens likvida medel."
+)
+_STANDARDKOST_DEFAULT_TOLKNING = (
+    "Identifiera den dominerande avvikelsen. Stor prisavvikelse pekar mot "
+    "inköpsfunktionen, stor effektivitetsavvikelse mot produktionen, och stor "
+    "volymavvikelse mot försäljningen eller marknadsefterfrågan."
+)
+
 
 def fallback_kalkyl_template(
-    calc_type: str, inputs: dict[str, Any], outputs: dict[str, Any]
+    calc_type: str,
+    inputs: dict[str, Any],
+    outputs: dict[str, Any],
+    interpretation: str | None = None,
 ) -> str:
     """Return a Swedish four section explanation built from inputs and outputs."""
     method_label = {
@@ -545,8 +569,7 @@ def fallback_kalkyl_template(
         f"Indata:\n{inputs_lines}\n\n"
         f"Resultat:\n{outputs_lines}\n\n"
         f"**Tolkning**\n"
-        f"Resultatet visar hur kostnaderna fördelas och summeras enligt vald kalkylmetod. "
-        f"Studera särskilt vilka kostnadsslag som dominerar.\n\n"
+        f"{interpretation or _KALKYL_DEFAULT_TOLKNING}\n\n"
         f"**Källor och förbehåll**\n"
         f"Förenklad modell. Verkliga företag kan ha staffade satser och "
         f"kostnadsställen som inte fångas här."
@@ -554,7 +577,10 @@ def fallback_kalkyl_template(
 
 
 def fallback_investering_template(
-    method: str, inputs: dict[str, Any], outputs: dict[str, Any]
+    method: str,
+    inputs: dict[str, Any],
+    outputs: dict[str, Any],
+    interpretation: str | None = None,
 ) -> str:
     """Return a fallback four section explanation for investment methods."""
     method_label = {
@@ -576,8 +602,7 @@ def fallback_investering_template(
         f"Indata:\n{inputs_lines}\n\n"
         f"Resultat:\n{outputs_lines}\n\n"
         f"**Tolkning**\n"
-        f"Använd beslutsregeln för vald metod. Jämför resultatet mot kalkylräntan eller andra "
-        f"alternativa investeringar.\n\n"
+        f"{interpretation or _INVESTERING_DEFAULT_TOLKNING}\n\n"
         f"**Källor och förbehåll**\n"
         f"Modellen abstraherar från viss komplexitet och förutsätter att indata är representativa "
         f"för investeringens livslängd."
@@ -585,7 +610,10 @@ def fallback_investering_template(
 
 
 def fallback_budget_template(
-    calc_type: str, inputs: dict[str, Any], outputs: dict[str, Any]
+    calc_type: str,
+    inputs: dict[str, Any],
+    outputs: dict[str, Any],
+    interpretation: str | None = None,
 ) -> str:
     """Return a fallback four section explanation for budget analysis."""
     inputs_lines = _format_labeled_block(inputs)
@@ -599,9 +627,7 @@ def fallback_budget_template(
         f"Indata:\n{inputs_lines}\n\n"
         f"Resultat:\n{outputs_lines}\n\n"
         f"**Tolkning**\n"
-        f"Kontrollera att de tre delbudgetarna är inbördes konsistenta. Resultatbudgetens "
-        f"årsresultat ska återspeglas i balansbudgetens förändring av eget kapital, och "
-        f"likviditetsbudgetens kassaförändring ska stämma med balansbudgetens likvida medel.\n\n"
+        f"{interpretation or _BUDGET_DEFAULT_TOLKNING}\n\n"
         f"**Källor och förbehåll**\n"
         f"Förenklad budgetmodell. Periodiseringseffekter och säsongsvariationer fångas "
         f"inte fullt ut."
@@ -609,7 +635,10 @@ def fallback_budget_template(
 
 
 def fallback_standardkost_template(
-    calc_type: str, inputs: dict[str, Any], outputs: dict[str, Any]
+    calc_type: str,
+    inputs: dict[str, Any],
+    outputs: dict[str, Any],
+    interpretation: str | None = None,
 ) -> str:
     """Return a fallback four section explanation for variance analysis."""
     inputs_lines = _format_labeled_block(inputs)
@@ -623,9 +652,7 @@ def fallback_standardkost_template(
         f"Indata:\n{inputs_lines}\n\n"
         f"Resultat:\n{outputs_lines}\n\n"
         f"**Tolkning**\n"
-        f"Identifiera den dominerande avvikelsen. Stor prisavvikelse pekar mot "
-        f"inköpsfunktionen, stor effektivitetsavvikelse mot produktionen, och stor "
-        f"volymavvikelse mot försäljningen eller marknadsefterfrågan.\n\n"
+        f"{interpretation or _STANDARDKOST_DEFAULT_TOLKNING}\n\n"
         f"**Källor och förbehåll**\n"
         f"Förenklad avvikelsemodell. Samspelseffekter mellan komponenterna kan ge "
         f"mindre avstämningsdifferenser."

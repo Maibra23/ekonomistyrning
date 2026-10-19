@@ -179,6 +179,7 @@ def render_step_guide(
     clear_label: str = "Ta bort guiden",
     expander_title: str = "Steg för steg guide",
     spinner_label: str = "Genererar steg-för-steg guide...",
+    fallback_text: Callable[[], str] | None = None,
 ) -> None:
     """Render the on-demand step-by-step guide for a section.
 
@@ -188,7 +189,24 @@ def render_step_guide(
     empty LLM response or a whitespace-only humanized result is treated
     as no cache instead of leaving the user with a relabeled button and
     an invisible (empty) expander.
+
+    ``fallback_text`` builds a deterministic guide from the user's own
+    numbers. It is used offline and whenever the service fails, so the
+    button always leads somewhere. Without it the button is hidden
+    offline.
     """
+    offline = not is_llm_available()
+    if offline and fallback_text is None:
+        st.caption(
+            "Steg för steg-guiden kräver förklaringstjänsten, som inte är "
+            "aktiv just nu."
+        )
+        return
+    if offline:
+        button_label = "Visa uträkningen steg för steg"
+        update_label = "Uppdatera uträkningen"
+        expander_title = "Uträkningen steg för steg"
+
     current_hash = _hash_payload(inputs, outputs)
     store = st.session_state.get(_store_key(state_key))
     cached_text: str = ""
@@ -219,7 +237,13 @@ def render_step_guide(
         st.session_state.pop(_store_key(state_key), None)
         st.rerun()
 
-    if clicked:
+    if clicked and offline and fallback_text is not None:
+        st.session_state[_store_key(state_key)] = {
+            "text": fallback_text(),
+            "hash": current_hash,
+        }
+        st.rerun()
+    elif clicked:
         try:
             if not is_llm_available():
                 raise LLMUnavailableError("Ingen token")
@@ -248,8 +272,14 @@ def render_step_guide(
         except LLMSessionCapError:
             render_session_cap_card()
         except LLMUnavailableError:
+            if fallback_text is not None:
+                st.session_state[_store_key(state_key)] = {
+                    "text": fallback_text(),
+                    "hash": current_hash,
+                }
+                st.rerun()
             st.info(
-                "Steg-för-steg guide är inte tillgänglig just nu. "
+                "Steg för steg-guiden är inte tillgänglig just nu. "
                 "Försök igen senare."
             )
         except Exception as exc:  # pragma: no cover - defensive surface
