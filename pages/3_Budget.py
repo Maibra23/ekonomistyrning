@@ -273,7 +273,7 @@ with st.expander("Steg 1: Resultatbudget", expanded=True):
         with st.form("bud_step1_form"):
             # Submit at the top: with ~9 fields in a narrow column the
             # button otherwise ends up below the fold while the results to
-            # the right are already visible with old values (review B3).
+            # the right are already visible with old values.
             bud_step1_form_submit = st.form_submit_button(
                 "Uppdatera värden", type="primary", use_container_width=True
             )

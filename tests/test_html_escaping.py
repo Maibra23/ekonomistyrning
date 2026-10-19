@@ -105,7 +105,7 @@ class TestScenarioBannerEscaping:
 
 
 class TestResponsiveSidebarCss:
-    """The sidebar lock must be desktop-only (review U1)."""
+    """The sidebar lock must be desktop-only."""
 
     def test_sidebar_lock_is_inside_desktop_media_query(self):
         from utils.ui import GLOBAL_CSS

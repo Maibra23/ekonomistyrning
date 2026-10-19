@@ -74,7 +74,7 @@ def _bisect_irr(cash_flows: list[float]) -> float | None:
 def irr(cash_flows: list[float]) -> tuple[float | None, str | None]:
     """Compute Internal Rate of Return with explanatory edge case messages.
 
-    Task 10.6 changes the signature to return a tuple so that opaque
+    Returns a tuple so that opaque
     failures of numpy_financial.irr can be replaced with a Swedish
     explanation. Successful normal calls return (value, None).
 

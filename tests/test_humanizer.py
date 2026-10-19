@@ -16,7 +16,7 @@ from utils.humanizer import (
 )
 
 # ---------------------------------------------------------------------------
-# LaTeX stripping (Day 10 hardening: tutor text must never leak raw LaTeX)
+# LaTeX stripping (tutor text must never leak raw LaTeX)
 # ---------------------------------------------------------------------------
 
 

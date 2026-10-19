@@ -1,4 +1,4 @@
-"""UI helper for cross-module company adoption (review gap 2).
+"""UI helper for cross-module company adoption.
 
 The sidebar "Aktuellt företag" banner used to be cosmetic: only the name
 followed the student between modules. This helper gives every module's

@@ -15,6 +15,7 @@ st.set_page_config(
     menu_items={"Get Help": None, "Report a bug": None},
 )
 
+from utils.llm import is_llm_available  # noqa: E402
 from utils.ui import (  # noqa: E402
     APP_UPDATED,
     APP_VERSION,
@@ -49,15 +50,23 @@ def render_landing() -> None:
 
     st.html(
         stat_strip([
-            ("5", "moduler"),
-            ("1", "styrcykel"),
-            ("50 000", "MC-iterationer (max)"),
-            ("100%", "svenska"),
+            ("15+", "beräkningsmetoder"),
+            ("5", "moduler med Excel-export"),
+            ("0", "konton eller inloggning"),
+            ("Lokalt", "alla beräkningar"),
         ])
     )
 
-    # Primary first-visit CTA: the pipeline says "Välj modul" but nothing in
-    # the main area used to lead anywhere (review L4).
+    if not is_llm_available():
+        st.info(
+            "Förklaringstjänsten är inte aktiv just nu. Alla beräkningar, diagram "
+            "och exporter fungerar ändå: förklaringarna visas som uträkningar med "
+            "dina egna siffror, och kunskapstestet använder frågor vars svar räknas "
+            "fram av appens kalkylatorer."
+        )
+
+    # Primary first-visit CTA: the pipeline says "Välj modul", so the main
+    # area needs a link that actually starts somewhere.
     st.page_link(
         "pages/1_Kalkyl.py",
         label="Börja här: Kalkylering →",
@@ -81,41 +90,41 @@ def render_landing() -> None:
                 "role": "Beräkna",
                 "title": "Kalkylering",
                 "tag": "Kap. 4, 6–8",
-                "desc": "Självkostnads-, bidrags- och ABC-kalkyl. Ta reda på vad "
-                "en produkt faktiskt kostar.",
+                "desc": "Självkostnad med prissättning, bidragskalkyl med "
+                "känslighet och ABC jämfört med traditionell fördelning.",
             },
             {
                 "role": "Bedöm",
                 "title": "Investering",
                 "tag": "Kap. 10",
-                "desc": "NPV, IRR, payback och annuitet, plus känslighet och "
-                "Monte Carlo för långsiktiga beslut.",
+                "desc": "NPV, IRR, payback och annuitet med restvärde och "
+                "rörelsekapital, NPV-profil, känslighet och Monte Carlo.",
             },
             {
                 "role": "Planera",
                 "title": "Budget",
                 "tag": "Kap. 13–15",
-                "desc": "Resultat-, likviditets- och balansbudget som länkas "
-                "automatiskt till en helhet.",
+                "desc": "Resultat-, likviditets- och balansbudget som går ihop, "
+                "nyckeltal och likviditetsbudget per månad.",
             },
             {
                 "role": "Följ upp",
                 "title": "Standardkostnadsanalys",
                 "tag": "Kap. 17",
-                "desc": "Dela upp avvikelser i volym, pris och effektivitet och "
-                "jämför utfallet mot planen.",
+                "desc": "Volym-, pris- och effektivitetsavvikelser per kostnadsslag "
+                "samt budget- och volymavvikelse för fasta omkostnader.",
             },
             {
                 "role": "Pröva",
                 "title": "Kunskapstest",
                 "tag": "Kap. 4–17",
-                "desc": "Scenariofrågor som verifieras mot kalkylatorn så att du "
-                "kan testa det du lärt dig.",
+                "desc": "Obegränsat med frågor vars svar räknas fram av "
+                "kalkylatorerna, med lösning steg för steg.",
             },
         ])
     )
     # Real links under the map: the nodes themselves are not clickable, so
-    # give each module an actual navigation affordance (review L1).
+    # give each module an actual navigation affordance.
     link_cols = st.columns(5)
     for col, (label, path) in zip(
         link_cols,

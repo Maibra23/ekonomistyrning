@@ -1,4 +1,4 @@
-"""Quiz progression per kapitelkluster (review gap 8 / roadmap item 12).
+"""Quiz progression per kapitelkluster.
 
 Pure functions over a plain JSON-serializable progress dict:
 

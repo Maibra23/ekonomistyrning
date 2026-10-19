@@ -4,7 +4,7 @@ The 50-call session cap lives in ``st.session_state`` and dies with the
 session, so on a public deploy anyone could drain the Hugging Face token
 budget by reloading the page in a loop. This module keeps a file-based
 daily counter that is shared across all sessions on the host and is not
-resettable from the UI (review V2).
+resettable from the UI.
 
 The counter is advisory bookkeeping, not billing-critical accounting: on
 any filesystem error we fail open (the app keeps working) but log the

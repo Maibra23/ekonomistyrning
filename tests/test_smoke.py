@@ -868,7 +868,7 @@ class TestHumanizerSmoke:
 
 
 class TestScenariosSmoke:
-    """Exercise utils.scenarios after the Day 10 LLM migration.
+    """Exercise utils.scenarios with LLM driven generation.
 
     Static SCENARIOS dict has been removed. We instead drive the fallback
     payload of generate_scenario through each calculator to confirm the

@@ -1,6 +1,6 @@
 """LLM driven scenario generation for the five modules.
 
-From Day 10 (Task 10.13), scenarios are no longer hard coded fictional
+Scenarios are no longer hard coded fictional
 companies. Each call to ``generate_scenario`` builds a fresh prompt for
 ``utils.prompts.build_scenario_generation_prompt`` and forwards it to
 ``utils.llm.cached_chat``. The returned JSON is parsed and validated
@@ -560,7 +560,7 @@ def clear_current_scenario() -> None:
 def validate_generated_scenario(scenario_dict: dict, calc_type: str) -> bool:
     """Run a quick sanity check on a kalkyl scenario via the calculator.
 
-    Kept for any callers that still depend on the Day 7 helper. Returns
+    Kept for callers that still use the older helper. Returns
     True if the calculator produces finite, non zero output for the
     supplied inputs.
     """

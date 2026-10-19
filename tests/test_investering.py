@@ -361,7 +361,7 @@ class TestMonteCarlo:
 
 
 class TestTornadoAnalysis:
-    """Tornado data for the sensitivity tab (review roadmap item 10)."""
+    """Tornado data for the sensitivity tab."""
 
     def _base(self):
         return dict(
@@ -449,7 +449,7 @@ class TestCorrelatedMonteCarlo:
 
 
 class TestCompareInvestments:
-    """Side-by-side appraisal of alternatives (review roadmap item 16)."""
+    """Side-by-side appraisal of alternatives."""
 
     def _projects(self):
         return [

@@ -206,7 +206,7 @@ def test_session_call_cap_constant():
 
 
 # ---------------------------------------------------------------------------
-# Task 10.8: session cap exception
+# Session cap exception
 # ---------------------------------------------------------------------------
 
 def test_llm_session_cap_error_is_subclass_of_unavailable():
@@ -229,7 +229,7 @@ def test_session_cap_message_is_user_friendly_swedish():
 
     assert "förklaringar" in SESSION_CAP_MESSAGE.lower()
     # The copy must not promise that a reload preserves inputs: session
-    # state dies on a real browser reload (review #3).
+    # state dies on a real browser reload.
     assert "Uppdatera sidan" not in SESSION_CAP_MESSAGE
     assert "autosave" not in SESSION_CAP_MESSAGE.lower()
     # User-facing copy must not leak the LLM/tutor abstraction.

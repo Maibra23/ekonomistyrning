@@ -81,7 +81,7 @@ class LLMSessionCapError(LLMUnavailableError):
 
 
 class LLMDailyCapError(LLMUnavailableError):
-    """Raised when the shared daily call budget is used up (review V2).
+    """Raised when the shared daily call budget is used up.
 
     Subclasses LLMUnavailableError so every existing catch site degrades
     to the deterministic fallback without code changes.
@@ -369,7 +369,7 @@ def cached_chat(
         raise LLMSessionCapError(SESSION_CAP_MESSAGE)
     # Server-side guard: the shared daily budget is independent of session
     # state, so it survives reloads and protects the HF token on public
-    # deploys (review V2).
+    # deploys.
     if is_new and get_daily_calls_remaining() <= 0:
         raise LLMDailyCapError(DAILY_CAP_MESSAGE)
 

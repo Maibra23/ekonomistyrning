@@ -1,4 +1,4 @@
-"""Tests for utils.quiz_progress (review gap 8 / roadmap item 12).
+"""Tests for utils.quiz_progress.
 
 The quiz used to forget everything: no per-cluster history, no mastery
 view. Progress is a plain JSON-serializable dict so it rides the

@@ -1,4 +1,4 @@
-"""Tests for LLM driven scenario generation (Task 10.13).
+"""Tests for LLM driven scenario generation.
 
 Covers the new build_scenario_generation_prompt builder (module + difficulty)
 and the generate_scenario / list_modules_for_scenarios entry points from
@@ -382,7 +382,7 @@ class TestValidateGeneratedScenario:
 
 
 class TestCompanyContinuity:
-    """Cross-module company adoption (review gap 2): a generated company
+    """Cross-module company adoption: a generated company
     can be carried into another module, which generates module-specific
     numbers for the same company."""
 

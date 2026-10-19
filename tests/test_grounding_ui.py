@@ -4,7 +4,6 @@ The helper is a thin Streamlit wrapper. We mock the streamlit module
 (via monkeypatching the ``st`` reference inside utils.grounding_ui)
 so we can assert on st.caption invocations without spinning up Streamlit.
 
-See Day 10 task 10.3.
 """
 from __future__ import annotations
 

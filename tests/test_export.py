@@ -42,7 +42,7 @@ def test_export_sheet_name_sanitized():
 
 
 # ---------------------------------------------------------------------------
-# Task 10.9: embedded charts
+# Embedded charts
 # ---------------------------------------------------------------------------
 
 def test_export_with_chart_produces_valid_xlsx():

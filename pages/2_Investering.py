@@ -841,7 +841,7 @@ with tab2:
                 )
 
     # Tornado overview: all three parameters flexed by the same relative
-    # variation in one chart (review roadmap item 10).
+    # variation in one chart.
     if base_cfs:
         st.markdown("#### Tornadodiagram: alla parametrar samtidigt")
         tornado_var = st.slider(
@@ -1306,7 +1306,7 @@ with tab4:
         mc_cf_means_tup = tuple(mc_cf_df["Medel (kr)"].tolist())
         mc_cf_stds_tup = tuple(mc_cf_df["Std (kr)"].tolist())
 
-        # Run only on explicit button press (review I3): no surprise
+        # Run only on explicit button press: no surprise
         # 10 000-draw simulation on first page visit.
         if run_sim:
             with st.spinner("Kör Monte Carlo-simulering..."):

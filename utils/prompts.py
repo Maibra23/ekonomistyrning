@@ -16,8 +16,8 @@ NBSP = "\u00a0"
 # Canonical section headers for tutor explanations. The prompt builders
 # instruct the LLM to use exactly these (with \u00e5/\u00e4/\u00f6), so structure
 # validation must check the same strings. Single source of truth: pages
-# import this instead of re-typing the list (review K6 \u2014 ASCII variants in
-# some pages validated against headers the LLM never writes).
+# import this instead of re-typing the list (ASCII variants in some pages
+# used to validate against headers the LLM never writes).
 TUTOR_REQUIRED_SECTIONS: list[str] = [
     "Antagande",
     "Ber\u00e4kning",
@@ -438,7 +438,7 @@ def build_qa_prompt(
         relevant = list(chat_history)
         # Callers append the new question to the history before building
         # the prompt; don't feed it both as history and as the current
-        # question (review K5).
+        # question.
         if relevant and tuple(relevant[-1]) == ("user", user_question):
             relevant = relevant[:-1]
         if relevant:
@@ -860,7 +860,7 @@ def build_scenario_generation_prompt(
 def build_quiz_quality_check_prompt(question_json: dict) -> tuple[str, str]:
     """Build prompt that asks the LLM to self-evaluate a generated quiz item.
 
-    Task 10.7: numerically correct questions can still be pedagogically
+    Numerically correct questions can still be pedagogically
     flat. We ask the model to rate three dimensions on a 1 to 5 scale
     and return JSON only.
 

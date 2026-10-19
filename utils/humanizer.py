@@ -42,7 +42,7 @@ AI_TELLS_SV: list[str] = [
     r"\bhör\s+av\s+dig\s+om\b",
     r"\bi\s+dagens\s+snabbrörliga\s+värld\b",
     r"\bhoppas\s+det(ta)?\s+hjälper\b",
-    # Day 10.2: extended Swedish AI artifacts
+    # Extended Swedish boilerplate phrases
     r"\bi\s+ett\s+nötskal\b",
     r"\bmed\s+andra\s+ord\b",
     r"\bför\s+att\s+sammanfatta\b",

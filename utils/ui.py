@@ -41,7 +41,7 @@ COLORS: dict[str, str] = {
     "text_primary": "#111827",
     "text_secondary": "#6B7280",
     # Used for small uppercase labels; must hold ~4.5:1 against white for
-    # WCAG AA at the 9.5-10.5px sizes the design system uses (review U5).
+    # WCAG AA at the 9.5-10.5px sizes the design system uses.
     "text_tertiary": "#6B7280",
     "border": "#E5E7EB",
     "grid": "#F3F4F6",
@@ -156,7 +156,7 @@ GLOBAL_CSS: str = (
     """
 /* Self-hosted fonts (latin subsets in static/fonts/, served via
    Streamlit static serving). No render-blocking Google Fonts request
-   and no third-party IP disclosure (GDPR, review L5). */
+   and no third-party IP disclosure (GDPR). */
 /* latin */
 @font-face {
   font-family: 'IBM Plex Mono';
@@ -239,7 +239,7 @@ section[data-testid="stSidebar"] * {
 /* Lock sidebar open on desktop only: hide every Streamlit collapse handle
    so the student cannot accidentally hide the navigation. On narrow
    screens (< 768px) the lock is released so the sidebar can be closed and
-   does not permanently cover the content (review U1). */
+   does not permanently cover the content. */
 @media (min-width: 768px) {
     section[data-testid="stSidebar"] {
         min-width: 260px !important;
@@ -833,7 +833,7 @@ div[data-testid="stSlider"] label {
     display: inline-block;
     margin-bottom: 8px;
 }
-/* --- Accessibility (review U7) --- */
+/* --- Accessibility --- */
 .eks-tip:focus-visible {
     outline: 2px solid %(primary_light)s;
     outline-offset: 2px;
@@ -917,8 +917,7 @@ def kpi_card(
     """
     variant_class = f" variant-{variant}" if variant != "default" else ""
     unit_html = f'<span class="eks-kpi-unit">{unit}</span>' if unit else ""
-    # Direction arrow so color is never the only signal carrier (review U6,
-    # WCAG 1.4.1).
+    # Direction arrow so color is never the only signal carrier (WCAG 1.4.1).
     delta_arrow = {"up": "▲ ", "down": "▼ "}.get(delta_direction, "")
     delta_html = (
         f'<div class="eks-kpi-delta delta-{delta_direction}">'
@@ -1121,7 +1120,7 @@ def scenario_banner_html(
     # The sidebar forces rgba(255,255,255,0.65) !important on all children,
     # so the hierarchy must be expressed in white-scale inline styles with
     # !important (inline !important wins over stylesheet !important) —
-    # review U2: the old gray palette was flattened to uniform half-white.
+    # otherwise the old gray palette is flattened to uniform half-white.
     meta_html = (
         f'<div style="font-size:10px;color:rgba(255,255,255,0.6) !important;'
         f'margin-top:2px;">'
@@ -1190,7 +1189,7 @@ def _render_current_scenario_banner() -> None:
 
 
 def _render_model_selector() -> None:
-    """Sidebar selectbox for the runtime LLM model override (review U3).
+    """Sidebar selectbox for the runtime LLM model override.
 
     The backend (MODEL_SESSION_KEY in utils/llm.py) and the sidebar CSS for
     the selectbox existed without any UI. Hidden when no token is
@@ -1225,7 +1224,7 @@ def _render_llm_budget_meter() -> None:
     """Show the remaining explanation budget for this session.
 
     Surfaces ``get_session_calls_remaining()`` so the user sees the budget
-    shrink instead of walking into the cap unannounced (review gap 3).
+    shrink instead of walking into the cap unannounced.
     Hidden when no LLM token is configured (offline mode has no budget).
     """
     try:
@@ -1278,7 +1277,7 @@ def render_session_cap_card() -> None:
 
     Used by every module page when an LLM call raises LLMSessionCapError.
     Purely informational: the counter is deliberately not user-resettable,
-    so the cap cannot be cleared from the UI (review V2). It resets when a
+    so the cap cannot be cleared from the UI. It resets when a
     new browser session starts.
     """
     import streamlit as st

@@ -1,4 +1,4 @@
-"""Tests for the server-side daily LLM call budget (review V2).
+"""Tests for the server-side daily LLM call budget.
 
 The session cap lives in st.session_state and dies with the session, so a
 malicious visitor could drain the HF token budget by reloading in a loop.

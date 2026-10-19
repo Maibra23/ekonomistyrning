@@ -149,7 +149,7 @@ def test_helpers_silent_when_session_state_missing(monkeypatch):
 
 
 class TestQueryParamPersistence:
-    """URL-level persistence (review gap 4 / roadmap 11): session_state dies
+    """URL-level persistence: session_state dies
     on a real browser reload, so saved inputs are mirrored into
     st.query_params and restored from the URL when the session is fresh."""
 

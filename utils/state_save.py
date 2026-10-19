@@ -8,8 +8,7 @@ a well known key so pages can restore their inputs on the next rerun.
 Saved inputs are also mirrored into ``st.query_params`` as a compressed
 base64url blob (one parameter per module). ``st.session_state`` dies on
 a real browser reload, so the URL is what makes autosave survive a
-reload — and it makes the current inputs shareable as a link for free
-(review gap 4 / roadmap item 11).
+reload — and it makes the current inputs shareable as a link for free.
 
 The helpers are intentionally defensive: when Streamlit is not
 importable (running under pytest without the Streamlit runtime) or
@@ -18,7 +17,6 @@ so callers do not need to guard against test environments. Query-param
 content is external input and is never trusted: decoding is size-capped
 and any malformed payload is ignored.
 
-See Day 10 task 10.5.
 """
 from __future__ import annotations
 

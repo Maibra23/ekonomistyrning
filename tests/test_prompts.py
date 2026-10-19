@@ -322,7 +322,7 @@ def test_no_dashes_in_any_builder_output():
 
 
 # ---------------------------------------------------------------------------
-# Task 10.7: quiz quality check prompt
+# Quiz quality check prompt
 # ---------------------------------------------------------------------------
 
 def test_quiz_quality_check_returns_valid_tuple():
@@ -447,7 +447,7 @@ def test_system_prompt_base_mentions_amnesavgransning():
 
 def test_tutor_required_sections_match_prompt_instructions():
     """The canonical section constant must name exactly the headers the
-    explanation prompts instruct the LLM to write (review K6)."""
+    explanation prompts instruct the LLM to write."""
     from utils.prompts import (
         TUTOR_REQUIRED_SECTIONS,
         build_kalkyl_explanation_prompt,
@@ -463,7 +463,7 @@ def test_tutor_required_sections_match_prompt_instructions():
 
 def test_qa_prompt_does_not_duplicate_current_question():
     """The current question must not appear both as history and as the
-    'Studentens fråga' line (review K5)."""
+    'Studentens fråga' line."""
     from utils.prompts import build_qa_prompt
 
     question = "Varför är täckningsbidraget viktigt?"

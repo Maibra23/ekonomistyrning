@@ -3,7 +3,7 @@
 When utils.llm.verify_grounding reports that the LLM cited numbers that
 do not match the calculator output, this helper renders a small Swedish
 warning beneath the tutor explanation so the student trusts the
-calculator over the tutor's prose. See Day 10 task 10.3.
+calculator over the tutor's prose.
 """
 from __future__ import annotations
 
