@@ -284,3 +284,34 @@ class TestVarianceSummary:
             "effektivitetsavvikelse",
             "total",
         ]
+
+
+class TestFixedOverheadVolume:
+    """Budget and volume variance for fixed overhead (sysselsättningsavvikelse)."""
+
+    def test_under_absorption_is_unfavorable(self):
+        from utils.standardkost import variance_fixed_overhead_volume
+
+        res = variance_fixed_overhead_volume(500_000, 550_000, 10_000, 8_000)
+        # Rate 50 kr/st, absorbed 400 000 kr.
+        assert res["satser_per_styck"] == pytest.approx(50.0)
+        assert res["absorberat"] == pytest.approx(400_000.0)
+        assert res["budgetavvikelse"] == pytest.approx(50_000.0)
+        assert res["volymavvikelse"] == pytest.approx(100_000.0)
+        assert res["total"] == pytest.approx(550_000 - 400_000)
+        assert not res["volymavvikelse_favorable"]
+
+    def test_over_absorption_is_favorable(self):
+        from utils.standardkost import variance_fixed_overhead_volume
+
+        res = variance_fixed_overhead_volume(500_000, 500_000, 10_000, 11_000)
+        assert res["volymavvikelse"] == pytest.approx(-50_000.0)
+        assert res["volymavvikelse_favorable"]
+        assert res["budgetavvikelse"] == pytest.approx(0.0)
+
+    def test_zero_normal_volume(self):
+        from utils.standardkost import variance_fixed_overhead_volume
+
+        res = variance_fixed_overhead_volume(500_000, 520_000, 0, 1_000)
+        assert res["volymavvikelse"] == 0.0
+        assert res["budgetavvikelse"] == pytest.approx(20_000.0)

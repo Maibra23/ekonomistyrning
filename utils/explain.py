@@ -508,6 +508,11 @@ def interpret_variances(variances: Mapping[str, float]) -> str:
         f"({_direction(value)}). Den följs i första hand upp av "
         f"{_VARIANCE_OWNER[key]}. "
     )
+    if key == "volymavvikelse":
+        text += (
+            "En volymavvikelse uppstår för att mer eller mindre tillverkades än "
+            "planerat; den säger inget om slöseri, bara att kostnaden följde volymen. "
+        )
     text += (
         f"Totalt blev kostnaden {_kr(abs(total))} "
         + ("högre" if total > 0 else "lägre")

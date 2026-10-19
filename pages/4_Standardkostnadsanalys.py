@@ -1,7 +1,12 @@
 """Standardkostnadsanalys - Variance analysis for standard costing.
 
 Kapitel 17 i Andersson, Ekonomistyrning: beslut och handling.
-All UI strings in Swedish. LLM sections are placeholders (wired in Day 7).
+All UI strings in Swedish.
+
+Tab 1 decomposes several variable cost items (material, lön, rörliga
+omkostnader) into volume, price and efficiency variances. Tab 2 splits
+the fixed overhead variance into a budget and a volume part. Tab 3 adds
+everything up.
 """
 from __future__ import annotations
 
@@ -9,45 +14,92 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from utils.charts import COLORS, apply_layout
-from utils.export import export_to_excel
+from utils.charts import COLORS, PALETTE, apply_layout
+from utils.explain import interpret_variances, steps_fixed_overhead, steps_variance
+from utils.export import export_to_excel, table_range
 from utils.formatting import format_sek
-from utils.humanizer import humanize
-from utils.llm import (
-    LLMSessionCapError,
-    LLMUnavailableError,
-    cached_chat,
-    is_llm_available,
+from utils.page_blocks import (
+    finish_scenario,
+    render_qa_chat,
+    render_scenario_controls,
+    render_scenario_info,
+    scenario_header_lines,
 )
 from utils.prompts import (
     FALLBACK_TEMPLATES,
     TUTOR_REQUIRED_SECTIONS,
-    build_qa_prompt,
     build_standardkost_interpretation_prompt,
 )
-from utils.scenario_continuity import render_adopt_button
-from utils.scenarios import generate_scenario, set_current_scenario
 from utils.standardkost import (
     variance_decomposition_rorlig,
-    variance_fixed_overhead,
+    variance_fixed_overhead_volume,
+    variance_summary,
 )
-from utils.state_save import load_state, save_state
+from utils.state_save import clear_state, load_state, save_state
 from utils.tutor import render_tutor_explanation
 from utils.ui import (
     APP_UPDATED,
-    SCENARIO_DIFFICULTY_HELP,
     footer_note,
     inject_css,
     kpi_card,
     page_title,
     render_kpi_row,
-    render_session_cap_card,
     render_sidebar,
 )
 
-# Difficulty label mapping for the scenario generator dropdown
-_DIFFICULTY_OPTIONS = ("Lätt", "Medel", "Svår")
-_DIFFICULTY_MAP = {"Lätt": "latt", "Medel": "medel", "Svår": "svar"}
+_XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+_COMPONENTS = ("volymavvikelse", "prisavvikelse", "effektivitetsavvikelse")
+_COMPONENT_LABELS = {
+    "volymavvikelse": "Volymavvikelse",
+    "prisavvikelse": "Prisavvikelse",
+    "effektivitetsavvikelse": "Effektivitetsavvikelse",
+}
+
+# Item table columns
+_C_NAME = "Kostnadsslag"
+_C_UNIT = "Enhet"
+_C_SP = "Standardpris (kr/enhet)"
+_C_SF = "Standardförbrukning (enheter/st)"
+_C_VP = "Verkligt pris (kr/enhet)"
+_C_VF = "Verklig förbrukning (enheter/st)"
+_ITEM_COLUMNS = [_C_NAME, _C_UNIT, _C_SP, _C_SF, _C_VP, _C_VF]
+
+_DEFAULT_ITEMS = [
+    {_C_NAME: "Direkt material", _C_UNIT: "kg", _C_SP: 50.0, _C_SF: 2.0, _C_VP: 55.0, _C_VF: 2.1},
+    {_C_NAME: "Direkt lön", _C_UNIT: "timmar", _C_SP: 220.0, _C_SF: 0.5, _C_VP: 230.0, _C_VF: 0.48},
+    {_C_NAME: "Rörliga omkostnader", _C_UNIT: "maskintimmar", _C_SP: 80.0, _C_SF: 0.3, _C_VP: 78.0, _C_VF: 0.33},
+]
+_DEFAULTS = {
+    "std_volym": 1000.0,
+    "verk_volym": 1100.0,
+    "fast_budget": 500_000.0,
+    "fast_verkligt": 550_000.0,
+    "fast_normal_volym": 1000.0,
+    "fast_verklig_volym": 1100.0,
+}
+
+
+def _items_df(records: list[dict]) -> pd.DataFrame:
+    df = pd.DataFrame(records)
+    for col in _ITEM_COLUMNS:
+        if col not in df.columns:
+            df[col] = "" if col in (_C_NAME, _C_UNIT) else 0.0
+    return df[_ITEM_COLUMNS]
+
+
+def _set_items_base(df: pd.DataFrame) -> None:
+    """Replace the item table; the editor's own edits are cleared with it."""
+    st.session_state["sk_items_df"] = df
+    st.session_state.pop("sk_items_de", None)
+
+
+def _num(value: object) -> float:
+    try:
+        out = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return 0.0
+    return 0.0 if pd.isna(out) else out
+
 
 # ---------------------------------------------------------------------------
 # Page config
@@ -61,6 +113,17 @@ st.set_page_config(
 inject_css()
 render_sidebar("standardkostnad")
 
+for _k, _v in _DEFAULTS.items():
+    st.session_state.setdefault(_k, _v)
+if "sk_items_df" not in st.session_state:
+    st.session_state["sk_items_df"] = _items_df(_DEFAULT_ITEMS)
+
+if st.session_state.pop("_reset_sk", False):
+    for _k, _v in _DEFAULTS.items():
+        st.session_state[_k] = _v
+    _set_items_base(_items_df(_DEFAULT_ITEMS))
+    st.session_state.pop("sk_scenario_info", None)
+
 # ---------------------------------------------------------------------------
 # Page header
 # ---------------------------------------------------------------------------
@@ -72,14 +135,10 @@ st.html(
         subtitle=(
             "Analysera avvikelser mellan standardkostnad och verkligt utfall. "
             "Bryt ner i volym-, pris- och effektivitetsavvikelser för rörliga kostnader, "
-            "och jämför budgeterade mot verkliga fasta omkostnader."
+            "och i budget- och volymavvikelse för fasta omkostnader."
         ),
     )
 )
-
-# ---------------------------------------------------------------------------
-# Tabs
-# ---------------------------------------------------------------------------
 
 tab1, tab2, tab3 = st.tabs([
     "Rörliga kostnader",
@@ -88,274 +147,196 @@ tab1, tab2, tab3 = st.tabs([
 ])
 
 # ===========================================================================
-# TAB 1 -- RORLIGA KOSTNADER (kapitel 17.2-17.4)
+# TAB 1 -- RÖRLIGA KOSTNADER (kapitel 17.2-17.4)
 # ===========================================================================
 
 with tab1:
     st.markdown(
-        "Ange standardvärden och verkligt utfall för en rörlig kostnadspost. "
-        "Avvikelsen bryts ner i tre komponenter: volym, pris och effektivitet."
+        "Ange produktionsvolymen och, för varje rörligt kostnadsslag, standard "
+        "och utfall för pris och förbrukning per tillverkad styck. Avvikelsen "
+        "bryts ner i volym, pris och effektivitet per kostnadsslag."
     )
 
-    # Autosave: restore saved inputs once per session, before widgets render
-    # (review S3 — Standardkost was the last module without autosave).
+    # Autosave: restore saved inputs once per session, before widgets render.
     _sk_saved = load_state("standardkost_rorlig")
     if _sk_saved is not None:
-        for _k in (
-            "std_volym", "std_pris", "std_forbrukning",
-            "verk_volym", "verk_pris", "verk_forbrukning",
-        ):
+        for _k in ("std_volym", "verk_volym"):
             if _k in _sk_saved:
                 st.session_state[_k] = float(_sk_saved[_k])
+        if isinstance(_sk_saved.get("items"), list) and _sk_saved["items"]:
+            _set_items_base(_items_df(_sk_saved["items"]))
+        elif "std_pris" in _sk_saved:
+            # Saved before the table existed: one item with the old fields.
+            _set_items_base(_items_df([{
+                _C_NAME: "Direkt material", _C_UNIT: "enhet",
+                _C_SP: _num(_sk_saved.get("std_pris")),
+                _C_SF: _num(_sk_saved.get("std_forbrukning")),
+                _C_VP: _num(_sk_saved.get("verk_pris")),
+                _C_VF: _num(_sk_saved.get("verk_forbrukning")),
+            }]))
 
-    # LLM driven scenario generator (Task 10.13)
-    sk_gen_cols = st.columns([2, 1, 1])
-    with sk_gen_cols[0]:
-        sk_difficulty_label = st.selectbox(
-            "Svårighetsgrad",
-            _DIFFICULTY_OPTIONS,
-            index=1,
-            key="sk_scenario_difficulty",
-            help=SCENARIO_DIFFICULTY_HELP,
-        )
-    with sk_gen_cols[1]:
-        st.write("")
-        st.write("")
-        sk_generate_clicked = st.button(
-            "Generera ett exempelföretag",
-            key="sk_gen_scenario",
-            use_container_width=True,
-        )
-    _sk_adopt = render_adopt_button("standardkost", "sk_adopt_scenario")
-    if sk_generate_clicked or _sk_adopt:
-        if _sk_adopt:
-            _sk_difficulty_code = _sk_adopt["difficulty"]
-            _sk_company = {
-                "foretag_namn": _sk_adopt["foretag_namn"],
-                "beskrivning": _sk_adopt["beskrivning"],
-            }
-        else:
-            _sk_difficulty_code = _DIFFICULTY_MAP[sk_difficulty_label]
-            _sk_company = None
-        with st.spinner("Genererar exempelföretag..."):
-            scenario = generate_scenario(
-                "standardkost", _sk_difficulty_code, company=_sk_company
-            )
-        st.session_state["std_volym"] = float(scenario.get("standard_volym", 1000.0))
-        st.session_state["std_pris"] = float(scenario.get("standard_pris", 50.0))
-        st.session_state["std_forbrukning"] = float(
-            scenario.get("standard_forbrukning", 2.0)
-        )
-        st.session_state["verk_volym"] = float(scenario.get("verklig_volym", 1100.0))
-        st.session_state["verk_pris"] = float(scenario.get("verkligt_pris", 55.0))
-        st.session_state["verk_forbrukning"] = float(
-            scenario.get("verklig_forbrukning", 2.1)
-        )
-        st.session_state["sk_scenario_info"] = {
-            "foretag_namn": scenario.get("foretag_namn", "Exempelföretag"),
-            "bransch_beskrivning": scenario.get("bransch_beskrivning", ""),
-            "kostnadsslag": scenario.get("kostnadsslag", "Direkt material"),
-        }
-        set_current_scenario("standardkost", scenario, _sk_difficulty_code)
-        st.rerun()
-
-    sk_info = st.session_state.get("sk_scenario_info")
-    if sk_info:
-        st.info(
-            f"**{sk_info['foretag_namn']}** ({sk_info.get('kostnadsslag', '')})\n\n"
-            f"{sk_info['bransch_beskrivning']}"
-        )
+    _sk_scenario, _sk_code, _ = render_scenario_controls("sk", "standardkost")
+    if _sk_scenario is not None:
+        st.session_state["std_volym"] = _num(_sk_scenario.get("standard_volym", 1000.0)) or 1000.0
+        st.session_state["verk_volym"] = _num(_sk_scenario.get("verklig_volym", 1100.0))
+        st.session_state["fast_normal_volym"] = st.session_state["std_volym"]
+        st.session_state["fast_verklig_volym"] = st.session_state["verk_volym"]
+        _set_items_base(_items_df([{
+            _C_NAME: str(_sk_scenario.get("kostnadsslag") or "Direkt material"),
+            _C_UNIT: "enhet",
+            _C_SP: _num(_sk_scenario.get("standard_pris", 50.0)),
+            _C_SF: _num(_sk_scenario.get("standard_forbrukning", 2.0)),
+            _C_VP: _num(_sk_scenario.get("verkligt_pris", 55.0)),
+            _C_VF: _num(_sk_scenario.get("verklig_forbrukning", 2.1)),
+        }]))
+        finish_scenario("sk", "standardkost", _sk_scenario, _sk_code)
+    render_scenario_info("sk")
 
     with st.form("sk_rorlig_form"):
-        col_std, col_verk = st.columns(2, gap="large")
-
-        with col_std:
-            st.markdown("**Standardvärden**")
+        col_v1, col_v2 = st.columns(2, gap="large")
+        with col_v1:
             std_volym = st.number_input(
-                "Standard volym (styck)",
+                "Standardvolym (styck)",
                 min_value=0.0,
-                value=1000.0,
                 step=100.0,
                 format="%.0f",
                 key="std_volym",
                 help="Budgeterad produktionsvolym i antal enheter",
             )
-            std_pris = st.number_input(
-                "Standard pris (kr/enhet)",
-                min_value=0.0,
-                value=50.0,
-                step=1.0,
-                format="%.2f",
-                key="std_pris",
-                help="Standardpris per insatsenhet (t.ex. kr/kg)",
-            )
-            std_forbrukning = st.number_input(
-                "Standard förbrukning (enheter/styck)",
-                min_value=0.0,
-                value=2.0,
-                step=0.1,
-                format="%.2f",
-                key="std_forbrukning",
-                help="Standard insatsförbrukning per producerad enhet",
-            )
-
-        with col_verk:
-            st.markdown("**Verkligt utfall**")
+        with col_v2:
             verk_volym = st.number_input(
                 "Verklig volym (styck)",
                 min_value=0.0,
-                value=1100.0,
                 step=100.0,
                 format="%.0f",
                 key="verk_volym",
                 help="Faktisk produktionsvolym i antal enheter",
             )
-            verk_pris = st.number_input(
-                "Verkligt pris (kr/enhet)",
-                min_value=0.0,
-                value=55.0,
-                step=1.0,
-                format="%.2f",
-                key="verk_pris",
-                help="Faktiskt pris per insatsenhet",
-            )
-            verk_forbrukning = st.number_input(
-                "Verklig förbrukning (enheter/styck)",
-                min_value=0.0,
-                value=2.1,
-                step=0.1,
-                format="%.2f",
-                key="verk_forbrukning",
-                help="Faktisk insatsförbrukning per producerad enhet",
-            )
-        sk_rorlig_form_submit = st.form_submit_button("Uppdatera värden", type="primary")
-
-    # Edge case: all zeros
-    all_zero = (
-        std_volym == 0
-        and std_pris == 0
-        and std_forbrukning == 0
-        and verk_volym == 0
-        and verk_pris == 0
-        and verk_forbrukning == 0
-    )
-
-    if all_zero:
-        st.info("Alla värden är noll. Ange standardvärden och verkligt utfall för att beräkna avvikelser.")
-    else:
-        # Calculate variance decomposition
-        rorlig_result = variance_decomposition_rorlig(
-            standard_volym=std_volym,
-            standard_pris=std_pris,
-            standard_forbrukning_per_styck=std_forbrukning,
-            verklig_volym=verk_volym,
-            verkligt_pris=verk_pris,
-            verklig_forbrukning_per_styck=verk_forbrukning,
+        st.markdown("**Rörliga kostnadsslag**")
+        items_df: pd.DataFrame = st.data_editor(
+            st.session_state["sk_items_df"],
+            num_rows="dynamic",
+            use_container_width=True,
+            hide_index=True,
+            key="sk_items_de",
+            column_config={
+                _C_NAME: st.column_config.TextColumn(_C_NAME, required=True),
+                _C_UNIT: st.column_config.TextColumn(
+                    _C_UNIT, help="Insatsens enhet, t.ex. kg eller timmar"
+                ),
+                _C_SP: st.column_config.NumberColumn(_C_SP, min_value=0.0, format="%.2f"),
+                _C_SF: st.column_config.NumberColumn(_C_SF, min_value=0.0, format="%.3f"),
+                _C_VP: st.column_config.NumberColumn(_C_VP, min_value=0.0, format="%.2f"),
+                _C_VF: st.column_config.NumberColumn(_C_VF, min_value=0.0, format="%.3f"),
+            },
         )
+        st.form_submit_button("Uppdatera värden", type="primary")
 
-        # Store in session state for Tab 3
-        st.session_state["sk_rorlig_result"] = rorlig_result
+    items: list[dict] = []
+    for _, row in items_df.iterrows():
+        name = row.get(_C_NAME)
+        if not isinstance(name, str) or not name.strip():
+            continue
+        res = variance_decomposition_rorlig(
+            standard_volym=std_volym,
+            standard_pris=_num(row.get(_C_SP)),
+            standard_forbrukning_per_styck=_num(row.get(_C_SF)),
+            verklig_volym=verk_volym,
+            verkligt_pris=_num(row.get(_C_VP)),
+            verklig_forbrukning_per_styck=_num(row.get(_C_VF)),
+        )
+        res["komponent"] = name.strip()
+        res["enhet"] = str(row.get(_C_UNIT) or "enhet")
+        res["inputs"] = (
+            _num(row.get(_C_SP)), _num(row.get(_C_SF)),
+            _num(row.get(_C_VP)), _num(row.get(_C_VF)),
+        )
+        items.append(res)
 
-        # Determine variant based on favorable/unfavorable (negative = favorable)
-        total_variant = "success" if rorlig_result["total"] <= 0 else "danger"
-        volym_variant = "success" if rorlig_result["volymavvikelse_favorable"] else "danger"
-        pris_variant = "success" if rorlig_result["prisavvikelse_favorable"] else "danger"
-        eff_variant = "success" if rorlig_result["effektivitetsavvikelse_favorable"] else "danger"
+    if not items:
+        st.session_state["sk_rorlig_result"] = None
+        st.info("Lägg till minst ett kostnadsslag i tabellen för att beräkna avvikelser.")
+    else:
+        totals = {
+            key: sum(r[key] for r in items)
+            for key in (*_COMPONENTS, "total", "standard_kostnad", "verklig_kostnad")
+        }
+        totals["reconciliation_ok"] = all(r["reconciliation_ok"] for r in items)
+        st.session_state["sk_rorlig_result"] = {
+            **totals,
+            "items": [
+                {k: r[k] for k in ("komponent", *_COMPONENTS, "total")} for r in items
+            ],
+        }
 
-        # KPI cards
+        def _variant(value: float) -> str:
+            return "success" if value <= 0 else "danger"
+
         render_kpi_row([
-            kpi_card(
-                "Total avvikelse",
-                format_sek(rorlig_result["total"]),
-                variant=total_variant,
-            ),
-            kpi_card(
-                "Volymavvikelse",
-                format_sek(rorlig_result["volymavvikelse"]),
-                variant=volym_variant,
-            ),
-            kpi_card(
-                "Prisavvikelse",
-                format_sek(rorlig_result["prisavvikelse"]),
-                variant=pris_variant,
-            ),
-            kpi_card(
-                "Effektivitetsavvikelse",
-                format_sek(rorlig_result["effektivitetsavvikelse"]),
-                variant=eff_variant,
-            ),
+            kpi_card("Total avvikelse", format_sek(totals["total"]), variant=_variant(totals["total"])),
+            *[
+                kpi_card(_COMPONENT_LABELS[c], format_sek(totals[c]), variant=_variant(totals[c]))
+                for c in _COMPONENTS
+            ],
         ])
 
-        # Waterfall chart: Standard -> components -> Verklig
+        # Waterfall: standard cost -> the three components -> actual cost
         fig_waterfall = go.Figure(go.Waterfall(
             orientation="v",
             measure=["absolute", "relative", "relative", "relative", "total"],
-            x=[
-                "Standardkostnad",
-                "Volymavvikelse",
-                "Prisavvikelse",
-                "Effektivitetsavvikelse",
-                "Verklig kostnad",
-            ],
+            x=["Standardkostnad", *[_COMPONENT_LABELS[c] for c in _COMPONENTS], "Verklig kostnad"],
             y=[
-                rorlig_result["standard_kostnad"],
-                rorlig_result["volymavvikelse"],
-                rorlig_result["prisavvikelse"],
-                rorlig_result["effektivitetsavvikelse"],
-                rorlig_result["verklig_kostnad"],
+                totals["standard_kostnad"],
+                *[totals[c] for c in _COMPONENTS],
+                totals["verklig_kostnad"],
             ],
             connector=dict(line=dict(color=COLORS["neutral"])),
             increasing=dict(marker=dict(color=COLORS["danger"])),
             decreasing=dict(marker=dict(color=COLORS["success"])),
             totals=dict(marker=dict(color=COLORS["primary"])),
             text=[
-                format_sek(rorlig_result["standard_kostnad"]),
-                format_sek(rorlig_result["volymavvikelse"]),
-                format_sek(rorlig_result["prisavvikelse"]),
-                format_sek(rorlig_result["effektivitetsavvikelse"]),
-                format_sek(rorlig_result["verklig_kostnad"]),
+                format_sek(totals["standard_kostnad"]),
+                *[format_sek(totals[c]) for c in _COMPONENTS],
+                format_sek(totals["verklig_kostnad"]),
             ],
             textposition="outside",
-            textfont=dict(size=9),
+            textfont=dict(size=11),
         ))
-        apply_layout(fig_waterfall, title="Avvikelseanalys (vattenfall)", height=420)
+        apply_layout(fig_waterfall, title="Avvikelseanalys, alla rörliga kostnader (vattenfall)", height=420)
         st.plotly_chart(fig_waterfall, use_container_width=True)
 
-        # Bar chart of 3 components (green if favorable/negative, red if unfavorable/positive)
-        component_names = ["Volymavvikelse", "Prisavvikelse", "Effektivitetsavvikelse"]
-        component_values = [
-            rorlig_result["volymavvikelse"],
-            rorlig_result["prisavvikelse"],
-            rorlig_result["effektivitetsavvikelse"],
-        ]
-        component_favorable = [
-            rorlig_result["volymavvikelse_favorable"],
-            rorlig_result["prisavvikelse_favorable"],
-            rorlig_result["effektivitetsavvikelse_favorable"],
-        ]
-        bar_colors = [
-            COLORS["success"] if fav else COLORS["danger"]
-            for fav in component_favorable
-        ]
+        # Per item: which cost type drives which variance
+        summary_df = variance_summary(items)
+        fig_items = go.Figure()
+        for i, comp in enumerate(_COMPONENTS):
+            fig_items.add_trace(go.Bar(
+                name=_COMPONENT_LABELS[comp],
+                x=summary_df["komponent"],
+                y=summary_df[comp],
+                marker_color=PALETTE[i % len(PALETTE)],
+                text=[format_sek(v) for v in summary_df[comp]],
+                textposition="outside",
+                textfont=dict(size=11),
+            ))
+        fig_items.add_hline(y=0, line_dash="dot", line_color=COLORS["neutral"], line_width=1)
+        fig_items.update_layout(barmode="group")
+        apply_layout(fig_items, title="Avvikelser per kostnadsslag (positivt = ofördelaktigt)", height=400)
+        st.plotly_chart(fig_items, use_container_width=True)
 
-        fig_components = go.Figure()
-        fig_components.add_trace(go.Bar(
-            x=component_names,
-            y=component_values,
-            marker_color=bar_colors,
-            text=[format_sek(v) for v in component_values],
-            textposition="outside",
-            textfont=dict(size=10),
-        ))
-        fig_components.add_hline(y=0, line_dash="dot", line_color=COLORS["neutral"], line_width=1)
-        apply_layout(fig_components, title="Avvikelsekomponenter", height=380)
-        st.plotly_chart(fig_components, use_container_width=True)
+        st.dataframe(
+            pd.DataFrame({
+                "Kostnadsslag": summary_df["komponent"],
+                **{_COMPONENT_LABELS[c]: summary_df[c].map(format_sek) for c in _COMPONENTS},
+                "Totalt": summary_df["total"].map(format_sek),
+            }),
+            use_container_width=True,
+            hide_index=True,
+        )
 
-        # Reconciliation check
-        if rorlig_result["reconciliation_ok"]:
+        if totals["reconciliation_ok"]:
             st.caption(
                 "Avstämning OK: Volymavvikelse + Prisavvikelse + Effektivitetsavvikelse "
-                f"= {format_sek(rorlig_result['total'])} (total avvikelse)."
+                f"= {format_sek(totals['total'])} (total avvikelse)."
             )
         else:
             st.warning(
@@ -363,79 +344,85 @@ with tab1:
                 "Kontrollera inmatade värden."
             )
 
-        # LLM interpretation (on-demand)
-        _rorlig_components = [{
-            "typ": "Rorlig kostnad",
-            "volymavvikelse": rorlig_result["volymavvikelse"],
-            "prisavvikelse": rorlig_result["prisavvikelse"],
-            "effektivitetsavvikelse": rorlig_result["effektivitetsavvikelse"],
-            "total": rorlig_result["total"],
-        }]
+        # The formulas with the student's own numbers: what they need for
+        # the exam, and it works without the explanation service.
+        with st.expander("Visa uträkningen"):
+            for r in items:
+                sp, sf, vp, vf = r["inputs"]
+                st.markdown(f"#### {r['komponent']}")
+                st.markdown(steps_variance(std_volym, sp, sf, verk_volym, vp, vf, unit=r["enhet"]))
+
+        _rorlig_components = [
+            {
+                "typ": r["komponent"],
+                **{c: r[c] for c in _COMPONENTS},
+                "total": r["total"],
+            }
+            for r in items
+        ]
+        _rorlig_outputs = {"total_avvikelse": totals["total"], **{c: totals[c] for c in _COMPONENTS}}
         render_tutor_explanation(
             state_key="sk_rorlig_llm",
-            inputs={"standard_volym": std_volym, "verklig_volym": verk_volym},
-            outputs={
-                "total_avvikelse": rorlig_result["total"],
-                "volymavvikelse": rorlig_result["volymavvikelse"],
-                "prisavvikelse": rorlig_result["prisavvikelse"],
-                "effektivitetsavvikelse": rorlig_result["effektivitetsavvikelse"],
+            inputs={
+                "standard_volym": std_volym,
+                "verklig_volym": verk_volym,
+                "kostnadsslag": ", ".join(r["komponent"] for r in items),
             },
-            build_prompt=lambda: build_standardkost_interpretation_prompt(
-                _rorlig_components
-            ),
+            outputs=_rorlig_outputs,
+            build_prompt=lambda: build_standardkost_interpretation_prompt(_rorlig_components),
             fallback_text=lambda: FALLBACK_TEMPLATES["standardkost"](
                 "standardkost",
                 {"standard_volym": std_volym, "verklig_volym": verk_volym},
-                {"total_avvikelse": rorlig_result["total"]},
+                _rorlig_outputs,
+                interpretation=interpret_variances(totals),
             ),
             required_sections=TUTOR_REQUIRED_SECTIONS,
-            expected_numbers={
-                "total_avvikelse": rorlig_result["total"],
-                "volymavvikelse": rorlig_result["volymavvikelse"],
-                "prisavvikelse": rorlig_result["prisavvikelse"],
-                "effektivitetsavvikelse": rorlig_result["effektivitetsavvikelse"],
-            },
+            expected_numbers=_rorlig_outputs,
             heading="### Tolkning",
             spinner_label="Analyserar avvikelser...",
         )
 
-        # Excel export of the detailed decomposition (review S3): this is
-        # the table students bring to seminars, previously only tab 3
-        # offered export.
+        _sk_header = scenario_header_lines(st.session_state.get("sk_scenario_info"))
         _rorlig_export_df = pd.DataFrame({
-            "Post": [
-                "Standardkostnad", "Verklig kostnad", "Total avvikelse",
-                "Volymavvikelse", "Prisavvikelse", "Effektivitetsavvikelse",
-            ],
-            "Belopp (kr)": [
-                rorlig_result["standard_kostnad"],
-                rorlig_result["verklig_kostnad"],
-                rorlig_result["total"],
-                rorlig_result["volymavvikelse"],
-                rorlig_result["prisavvikelse"],
-                rorlig_result["effektivitetsavvikelse"],
-            ],
+            "Kostnadsslag": [*summary_df["komponent"], "TOTALT"],
+            **{
+                _COMPONENT_LABELS[c]: [*summary_df[c], totals[c]] for c in _COMPONENTS
+            },
+            "Total avvikelse": [*summary_df["total"], totals["total"]],
         })
         st.download_button(
             label="Exportera till Excel",
-            data=export_to_excel({"Rorliga avvikelser": _rorlig_export_df}),
+            data=export_to_excel(
+                {"Rorliga avvikelser": _rorlig_export_df},
+                header_lines=_sk_header or None,
+                charts={"Rorliga avvikelser": [{
+                    "type": "column",
+                    "title": "Total avvikelse per kostnadsslag",
+                    "categories": table_range("A", len(summary_df), _sk_header),
+                    "values": table_range("E", len(summary_df), _sk_header),
+                    "position": f"A{len(_sk_header) + len(_rorlig_export_df) + 4}",
+                    "y_axis_title": "Belopp (kr)",
+                }]},
+            ),
             file_name="avvikelser_rorliga.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            mime=_XLSX_MIME,
             key="sk_rorlig_export",
         )
 
-    # Autosave current input values on every rerun
     save_state(
         "standardkost_rorlig",
         {
             "std_volym": std_volym,
-            "std_pris": std_pris,
-            "std_forbrukning": std_forbrukning,
             "verk_volym": verk_volym,
-            "verk_pris": verk_pris,
-            "verk_forbrukning": verk_forbrukning,
+            "items": items_df.to_dict(orient="records"),
         },
     )
+
+    if st.button("Återställ till standardvärden", key="sk_reset_autosave"):
+        clear_state("standardkost_rorlig")
+        clear_state("standardkost_fast")
+        st.session_state["_reset_sk"] = True
+        st.rerun()
 
     st.html(footer_note(updated=APP_UPDATED))
 
@@ -445,16 +432,22 @@ with tab1:
 
 with tab2:
     st.markdown(
-        "Jämför budgeterade fasta omkostnader med verkligt utfall. "
-        "En enkel differensanalys som visar om företaget överskridit eller underskridit budget."
+        "Fasta omkostnader fördelas på produkterna med en sats per styck som "
+        "bygger på normalvolymen. Avvikelsen delas i en **budgetavvikelse** "
+        "(vi betalade mer eller mindre än budget) och en **volymavvikelse** "
+        "(vi tillverkade mer eller mindre än normalvolymen, så för lite eller "
+        "för mycket omkostnader fördelades)."
     )
 
-    # Autosave: restore saved inputs once per session (review S3)
     _sk_fast_saved = load_state("standardkost_fast")
     if _sk_fast_saved is not None:
-        for _k in ("fast_budget", "fast_verkligt"):
+        for _k in ("fast_budget", "fast_verkligt", "fast_normal_volym", "fast_verklig_volym"):
             if _k in _sk_fast_saved:
                 st.session_state[_k] = float(_sk_fast_saved[_k])
+
+    if st.button("Hämta volymer från Rörliga kostnader", key="fast_pull_volumes"):
+        st.session_state["fast_normal_volym"] = float(st.session_state["std_volym"])
+        st.session_state["fast_verklig_volym"] = float(st.session_state["verk_volym"])
 
     col_fix_in, col_fix_res = st.columns([1, 2], gap="large")
 
@@ -464,7 +457,6 @@ with tab2:
             budget_belopp = st.number_input(
                 "Budgeterat belopp (kr)",
                 min_value=0.0,
-                value=500_000.0,
                 step=10_000.0,
                 format="%.0f",
                 key="fast_budget",
@@ -473,119 +465,182 @@ with tab2:
             verkligt_belopp = st.number_input(
                 "Verkligt belopp (kr)",
                 min_value=0.0,
-                value=550_000.0,
                 step=10_000.0,
                 format="%.0f",
                 key="fast_verkligt",
                 help="Verkliga fasta omkostnader för perioden",
             )
-            sk_fast_form_submit = st.form_submit_button("Uppdatera värden", type="primary")
+            st.markdown("**Volym**")
+            normal_volym = st.number_input(
+                "Normalvolym (styck)",
+                min_value=0.0,
+                step=100.0,
+                format="%.0f",
+                key="fast_normal_volym",
+                help="Den volym som omkostnadssatsen bygger på (budget / normalvolym = sats per styck)",
+            )
+            fast_verklig_volym = st.number_input(
+                "Verklig volym (styck)",
+                min_value=0.0,
+                step=100.0,
+                format="%.0f",
+                key="fast_verklig_volym",
+                help="Faktisk produktionsvolym under perioden",
+            )
+            st.form_submit_button("Uppdatera värden", type="primary")
 
     with col_fix_res:
-        # Calculate fixed overhead variance
-        fast_result = variance_fixed_overhead(
-            standard_belopp=budget_belopp,
-            verkligt_belopp=verkligt_belopp,
+        fast_result = variance_fixed_overhead_volume(
+            budget_belopp, verkligt_belopp, normal_volym, fast_verklig_volym
         )
-
-        # Store in session state for Tab 3
         st.session_state["sk_fast_result"] = fast_result
 
-        avvikelse_variant = "success" if fast_result["favorable"] else "danger"
+        def _fvariant(value: float) -> str:
+            return "success" if value <= 0 else "danger"
 
-        # KPI cards
         render_kpi_row([
             kpi_card(
-                "Budgeterat belopp",
-                format_sek(fast_result["standard_belopp"]),
+                "Budgetavvikelse",
+                format_sek(fast_result["budgetavvikelse"]),
+                variant=_fvariant(fast_result["budgetavvikelse"]),
             ),
             kpi_card(
-                "Verkligt belopp",
-                format_sek(fast_result["verkligt_belopp"]),
+                "Volymavvikelse",
+                format_sek(fast_result["volymavvikelse"]),
+                variant=_fvariant(fast_result["volymavvikelse"]),
             ),
             kpi_card(
-                "Avvikelse",
-                format_sek(fast_result["avvikelse"]),
-                variant=avvikelse_variant,
+                "Total avvikelse",
+                format_sek(fast_result["total"]),
+                variant=_fvariant(fast_result["total"]),
             ),
         ])
+        if normal_volym <= 0:
+            st.warning("Ange en normalvolym över noll för att räkna ut volymavvikelsen.")
 
-        # Success/error message
-        if fast_result["favorable"]:
-            st.success(
-                f"Fördelaktig avvikelse: Verkliga fasta omkostnader understeg budget "
-                f"med {format_sek(abs(fast_result['avvikelse']))}."
+        parts = []
+        if fast_result["budgetavvikelse"] > 0:
+            parts.append(
+                f"De fasta omkostnaderna blev {format_sek(fast_result['budgetavvikelse'])} "
+                "högre än budget (ofördelaktig budgetavvikelse)."
             )
-        elif fast_result["avvikelse"] == 0:
-            st.info("Inga avvikelser. Verkliga fasta omkostnader matchar budget exakt.")
+        elif fast_result["budgetavvikelse"] < 0:
+            parts.append(
+                f"De fasta omkostnaderna blev {format_sek(abs(fast_result['budgetavvikelse']))} "
+                "lägre än budget (fördelaktig budgetavvikelse)."
+            )
+        if normal_volym > 0 and fast_result["volymavvikelse"] > 0:
+            parts.append(
+                f"Volymen låg under normalvolymen, så {format_sek(fast_result['volymavvikelse'])} "
+                "av de fasta omkostnaderna fördelades aldrig ut på produkterna "
+                "(ofördelaktig volymavvikelse, undertäckning)."
+            )
+        elif normal_volym > 0 and fast_result["volymavvikelse"] < 0:
+            parts.append(
+                f"Volymen låg över normalvolymen, så {format_sek(abs(fast_result['volymavvikelse']))} "
+                "mer än budget fördelades ut (fördelaktig volymavvikelse, övertäckning)."
+            )
+        if parts:
+            (st.error if fast_result["total"] > 0 else st.success)(" ".join(parts))
         else:
-            st.error(
-                f"Ofördelaktig avvikelse: Verkliga fasta omkostnader översteg budget "
-                f"med {format_sek(abs(fast_result['avvikelse']))}."
-            )
+            st.info("Inga avvikelser. Utfallet matchar budget och normalvolym.")
 
-        # Simple bar chart comparing budget vs actual
         fig_fast = go.Figure()
         fig_fast.add_trace(go.Bar(
-            x=["Budgeterat", "Verkligt"],
-            y=[fast_result["standard_belopp"], fast_result["verkligt_belopp"]],
-            marker_color=[COLORS["primary"], COLORS["primary_light"]],
+            x=["Budgeterat", "Verkligt", "Fördelat på produkterna"],
+            y=[budget_belopp, verkligt_belopp, fast_result["absorberat"]],
+            marker_color=[COLORS["primary"], COLORS["primary_light"], COLORS["neutral"]],
             text=[
-                format_sek(fast_result["standard_belopp"]),
-                format_sek(fast_result["verkligt_belopp"]),
+                format_sek(budget_belopp),
+                format_sek(verkligt_belopp),
+                format_sek(fast_result["absorberat"]),
             ],
             textposition="outside",
-            textfont=dict(size=10),
+            textfont=dict(size=11),
         ))
-        apply_layout(fig_fast, title="Fasta omkostnader: Budget vs Verkligt", height=380)
+        apply_layout(fig_fast, title="Fasta omkostnader: budget, utfall och fördelat", height=380)
         st.plotly_chart(fig_fast, use_container_width=True)
 
-        st.caption("Fasta omkostnadsavvikelser.")
+        with st.expander("Visa uträkningen"):
+            st.markdown(
+                steps_fixed_overhead(budget_belopp, verkligt_belopp, normal_volym, fast_verklig_volym)
+            )
 
-        # Excel export (review S3)
+        _sk_header_fast = scenario_header_lines(st.session_state.get("sk_scenario_info"))
         _fast_export_df = pd.DataFrame({
-            "Post": ["Budgeterat belopp", "Verkligt belopp", "Avvikelse"],
+            "Post": [
+                "Budgeterat belopp", "Verkligt belopp", "Fördelat (absorberat)",
+                "Budgetavvikelse", "Volymavvikelse", "Total avvikelse",
+            ],
             "Belopp (kr)": [
-                fast_result["standard_belopp"],
-                fast_result["verkligt_belopp"],
-                fast_result["avvikelse"],
+                budget_belopp, verkligt_belopp, fast_result["absorberat"],
+                fast_result["budgetavvikelse"], fast_result["volymavvikelse"],
+                fast_result["total"],
             ],
         })
         st.download_button(
             label="Exportera till Excel",
-            data=export_to_excel({"Fasta omkostnader": _fast_export_df}),
+            data=export_to_excel(
+                {"Fasta omkostnader": _fast_export_df},
+                header_lines=_sk_header_fast or None,
+                charts={"Fasta omkostnader": [{
+                    "type": "column",
+                    "title": "Fasta omkostnader och avvikelser",
+                    "categories": table_range("A", len(_fast_export_df), _sk_header_fast),
+                    "values": table_range("B", len(_fast_export_df), _sk_header_fast),
+                    "position": "D2",
+                    "y_axis_title": "Belopp (kr)",
+                }]},
+            ),
             file_name="avvikelser_fasta.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            mime=_XLSX_MIME,
             key="sk_fast_export",
         )
 
-    # Autosave current input values on every rerun
     save_state(
         "standardkost_fast",
-        {"fast_budget": budget_belopp, "fast_verkligt": verkligt_belopp},
+        {
+            "fast_budget": budget_belopp,
+            "fast_verkligt": verkligt_belopp,
+            "fast_normal_volym": normal_volym,
+            "fast_verklig_volym": fast_verklig_volym,
+        },
     )
 
-    # LLM interpretation for fixed overhead (on-demand)
     _fast_components = [{
         "typ": "Fast omkostnad",
-        "budgeterat": fast_result["standard_belopp"],
-        "verkligt": fast_result["verkligt_belopp"],
-        "avvikelse": fast_result["avvikelse"],
-        "fordelaktig": fast_result["favorable"],
+        "budgeterat": budget_belopp,
+        "verkligt": verkligt_belopp,
+        "budgetavvikelse": fast_result["budgetavvikelse"],
+        "volymavvikelse": fast_result["volymavvikelse"],
     }]
+    _fast_outputs = {
+        "budgetavvikelse": fast_result["budgetavvikelse"],
+        "volymavvikelse": fast_result["volymavvikelse"],
+        "total_avvikelse": fast_result["total"],
+    }
     render_tutor_explanation(
         state_key="sk_fast_llm",
-        inputs={"budgeterat": budget_belopp, "verkligt": verkligt_belopp},
-        outputs={"avvikelse": fast_result["avvikelse"]},
-        build_prompt=lambda: build_standardkost_interpretation_prompt(
-            _fast_components
-        ),
+        inputs={
+            "budgeterat": budget_belopp,
+            "verkligt": verkligt_belopp,
+            "normalvolym": normal_volym,
+            "verklig_volym": fast_verklig_volym,
+        },
+        outputs=_fast_outputs,
+        build_prompt=lambda: build_standardkost_interpretation_prompt(_fast_components),
         fallback_text=lambda: FALLBACK_TEMPLATES["standardkost"](
             "standardkost",
             {"budgeterat": budget_belopp, "verkligt": verkligt_belopp},
-            {"avvikelse": fast_result["avvikelse"]},
+            _fast_outputs,
+            interpretation=(
+                "Budgetavvikelsen följs upp av den som ansvarar för kostnaderna, "
+                "volymavvikelsen av den som planerar produktion och försäljning. "
+                "Volymavvikelsen är ingen verklig kostnad utan visar hur mycket av "
+                "de fasta omkostnaderna som inte fördelades ut på produkterna."
+            ),
         ),
-        expected_numbers={"total_avvikelse": fast_result["avvikelse"]},
+        expected_numbers={"total_avvikelse": fast_result["total"]},
         heading="### Tolkning",
         spinner_label="Analyserar...",
     )
@@ -593,7 +648,7 @@ with tab2:
     st.html(footer_note(updated=APP_UPDATED))
 
 # ===========================================================================
-# TAB 3 -- SAMMANSTALLNING
+# TAB 3 -- SAMMANSTÄLLNING
 # ===========================================================================
 
 with tab3:
@@ -605,11 +660,13 @@ with tab3:
     rorlig_res = st.session_state.get("sk_rorlig_result")
     fast_res = st.session_state.get("sk_fast_result")
 
-    # Defined unconditionally: the blocks below and the Q&A chat at the
-    # bottom must not depend on which branch executed (review S1 — the old
-    # code had a latent NameError guarded only by a dir() lookup).
+    # Defined unconditionally: the blocks below and the chat at the bottom
+    # must not depend on which branch executed.
     total_all = 0.0
+    bar_names: list[str] = []
     bar_values: list[float] = []
+    rorlig_total = rorlig_res["total"] if rorlig_res else 0.0
+    fast_total = fast_res["total"] if fast_res else 0.0
 
     if rorlig_res is None and fast_res is None:
         st.info(
@@ -617,55 +674,56 @@ with tab3:
             "Fyll i värden i flikarna 'Rörliga kostnader' och 'Fasta omkostnader' först."
         )
     else:
-        # Calculate totals
-        rorlig_total = rorlig_res["total"] if rorlig_res else 0.0
-        fast_avvikelse = fast_res["avvikelse"] if fast_res else 0.0
-        total_all = rorlig_total + fast_avvikelse
+        total_all = rorlig_total + fast_total
 
-        total_variant = "success" if total_all <= 0 else "danger"
-        rorlig_variant = "success" if rorlig_total <= 0 else "danger"
-        fast_variant = "success" if fast_avvikelse <= 0 else "danger"
-
-        # KPI cards
         render_kpi_row([
             kpi_card(
                 "Total avvikelse (alla)",
                 format_sek(total_all),
-                variant=total_variant,
+                variant="success" if total_all <= 0 else "danger",
             ),
             kpi_card(
                 "Rörliga kostnader",
                 format_sek(rorlig_total),
-                variant=rorlig_variant,
+                variant="success" if rorlig_total <= 0 else "danger",
             ),
             kpi_card(
                 "Fasta omkostnader",
-                format_sek(fast_avvikelse),
-                variant=fast_variant,
+                format_sek(fast_total),
+                variant="success" if fast_total <= 0 else "danger",
             ),
         ])
 
-        # Build bar chart with all components
-        bar_names = []
-
+        summary_rows: list[dict] = []
         if rorlig_res:
-            bar_names.extend(["Volymavvikelse", "Prisavvikelse", "Effektivitetsavvikelse"])
-            bar_values.extend([
-                rorlig_res["volymavvikelse"],
-                rorlig_res["prisavvikelse"],
-                rorlig_res["effektivitetsavvikelse"],
-            ])
-
+            for item in rorlig_res["items"]:
+                for comp in _COMPONENTS:
+                    summary_rows.append({
+                        "Komponent": f"{_COMPONENT_LABELS[comp]}, {item['komponent'].lower()}",
+                        "Belopp (kr)": item[comp],
+                        "Typ": "Rörlig",
+                    })
+            for comp in _COMPONENTS:
+                bar_names.append(_COMPONENT_LABELS[comp])
+                bar_values.append(rorlig_res[comp])
         if fast_res:
-            bar_names.append("Fasta OH-avvikelse")
-            bar_values.append(fast_res["avvikelse"])
+            summary_rows.append({
+                "Komponent": "Budgetavvikelse, fasta omkostnader",
+                "Belopp (kr)": fast_res["budgetavvikelse"],
+                "Typ": "Fast",
+            })
+            summary_rows.append({
+                "Komponent": "Volymavvikelse, fasta omkostnader",
+                "Belopp (kr)": fast_res["volymavvikelse"],
+                "Typ": "Fast",
+            })
+            bar_names.extend(["Budgetavvikelse (fasta)", "Volymavvikelse (fasta)"])
+            bar_values.extend([fast_res["budgetavvikelse"], fast_res["volymavvikelse"]])
 
-        # Color: green if negative (favorable), red if positive (unfavorable)
         bar_colors = [
             COLORS["success"] if v < 0 else (COLORS["danger"] if v > 0 else COLORS["neutral"])
             for v in bar_values
         ]
-
         fig_summary = go.Figure()
         fig_summary.add_trace(go.Bar(
             x=bar_names,
@@ -673,151 +731,93 @@ with tab3:
             marker_color=bar_colors,
             text=[format_sek(v) for v in bar_values],
             textposition="outside",
-            textfont=dict(size=10),
+            textfont=dict(size=11),
         ))
         fig_summary.add_hline(y=0, line_dash="dot", line_color=COLORS["neutral"], line_width=1)
         apply_layout(fig_summary, title="Sammanställning av alla avvikelser", height=420)
         st.plotly_chart(fig_summary, use_container_width=True)
 
-        # Identify dominant variance
-        if bar_values:
-            abs_values = [abs(v) for v in bar_values]
-            max_idx = abs_values.index(max(abs_values))
-            dominant_name = bar_names[max_idx]
-            dominant_value = bar_values[max_idx]
-            dominant_direction = "fördelaktig" if dominant_value < 0 else "ofördelaktig"
+        if summary_rows:
+            dominant = max(summary_rows, key=lambda r: abs(r["Belopp (kr)"]))
+            direction = "fördelaktig" if dominant["Belopp (kr)"] < 0 else "ofördelaktig"
             st.info(
-                f"Största avvikelse: {dominant_name} på {format_sek(dominant_value)} "
-                f"({dominant_direction}). Denna komponent bör prioriteras vid uppföljning."
+                f"Största enskilda avvikelse: {dominant['Komponent']} på "
+                f"{format_sek(dominant['Belopp (kr)'])} ({direction}). Den bör "
+                "prioriteras vid uppföljningen."
             )
 
-        # Excel export
-        summary_rows = []
-        if rorlig_res:
-            summary_rows.append({
-                "Komponent": "Volymavvikelse",
-                "Belopp (kr)": rorlig_res["volymavvikelse"],
-                "Typ": "Rörlig",
-            })
-            summary_rows.append({
-                "Komponent": "Prisavvikelse",
-                "Belopp (kr)": rorlig_res["prisavvikelse"],
-                "Typ": "Rörlig",
-            })
-            summary_rows.append({
-                "Komponent": "Effektivitetsavvikelse",
-                "Belopp (kr)": rorlig_res["effektivitetsavvikelse"],
-                "Typ": "Rörlig",
-            })
-        if fast_res:
-            summary_rows.append({
-                "Komponent": "Fasta OH-avvikelse",
-                "Belopp (kr)": fast_res["avvikelse"],
-                "Typ": "Fast",
-            })
-        summary_rows.append({
-            "Komponent": "TOTALT",
-            "Belopp (kr)": total_all,
-            "Typ": "",
-        })
-
+        summary_rows.append({"Komponent": "TOTALT", "Belopp (kr)": total_all, "Typ": ""})
         export_df = pd.DataFrame(summary_rows)
+        st.dataframe(
+            export_df.assign(**{"Belopp (kr)": export_df["Belopp (kr)"].map(format_sek)}),
+            use_container_width=True,
+            hide_index=True,
+        )
 
-        # Bar chart of the avvikelse components (Task 10.9)
-        _n_rows = len(export_df)
-        sk_charts = {
-            "Sammanställning": [
-                {
-                    "type": "bar",
-                    "title": "Avvikelser per komponent",
-                    "categories": f"A2:A{1 + _n_rows}",
-                    "values": f"B2:B{1 + _n_rows}",
-                    "position": "E2",
-                    "x_axis_title": "Belopp (kr)",
-                }
-            ]
-        }
+        _sum_header = scenario_header_lines(st.session_state.get("sk_scenario_info"))
         st.download_button(
             "Exportera till Excel",
             data=export_to_excel(
                 {"Sammanställning": export_df},
-                charts=sk_charts,
+                header_lines=_sum_header or None,
+                charts={"Sammanställning": [{
+                    "type": "bar",
+                    "title": "Avvikelser per komponent",
+                    "categories": table_range("A", len(export_df) - 1, _sum_header),
+                    "values": table_range("B", len(export_df) - 1, _sum_header),
+                    "position": "E2",
+                    "x_axis_title": "Belopp (kr)",
+                }]},
             ),
             file_name="standardkostnadsanalys.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            mime=_XLSX_MIME,
         )
 
-    # LLM interpretation (on-demand) -- only when there is at least one variance
     if bar_values:
         _all_components: list[dict] = []
         if rorlig_res:
-            _all_components.append({
-                "typ": "Rorlig",
-                "volymavvikelse": rorlig_res["volymavvikelse"],
-                "prisavvikelse": rorlig_res["prisavvikelse"],
-                "effektivitetsavvikelse": rorlig_res["effektivitetsavvikelse"],
-            })
+            for item in rorlig_res["items"]:
+                _all_components.append({"typ": item["komponent"], **{c: item[c] for c in _COMPONENTS}})
         if fast_res:
             _all_components.append({
-                "typ": "Fast",
-                "avvikelse": fast_res["avvikelse"],
+                "typ": "Fast omkostnad",
+                "budgetavvikelse": fast_res["budgetavvikelse"],
+                "volymavvikelse": fast_res["volymavvikelse"],
             })
         _expected: dict[str, float] = {"total_avvikelse": total_all}
         if rorlig_res:
-            _expected["volymavvikelse"] = rorlig_res["volymavvikelse"]
-            _expected["prisavvikelse"] = rorlig_res["prisavvikelse"]
-            _expected["effektivitetsavvikelse"] = rorlig_res["effektivitetsavvikelse"]
+            for comp in _COMPONENTS:
+                _expected[comp] = rorlig_res[comp]
         render_tutor_explanation(
             state_key="sk_summary_llm",
-            inputs={
-                "rorlig_total": rorlig_total,
-                "fast_avvikelse": fast_avvikelse,
-            },
+            inputs={"rorlig_total": rorlig_total, "fast_avvikelse": fast_total},
             outputs=_expected,
-            build_prompt=lambda: build_standardkost_interpretation_prompt(
-                _all_components
-            ),
+            build_prompt=lambda: build_standardkost_interpretation_prompt(_all_components),
             fallback_text=lambda: FALLBACK_TEMPLATES["standardkost"](
                 "standardkost",
-                {"rorlig_total": rorlig_total, "fast_avvikelse": fast_avvikelse},
+                {"rorlig_total": rorlig_total, "fast_avvikelse": fast_total},
                 {"total_avvikelse": total_all},
+                interpretation=(
+                    interpret_variances(rorlig_res) if rorlig_res else None
+                ),
             ),
             expected_numbers=_expected,
             heading="### Tolkning",
             spinner_label="Analyserar sammanställning...",
         )
 
-    # Q&A chat
-    if "sk_chat_history" not in st.session_state:
-        st.session_state["sk_chat_history"] = []
-    for role, msg in st.session_state["sk_chat_history"]:
-        with st.chat_message(role):
-            st.markdown(msg)
-    user_q = st.chat_input("Fråga om standardkostnadsanalysen", key="sk_chat_input")
-    if user_q:
-        st.session_state["sk_chat_history"].append(("user", user_q))
-        with st.chat_message("user"):
-            st.markdown(user_q)
-        try:
-            if not is_llm_available():
-                raise LLMUnavailableError("Ingen token")
-            sk_ctx = {"total_avvikelse": total_all} if bar_values else {}
-            sys_p, usr_p = build_qa_prompt("standardkost", sk_ctx, sk_ctx, user_q, chat_history=st.session_state["sk_chat_history"])
-            with st.chat_message("assistant"):
-                with st.spinner("Tänker..."):
-                    raw = cached_chat(sys_p, usr_p)
-                result = humanize(raw)
-                st.markdown(result.text)
-            st.session_state["sk_chat_history"].append(("assistant", result.text))
-        except LLMSessionCapError:
-            # Must be caught before LLMUnavailableError (its parent class):
-            # a capped user should see the cap card, not "try again later"
-            # advice that can never help (review K4).
-            render_session_cap_card()
-        except LLMUnavailableError:
-            msg = "Tjänsten är tillfälligt otillgänglig. Försök igen senare."
-            with st.chat_message("assistant"):
-                st.info(msg)
-            st.session_state["sk_chat_history"].append(("assistant", msg))
+    render_qa_chat(
+        chat_key="sk_chat_history",
+        input_key="sk_chat_input",
+        placeholder="Fråga om standardkostnadsanalysen",
+        context="standardkost",
+        inputs={"total_avvikelse": total_all} if bar_values else {},
+        outputs={"total_avvikelse": total_all} if bar_values else {},
+        ground=False,
+    )
+    st.caption(
+        "Positivt belopp = ofördelaktig avvikelse (högre kostnad än standard), "
+        "negativt belopp = fördelaktig."
+    )
 
     st.html(footer_note(updated=APP_UPDATED))

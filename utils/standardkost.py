@@ -144,3 +144,38 @@ def variance_summary(component_results: list[dict]) -> pd.DataFrame:
         "total",
     ]
     return pd.DataFrame(rows, columns=columns)
+
+
+def variance_fixed_overhead_volume(
+    budget_belopp: float,
+    verkligt_belopp: float,
+    normal_volym: float,
+    verklig_volym: float,
+) -> dict:
+    """Split the fixed-overhead variance into budget and volume parts.
+
+    Fixed overhead is absorbed into products at budget / normalvolym per
+    unit. When the actual volume differs from the normal volume, more or
+    less than the budget is absorbed; that difference is the volume
+    variance (sysselsättningsavvikelse).
+
+        Budgetavvikelse  = verkligt - budget
+        Fördelat         = budget / normalvolym × verklig volym
+        Volymavvikelse   = budget - fördelat
+        Total            = verkligt - fördelat = budget- + volymavvikelse
+
+    Positive = unfavorable, negative = favorable.
+    """
+    rate = budget_belopp / normal_volym if normal_volym else 0.0
+    absorberat = rate * verklig_volym
+    budgetavvikelse = verkligt_belopp - budget_belopp
+    volymavvikelse = budget_belopp - absorberat if normal_volym else 0.0
+    return {
+        "satser_per_styck": rate,
+        "absorberat": absorberat,
+        "budgetavvikelse": budgetavvikelse,
+        "volymavvikelse": volymavvikelse,
+        "total": budgetavvikelse + volymavvikelse,
+        "budgetavvikelse_favorable": budgetavvikelse < 0,
+        "volymavvikelse_favorable": volymavvikelse < 0,
+    }
