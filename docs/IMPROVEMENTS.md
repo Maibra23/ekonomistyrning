@@ -10,6 +10,32 @@ include writing or updating tests.
 
 ---
 
+## Status (2026-10-19): implemented
+
+Everything in this document has been implemented, including the items
+in section 9 that were estimated at more than a day. The evaluation below
+is kept as the record of what was found and why each change was made.
+
+| Area | What changed | Where |
+|---|---|---|
+| Bug 1 | Linked budget inputs, generated company always balances, opening-balance check | `pages/3_Budget.py`, `utils/budget.py`, `tests/test_budget_linked.py` |
+| Bug 2 | Unallocated ABC cost warning, automatic activity columns | `pages/1_Kalkyl.py`, `utils/kalkyl.py` |
+| Bug 3 | Annuity ranking for unequal lifetimes, NPV profiles with Fisher's intersection | `pages/2_Investering.py`, `utils/investering.py` |
+| Offline | Worked examples and rule-based interpretations, dead chat inputs hidden | `utils/explain.py`, `utils/tutor.py`, `utils/page_blocks.py` |
+| Quiz | Parametrised generator, no repeats, 13 new bank questions, score from progress | `utils/quiz_generator.py`, `pages/5_Kunskapstest.py` |
+| Kalkyl | Pricing, ±10 % sensitivity, ABC vs traditional | `pages/1_Kalkyl.py` |
+| Investering | Restvärde and rörelsekapital, horizon keeps cash flows, NPV profile, "Hämta värden", MC export | `pages/2_Investering.py` |
+| Budget | Key ratios, monthly cash budget with seasonality, export header | `pages/3_Budget.py` |
+| Standardkost | Several cost items, fixed-overhead volume variance, "Visa uträkningen" | `pages/4_Standardkostnadsanalys.py` |
+| Cross-cutting | Shared page blocks, self-contained comments, Qwen3-8B in the docs, consistent exports | `utils/page_blocks.py`, docs |
+| Bigger items | Monthly likviditetsbudget, English language switch, shareable links | `utils/i18n.py`, `utils/page_blocks.py` |
+| Tests | Every page runs in CI with Streamlit AppTest, in Swedish and English | `tests/test_pages.py`, `tests/test_i18n.py` |
+
+Deliberately left out: explanations from the explanation service and quiz
+questions stay in Swedish when the interface is in English.
+
+---
+
 ## Summary
 
 The calculation core is solid and well tested. In offline mode the app

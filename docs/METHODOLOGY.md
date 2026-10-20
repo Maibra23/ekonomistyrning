@@ -93,6 +93,16 @@ Självkostnad (SK) = TVK
 * Modellen hanterar inte uppdelning på kostnadsställen (kapitel 6.1 utvidgad fördelning utelämnas)
 * Fördelningen antas linjär; verkliga företag kan ha staffade satser
 
+### 2.1.1 Prissättning med vinstpålägg
+
+```
+Pris per styck  = Självkostnad per styck × (1 plus vinstpålägg)
+Vinst per styck = Pris minus Självkostnad
+Vinstmarginal   = Vinst per styck / Pris
+```
+
+Vinstmarginalen räknas på priset och blir därför lägre än vinstpålägget, som räknas på självkostnaden. Appen visar båda för att den skillnaden ofta blandas ihop.
+
 ### 2.2 Bidragskalkyl (kapitel 8.1)
 
 **Concept:** Skiljer rörliga från fasta kostnader och fokuserar på täckningsbidraget (TB) som varje produkt bidrar med till att täcka fasta kostnader och generera resultat.
@@ -115,6 +125,8 @@ Säkerhetsmarginal (%)              = Säkerhetsmarginal / Volym
 **Begränsningar:**
 * Modellen är kortperspektiv; alla kostnader antas vara fasta på lång sikt
 * Negativ TB ger inget breakeven; modellen returnerar då None och varnar i UI
+
+**Känslighetstabell:** Resultatet räknas om med pris, volym och rörlig kostnad ändrade ±10 %, en faktor i taget och allt annat lika. Den faktor som flyttar resultatet mest lyfts fram i en bildtext.
 
 ### 2.3 Stegkalkyl (kapitel 8.3)
 
@@ -145,6 +157,17 @@ För varje produkt p:
 
 **Pedagogisk poäng:** ABC visar tydligt skillnaden mot påläggsmetoden när produkter har olika resursanspråk på indirekta aktiviteter (kapitel 7.4 för och nackdelar).
 
+**Jämförelse med traditionell fördelning:** Appen fördelar samma totala omkostnader i proportion till produkternas direkta kostnad (ett enda påläggstal) och visar skillnaden mot ABC per produkt:
+
+```
+Traditionell omkostnad_p = Totala omkostnader × Direkt kostnad_p / summa Direkt kostnad
+Skillnad_p               = ABC-omkostnad_p minus Traditionell omkostnad_p
+```
+
+En positiv skillnad betyder att produkten drar mer av aktiviteterna än dess storlek antyder och att den traditionella metoden låter andra produkter subventionera den.
+
+**Kontroll av ofördelad kostnad:** Förbrukar produkterna inte hela drivvolymen fördelas inte hela aktivitetskostnaden (KPD × förbrukning < total kostnad). Appen visar då en varning med det ofördelade beloppet per aktivitet i stället för att totalerna tyst blir för låga. Varje ny aktivitet får automatiskt en kolumn i produkttabellen.
+
 ---
 
 ## 3. Investeringsbedömning (Kapitel 10)
@@ -158,6 +181,15 @@ NPV = minus I_0 plus summa (CF_t / (1 plus r)^t)
 ```
 
 där I_0 är grundinvestering, CF_t är kassaflöde år t, r är diskonteringsränta (kalkylränta).
+
+**Restvärde och rörelsekapital:** Rörelsekapital som binds när investeringen startar läggs till grundinvesteringen år 0 och frigörs sista året. Restvärdet räknas som en inbetalning sista året:
+
+```
+I_0'  = I_0 plus Rörelsekapital
+CF_n' = CF_n plus Restvärde plus Rörelsekapital
+```
+
+**NPV-profil:** NPV beräknas för kalkylräntor från 0 % och uppåt och ritas som en kurva. Kurvan skär noll vid internräntan, vilket gör IRR synlig.
 
 **Beslutsregel:** Investera om NPV > 0. Vid val mellan flera ömsesidigt uteslutande projekt, välj högst NPV (förutsatt jämförbar livslängd).
 
@@ -191,6 +223,8 @@ Annuitet = NV × r / (1 minus (1 plus r)^(minus n))
 
 Används när investeringar med olika livslängd ska jämföras (ekvivalent årsannuitet).
 
+**Implementering i jämförelsen:** Har de två alternativen samma livslängd rangordnas de efter NPV. Har de olika livslängd rangordnas de efter annuiteten av NPV (`Annuitet = NPV × r / (1 minus (1 plus r)^(minus n))`), eftersom det längre alternativet annars får fler år att samla nuvärde. Antagandet är att alternativen kan upprepas. Appen ritar båda alternativens NPV-profiler och markerar Fishers skärningspunkt, den kalkylränta där alternativen har samma NPV (internräntan för differensen mellan kassaflödena).
+
 ### 3.5 Inflation och skatt (kapitel 10.11)
 
 **Nominal vs reell ränta (Fishers samband):**
@@ -217,7 +251,7 @@ NPV efter skatt                = summa (CF_efter_skatt_t / (1 plus r_nominell)^t
 
 **Concept:** Mäter NPV:s känslighet mot variationer i en parameter (kassaflöde, ränta eller grundinvestering) för att identifiera kritiska antaganden.
 
-**Implementering:** Variera parametern plus minus 30 % i 21 linjärt fördelade steg och plotta NPV. "Kritisk variation" är den punkt där NPV korsar noll.
+**Implementering:** Parametern varieras inom ett valbart intervall (standard minus 30 till plus 30 %) i 41 linjärt fördelade steg och NPV plottas. "Kritisk variation" är den punkt där NPV korsar noll, linjärt interpolerad. Ett tornadodiagram visar alla tre parametrar samtidigt vid samma relativa variation.
 
 **Pedagogisk poäng:** Synliggör vilka antaganden som är robusta och vilka som är ömtåliga. Kompletterar punktestimaten med beslutsrelevant osäkerhetsbild.
 
@@ -238,7 +272,7 @@ NPV efter skatt                = summa (CF_efter_skatt_t / (1 plus r_nominell)^t
 
 **Antaganden och begränsningar:**
 * Normalfördelning är en förenkling; verkliga kassaflöden kan vara tjocksvansade eller skeva
-* Korrelationer mellan parametrar ignoreras (alla samplas oberoende). Detta överskattar diversifiering.
+* Grundinvestering, kalkylränta och kassaflöden samplas oberoende av varandra. Korrelationen mellan årens kassaflöden kan väljas (dras via Cholesky-faktorisering); med 0 överskattas diversifieringen mellan åren.
 * Diskonteringsräntan begränsas till r större än eller lika med 0 vid sampling
 * Reproducerbarhet säkerställs med fast random seed (42)
 
@@ -281,16 +315,53 @@ plus Finansiering (lån, nyemission)
 Förändring rörelsekapital approximeras i appen som:
 
 ```
-Delta RK ungefär Försäljning × Delta(kundfordringar dagar) / 365
-                plus Inköp × Delta(lager dagar) / 365
-                minus Inköp × Delta(leverantörsskulder dagar) / 365
+Delta RK ungefär Försäljning × kundfordringar dagar / 365
+                plus Inköp × lager dagar / 365
+                minus Inköp × leverantörsskulder dagar / 365
 ```
+
+Inköpen antas vara lika stora som de rörliga kostnaderna.
 
 **Antagande:** Stabil affärsmodell, inga extraordinära poster.
 
 ### 4.4 Balansbudget
 
-Utgående balans = Ingående balans plus nettoeffekt av periodens transaktioner. Tillgångar ska balansera mot skulder och eget kapital. Appen kontrollerar och visar avvikelse om de inte balanserar (vilket signalerar inkonsistens i de tre budgetarna).
+Utgående balans = Ingående balans plus nettoeffekt av periodens transaktioner. Tillgångar ska balansera mot skulder och eget kapital.
+
+Poster som betyder samma sak i två steg matas in en gång: nyanskaffningen i balansbudgeten är investeringarna från likviditetsbudgeten, avskrivningarna är resultatbudgetens avskrivningar och ingående likvida medel är likviditetsbudgetens ingående kassa. Med de länkarna gäller
+
+```
+Delta tillgångar = Nyanskaffning minus Avskrivningar plus Delta lager plus Delta kundfordringar plus Delta kassa
+                 = Årets resultat plus Finansiering plus Delta leverantörsskulder
+                 = Delta (skulder plus eget kapital)
+```
+
+så utgående balans går alltid ihop när ingående balans gör det. Appen kontrollerar därför först den ingående balansen och pekar ut den om den inte går ihop. Ett genererat exempelföretag avrundas post för post; dess eget kapital justeras så att den ingående balansen går ihop.
+
+### 4.5 Nyckeltal
+
+```
+Soliditet                    = Eget kapital UB / Summa tillgångar UB
+Rörelsemarginal              = Rörelseresultat / Försäljning
+Balanslikviditet             = (Lager plus Kundfordringar plus Likvida medel) / Kortfristiga skulder
+Kassalikviditet              = (Kundfordringar plus Likvida medel) / Kortfristiga skulder
+Avkastning på eget kapital   = Årets resultat / genomsnittligt eget kapital (IB och UB)
+Avkastning på totalt kapital = Rörelseresultat / genomsnittligt totalt kapital (IB och UB)
+```
+
+Kortfristiga skulder är leverantörsskulderna, eftersom budgeten inte har andra kortfristiga skulder.
+
+### 4.6 Likviditetsbudget per månad
+
+Årets försäljning och inköp fördelas på månader efter en säsongsprofil (jämn, sommartopp, julhandel, vinterhalvår eller egna andelar, som skalas om till 100 %). Betalningarna förskjuts med kredittiderna, med 30 dagar som en månad:
+
+```
+Betalningsförskjutning L = dagar / 30
+Inbetalning i månad m    = (1 minus andel) × Försäljning_(m minus floor(L)) plus andel × Försäljning_(m minus floor(L) minus 1)
+där andel = L minus floor(L)
+```
+
+Ingående kundfordringar och leverantörsskulder betalas jämnt under den första kreditperioden. Personal, lokaler, övriga kostnader, räntor och preliminärskatt betalas med en tolftedel per månad; investering och finansiering i vald månad. Appen visar lägsta saldo och de månader då kassan blir negativ, alltså behovet av checkkredit. Decembersaldot kan skilja sig från årsbudgetens utgående kassa, eftersom årsbudgeten räknar med lageruppbyggnad och ett förenklat rörelsekapital.
 
 ---
 
@@ -315,9 +386,21 @@ Effektivitetsavvikelse = (Verklig förbrukning per styck minus Standard förbruk
 
 **Avstämning:** Volym plus Pris plus Effektivitet ungefär lika med Total avvikelse. Små rundningsfel kan uppstå; appen visar avstämningskontroll.
 
+**Flera kostnadsslag:** Varje rörligt kostnadsslag (till exempel direkt material, direkt lön och rörliga omkostnader) har eget pris och egen förbrukning per tillverkad styck men samma produktionsvolym. Uppdelningen görs per kostnadsslag och summeras.
+
 ### 5.2 Fasta omkostnader (kapitel 17.7)
 
-Förenklad analys: Verklig fast kostnad minus Budgeterad fast kostnad.
+Fasta omkostnader fördelas på produkterna med en sats per styck som bygger på normalvolymen. Avvikelsen delas i två delar:
+
+```
+Sats per styck   = Budgeterade fasta omkostnader / Normalvolym
+Fördelat         = Sats per styck × Verklig volym
+Budgetavvikelse  = Verkliga fasta omkostnader minus Budgeterade
+Volymavvikelse   = Budgeterade minus Fördelat          (sysselsättningsavvikelse)
+Total avvikelse  = Verkliga minus Fördelat = Budgetavvikelse plus Volymavvikelse
+```
+
+En verklig volym under normalvolymen ger undertäckning (ofördelaktig volymavvikelse). Volymavvikelsen är ingen verklig kostnad utan visar hur mycket av de fasta omkostnaderna som inte fördelades ut.
 
 ### 5.3 Tolkning och åtgärder
 
@@ -328,13 +411,13 @@ Förenklad analys: Verklig fast kostnad minus Budgeterad fast kostnad.
 
 ---
 
-## 6. LLM design (Qwen3-14B integration)
+## 6. LLM design (Qwen3 integration)
 
 This section documents how the language model is used, the engineering choices behind the integration, and the evaluation approach.
 
-### 6.1 Why Qwen3-14B specifically
+### 6.1 Why Qwen3
 
-The 14B parameter class is large enough to handle Swedish nuance, multi step finance reasoning, and ground responses in user supplied numbers, while remaining cost effective on Hugging Face Inference Providers. Qwen3 family models have shown strong multilingual capability including Nordic languages, and the open licensing fits a portfolio project. Smaller models (7B and below) tend to lose precision on Swedish ekonomistyrning terminology and produce numerically incorrect interpretations when asked to reason over user inputs.
+The default model is Qwen3-8B; Qwen3-14B can be chosen in the sidebar. Qwen3 family models have shown strong multilingual capability including Nordic languages, and the open licensing fits a portfolio project. The 8B model answers fast enough for an interactive page and is cheap on Hugging Face Inference Providers. The 14B model often writes somewhat fuller Swedish but responds more slowly. Because the app does all the arithmetic and the model only narrates verified numbers, the smaller model's weaker multi-step reasoning matters less than it would in a free-form tutor.
 
 ### 6.2 Provider choice
 
@@ -342,7 +425,7 @@ The 14B parameter class is large enough to handle Swedish nuance, multi step fin
 * Single API across multiple underlying providers (Together, Fireworks, etc.) reduces vendor lock in
 * Pay per token billing scales naturally with portfolio level traffic
 * Token authentication is straightforward and integrates with Streamlit secrets
-* No GPU infrastructure to manage, which is essential since Streamlit Community Cloud cannot host a 14B model locally
+* No GPU infrastructure to manage, which is essential since Streamlit Community Cloud cannot host an 8B or 14B model locally
 
 **Alternatives considered and rejected:**
 * Local hosting via transformers: requires GPU, incompatible with Streamlit Cloud free tier
@@ -400,26 +483,22 @@ LLM hallucination on numeric values is the single highest risk in this app. The 
 
 **Mechanism 2: Numeric verification.** A small parser in `utils/llm.py` extracts numbers from the LLM response and checks them against the calculator output within a tolerance. Mismatches trigger a soft warning in the UI.
 
-**Mechanism 3: Quiz answer verification.** For numeric quiz questions, the LLM returns both the question and the expected answer. Before display, the app re-runs the math using `utils/kalkyl.py` etc. and compares. Mismatches trigger regeneration up to 3 times, then fall back to a static question.
+**Mechanism 3: Quiz answer checks.** Generated quiz questions must parse as JSON with the required fields, numeric answers must be finite and of a plausible size, and the chapter reference and vocabulary must stay inside the chosen chapter cluster. A failed check triggers one retry; after that the app falls back to the offline questions described in 6.7.
 
 **Mechanism 4: Kapitel reference grounding.** The system prompt includes the kapitel reference relevant to the current module so the LLM cannot drift to unrelated material.
 
 ### 6.7 Quiz generation methodology
 
-The quiz module is fully LLM driven (not static), but every question undergoes deterministic verification before display.
+**With the explanation service:**
 
-**Generation flow:**
+1. User selects kapitelkluster, difficulty (Lätt, Medel, Svår) and question type (flerval or numerisk)
+2. One combined call returns the question and a self-rating in a single JSON envelope: fraga, alternativ (for flerval), ratt_svar, berakning_steg, forklaring, kapitel_referens and a quality score
+3. The checks in 6.6 run; one retry at most
+4. After answering, the student can ask for a similar but harder question or a deeper explanation
 
-1. User selects kapitelkluster and difficulty (Lätt, Medel, Svår)
-2. Prompt template inserts: kapitel scope, difficulty, question type (flerval or numerisk), seed scenario context (a fictional Swedish company)
-3. LLM returns JSON with: fraga, typ, alternativ (for flerval), ratt_svar, berakning_steg, forklaring, kapitel_referens
-4. For numerisk: app calls the relevant calculator function with the LLM's stated inputs and verifies ratt_svar matches within tolerance
-5. If mismatch, regenerate up to 3 times
-6. If still mismatch, fall back to static question from `data/quiz_fallback.json`
-7. Display with explanation
-8. After answer, LLM can be asked "ge en liknande fråga", "gör den svårare", "förklara djupare"
+**Without it (or when the session budget is spent):** `utils/quiz_generator.py` builds questions from templates per area. Each template draws realistic random inputs, computes the answer with the same functions the module pages use (`self_cost_palagg`, `contribution_calc`, `abc_calc`, `npv`, `payback`, `annuity`, `build_resultatbudget`, `variance_decomposition_rorlig`, `variance_fixed_overhead_volume`) and writes the solution steps from the same numbers. Difficulty changes the problem: Lätt asks for one step with round inputs, Medel adds a step and Svår adds another concept (AO/FO and pricing, residual value, tax, the fixed-overhead volume variance). Multiple-choice versions use wrong options built from typical mistakes (overhead on the wrong base, forgetting to discount, markup versus margin). Multiple-choice questions alternate with the conceptual questions in `data/quiz_fallback.json`. Questions already shown in the session are not repeated.
 
-This combination keeps the quiz unpredictable and contextual while never letting a wrong answer reach the user.
+A test generates many questions for every combination of area, difficulty and type and checks the answers against the calculators.
 
 ### 6.8 Caching strategy
 
@@ -433,7 +512,7 @@ This combination keeps the quiz unpredictable and contextual while never letting
 * Per session soft cap: 50 LLM calls
 * Streaming enabled to reduce perceived latency without changing token cost
 * Prompts are compact: typical system prompt 600 tokens, user prompt 200 to 800 tokens, response 300 to 600 tokens
-* Estimated cost at HF Inference Providers Qwen3-14B rates: roughly 0.001 to 0.003 USD per call, so 50 calls per session is bounded at 0.15 USD
+* Estimated cost at HF Inference Providers Qwen3 rates: roughly 0.001 to 0.003 USD per call, so 50 calls per session is bounded at 0.15 USD
 
 ### 6.10 Evaluation methodology
 
@@ -449,7 +528,7 @@ A minimal evaluation harness lives in `tests/eval_llm.py`. It runs once before e
 
 ### 6.11 Limitations
 
-* Qwen3-14B occasionally produces grammatically awkward Swedish in long form; Layer 2 cannot catch this
+* Qwen3 occasionally produces grammatically awkward Swedish in long form; Layer 2 cannot catch this
 * Numeric reasoning is generally correct for one or two step calculations but degrades on complex multi step (mitigation: app does the math, LLM only narrates)
 * Quiz generation can produce questions that are technically correct but pedagogically flat; future work could fine tune
 * No long term user memory, so the LLM cannot reference prior sessions
@@ -462,7 +541,16 @@ The combination of four mechanisms makes every LLM output specific to the user's
 1. **User's actual numbers** are always in the prompt, so the LLM cites them
 2. **Specific kapitel reference** is always in the prompt, so the LLM stays anchored to the textbook
 3. **Hybrid register with humanizer principles** removes generic AI voice
-4. **Quiz verification** ensures dynamism without sacrificing correctness
+4. **Quiz checks and calculator-computed offline questions** keep the quiz varied without sacrificing correctness
+
+### 6.13 Offline explanations
+
+Without the explanation service every explanation still works from the student's own numbers (`utils/explain.py`):
+
+* **Worked examples:** the step-by-step guide substitutes the inputs into the textbook formulas ("MO = 850 kr × 25 % = 212,50 kr"), for självkostnad, bidrag, ABC and the variance decompositions.
+* **Rule-based interpretation:** the "Tolkning" section of the four-section template names the key fact: the dominating cost item and the overhead share, whether the contribution covers the fixed costs and how strong the safety margin is (under 10 % weak, 10 to 25 % reasonable, over 25 % strong), which product the traditional allocation subsidises, what NPV, IRR and payback say together, the dominating variance and who follows it up.
+
+The free-text chat and "Förklara djupare" need the service and are hidden offline instead of answering "not available".
 
 A user who calculates NPV for an LLM-generated svensk exempelfirma with diskonteringsränta 8 % and 10 års kassaflöde gets an explanation that names the firm, cites 8 %, walks through years 1 to 10 with their actual values, and references kapitel 10.4. A different user with different inputs gets a different explanation. This is structurally generic AI output cannot achieve, by design.
 
@@ -483,7 +571,7 @@ Waterfall charts för självkostnad och inflations skattepåverkan visar hur vä
 
 ### 7.3 Princip: realistiska men fiktiva scenarier
 
-Från Day 10 (Task 10.13) genereras alla scenarier dynamiskt vid runtime via LLM, en per modul och svårighetsgrad (Lätt, Medel, Svår). Modellen anropas med ett JSON-schema som specificerar exakt vilka fält som krävs för den aktuella kalkylfunktionen och instrueras att producera plausibla siffror för svensk industri- eller tjänstekontext. Företagsnamnen är påhittade och varierar mellan anrop. Det genererade scenariot valideras mot förväntade nycklar innan det visas; misslyckas valideringen, eller är LLM otillgänglig, används en deterministisk fallback-dict med Swedish placeholder-värden i samma form. Humanizern tillämpas inte här eftersom det är inputdata, inte LLM-förklaring, som genereras. Resultatet är att appen aldrig känns som ett statiskt läroboksexempel: varje session presenterar nya företag med nya siffror som speglar de tre traditionella branschtyperna (tillverkning, handel, tjänst) som Andersson använder i kapitel 6.
+Alla scenarier genereras dynamiskt vid runtime via LLM, en per modul och svårighetsgrad (Lätt, Medel, Svår). Modellen anropas med ett JSON-schema som specificerar exakt vilka fält som krävs för den aktuella kalkylfunktionen och instrueras att producera plausibla siffror för svensk industri- eller tjänstekontext. Företagsnamnen är påhittade och varierar mellan anrop. Det genererade scenariot valideras mot förväntade nycklar innan det visas; misslyckas valideringen, eller är LLM otillgänglig, används en deterministisk fallback-dict med Swedish placeholder-värden i samma form. Humanizern tillämpas inte här eftersom det är inputdata, inte LLM-förklaring, som genereras. Resultatet är att appen aldrig känns som ett statiskt läroboksexempel: varje session presenterar nya företag med nya siffror som speglar de tre traditionella branschtyperna (tillverkning, handel, tjänst) som Andersson använder i kapitel 6.
 
 ### 7.4 Princip: LLM som komplement, inte ersättning
 
@@ -570,7 +658,7 @@ All component functions return HTML strings rendered via `st.html()`. The sole e
 1. **Brand block** — 32x3px blue bar, `EKS` mark, "Ekonomistyrning", "Andersson kap. 4–17"
 2. **MODULER** section — six nav links via `st.page_link()`; active link gets mid-blue background
 3. **INFORMATION** section — "Om appen" link
-4. **Footer** — model name (Qwen3-14B via Hugging Face) and live counter `N / 50`
+4. **Footer** — model name (Qwen3-8B by default via Hugging Face) and live counter `N / 50`
 
 Streamlit's auto-generated sidebar nav is disabled via CSS (`div[data-testid="stSidebarNav"] {display: none !important;}`). The sidebar background is `#1E3A8A` and all sidebar text is forced to `rgba(255,255,255,0.65)` via a global CSS rule. The call counter reads from `st.session_state["llm_call_count"]` and updates in real time.
 
@@ -649,12 +737,12 @@ Chart series use `CHART_PALETTE` from `utils/ui.py` so color ordering is consist
 
 ## 10. Begränsningar och framtida arbete
 
-### 9.1 Kända begränsningar i v1
+### 9.1 Kända begränsningar
 
-* Endast svenska
+* Förklaringar från förklaringstjänsten och quizfrågor är på svenska även när gränssnittet visas på engelska
 * Inga användarkonton, ingen molnlagring av scenarier
 * Mobil responsivitet är begränsad till Streamlits standardbeteende
-* Monte Carlo antar normalfördelning och oberoende
+* Monte Carlo antar normalfördelning och oberoende mellan parametrar (korrelation mellan årens kassaflöden kan väljas)
 * Stegkalkyl är förenklad i förhållande till kapitel 8.3 fullständiga formulering
 * LLM kan producera grammatiskt klumpig svenska i långa svar
 
@@ -664,7 +752,6 @@ Chart series use `CHART_PALETTE` from `utils/ui.py` so color ordering is consist
 * Projektstyrning (kapitel 19) med Gantt visualisering
 * Benchmarking (kapitel 20)
 * Balanced scorecard (kapitel 21)
-* Engelsk språkversion
 * PDF rapportexport utöver Excel
 * Persistent användarprofil med scenariohistorik
 * Finetuning av Qwen3 på svenska ekonomistyrning korpus
@@ -679,7 +766,7 @@ Chart series use `CHART_PALETTE` from `utils/ui.py` so color ordering is consist
 * Plotly Python dokumentation. https://plotly.com/python
 * numpy_financial dokumentation. https://numpy.org/numpy-financial/
 * Hugging Face Inference Providers. https://huggingface.co/docs/inference-providers
-* Qwen3 model card. https://huggingface.co/Qwen/Qwen3-14B
+* Qwen3 model card. https://huggingface.co/Qwen/Qwen3-8B
 
 ---
 
@@ -689,5 +776,6 @@ Chart series use `CHART_PALETTE` from `utils/ui.py` so color ordering is consist
 |---|---|---|
 | 1.0 | 2026-04-28 | Första utgåvan vid projektstart |
 | 2.0 | 2026-04-28 | Tillagd sektion 6 om LLM design (Qwen3-14B, hybrid register, två lager humanizer, dynamisk quiz, evaluering) |
-| 2.1 | 2026-05-05 | Uppdaterad sektion 7.3 med LLM-genererade scenarier på begäran (Task 7.5) |
+| 2.1 | 2026-05-05 | Uppdaterad sektion 7.3 med LLM-genererade scenarier på begäran |
 | 2.2 | 2026-05-05 | Ny sektion 8 om UI-designsystemet (utils/ui.py, CSS-arkitektur, färgtokens, komponentkatalog, interaktionsflöde); omdöpta sektioner 8–11 till 9–12 |
+| 2.3 | 2026-10-19 | Qwen3-8B som standardmodell; prissättning, ABC mot traditionell fördelning, restvärde och rörelsekapital, NPV-profil och annuitetsrangordning, länkad balansbudget, nyckeltal, månadsbudget, flera kostnadsslag, fasta omkostnaders volymavvikelse, offline-förklaringar (6.13) och kalkylatorbaserade quizfrågor |

@@ -4,7 +4,7 @@
 
 **En interaktiv övningsmiljö för svenska studenter som läser *Ekonomistyrning: beslut och handling* av Göran Andersson.**
 
-An interactive practice environment for Swedish accounting management students. Built with Streamlit, Plotly, and Qwen3-8B via Hugging Face Inference Providers.
+An interactive practice environment for Swedish management accounting students. Built with Streamlit, Plotly, and Qwen3-8B via Hugging Face Inference Providers. The interface is available in Swedish and English.
 
 ---
 
@@ -16,30 +16,31 @@ An interactive practice environment for Swedish accounting management students. 
 
 | Modul | Beskrivning | Kapitel |
 |-------|-------------|---------|
-| **Kalkylering** | Självkostnadskalkyl via pålägg, bidragskalkyl och ABC-kalkyl med waterfall-diagram | 4, 6, 7, 8 |
-| **Investeringsbedömning** | NPV, IRR, payback, annuitet, känslighetsanalys med tornadodiagram, inflation och skatt, Monte Carlo (upp till 50 000 iterationer, korrelerade kassaflöden) samt jämförelse av två alternativ | 10 |
-| **Budget och budgetering** | Resultatbudget, likviditetsbudget och balansbudget med automatisk integration och konsistenskontroll | 13, 14, 15 |
-| **Standardkostnadsanalys** | Avvikelsedekomposition i volym, pris och effektivitet med färgkodade diagram | 17 |
-| **Kunskapstest** | LLM-genererade scenariofrågor per kapitelkluster, numeriska svar verifieras mot kalkylator | 4 till 17 |
+| **Kalkylering** | Självkostnadskalkyl via pålägg med prissättning (vinstpålägg), bidragskalkyl med nollpunkt och känslighetstabell (±10 %), ABC-kalkyl jämförd med traditionell fördelning och varning för ofördelad aktivitetskostnad | 4, 6, 7, 8 |
+| **Investeringsbedömning** | NPV, IRR, payback och annuitet med restvärde och rörelsekapital, NPV-profil, känslighetsanalys med tornadodiagram, inflation och skatt, Monte Carlo (upp till 50 000 iterationer, korrelerade kassaflöden) samt jämförelse av två alternativ (annuitetsmetoden vid olika livslängd, Fishers skärningspunkt) | 10 |
+| **Budget och budgetering** | Resultat-, likviditets- och balansbudget som alltid går ihop, kontroll av ingående balans, nyckeltal (soliditet, rörelsemarginal, balans- och kassalikviditet, avkastning) och likviditetsbudget per månad med säsongsprofil | 13, 14, 15 |
+| **Standardkostnadsanalys** | Volym-, pris- och effektivitetsavvikelser för flera rörliga kostnadsslag, budget- och volymavvikelse (sysselsättningsavvikelse) för fasta omkostnader, alla formler med dina siffror | 17 |
+| **Kunskapstest** | Obegränsat med frågor vars svar räknas fram av appens egna kalkylatorer, lösning steg för steg, progression per ämnesområde | 4 till 17 |
 
-**LLM-tutor (Qwen3-8B):** Varje modul har en inbyggd tutor som förklarar resultat grundat i dina egna siffror. Tutorn skriver i ett hybridregister med banktjänstemannens precision och akademisk rigorositet. Om LLM inte är tillgänglig visas deterministiska förklaringsmallar som fallback.
+**Förklaringar (Qwen3-8B):** Varje modul har en tutor som förklarar resultat grundat i dina egna siffror. Utan förklaringstjänsten visas i stället uträkningen steg för steg med dina siffror och en regelbaserad tolkning (till exempel vilken kostnadspost som dominerar eller hur stark säkerhetsmarginalen är), så appen är fullt användbar offline.
 
 Övriga funktioner:
-- Excel-export i alla moduler
-- Dynamiskt LLM-genererade exempelföretag per modul och svårighetsgrad (Lätt, Medel, Svår)
-- Steg-för-steg-guider och Q&A-chatt per modul
+- Excel-export i alla moduler, med företagsnamn och diagram
+- Exempelföretag per modul och svårighetsgrad (Lätt, Medel, Svår) som kan följa med mellan modulerna
+- Delbara länkar: alla inmatningar ligger i webbadressen, så en länk öppnar samma kalkyl
+- Svenska och engelska gränssnitt (språkväljare i sidomenyn)
 - Grounding-verifiering av LLM-svar mot beräknade siffror
 
 ## Teknisk stack
 
-- **Python** 3.11
-- **Streamlit** 1.32+ (UI-ramverk)
+- **Python** 3.11+
+- **Streamlit** 1.50+ (UI-ramverk)
 - **Plotly** 5.18+ (interaktiva diagram)
-- **Qwen3-8B** via Hugging Face Inference Providers (LLM-tutor)
+- **Qwen3-8B** via Hugging Face Inference Providers (förklaringar; Qwen3-14B kan väljas i sidomenyn)
 - **huggingface-hub** 0.24+ (API-klient)
 - numpy, pandas, scipy, numpy-financial (beräkningar)
 - xlsxwriter, openpyxl (Excel-export)
-- pytest (testramverk)
+- pytest (testramverk, inklusive Streamlit AppTest för sidorna)
 - ruff + mypy (lint och statisk typkontroll, körs i CI)
 
 ## Lokal installation
@@ -77,7 +78,7 @@ För att aktivera workflowen behöver du lägga in URL:en till din deployade app
 
 ## Hugging Face Token
 
-För att använda LLM-tutorn behöver du en Hugging Face-token:
+För att använda förklaringstjänsten behöver du en Hugging Face-token:
 
 1. Skapa ett konto på [huggingface.co](https://huggingface.co)
 2. Gå till Settings, Access Tokens och skapa en ny token (Read-rättigheter räcker)
@@ -95,7 +96,7 @@ För att använda LLM-tutorn behöver du en Hugging Face-token:
 
 **Säkerhet:** Committa aldrig `secrets.toml` till versionshantering. Filen är redan listad i `.gitignore`. Vid deploy på Streamlit Community Cloud läggs token in via Secrets-hanteraren i adminpanelen.
 
-**Utan token:** Appen fungerar fullt ut för alla beräkningar och diagram. Endast LLM-förklaringar och LLM-genererade frågor ersätts med deterministiska fallback-mallar.
+**Utan token:** Alla beräkningar, diagram och exporter fungerar. Förklaringarna visas som uträkningar steg för steg med dina egna siffror plus en regelbaserad tolkning, och kunskapstestet använder frågor som skapas av appens kalkylatorer. Det som saknas offline är den fria frågechatten och "Förklara djupare", som då döljs.
 
 ## Projektstruktur
 
@@ -108,43 +109,35 @@ ekonomistyrning/
 │   ├── 3_Budget.py
 │   ├── 4_Standardkostnadsanalys.py
 │   └── 5_Kunskapstest.py
-├── utils/                        # Ren Python, inga streamlit-importer
+├── utils/
 │   ├── formatting.py             # Svensk talformatering
 │   ├── charts.py                 # Plotly-palett och layout
-│   ├── export.py                 # Excel-export
-│   ├── kalkyl.py                 # Självkostnad, bidrag, ABC
-│   ├── investering.py            # NPV, IRR, payback, Monte Carlo
-│   ├── budget.py                 # Tre integrerade budgetar
-│   ├── standardkost.py           # Avvikelsedekomposition
-│   ├── scenarios.py              # Förinladdade fiktiva företag
+│   ├── export.py                 # Excel-export med diagram
+│   ├── kalkyl.py                 # Självkostnad, bidrag, ABC, prissättning
+│   ├── investering.py            # NPV, IRR, payback, NPV-profil, Monte Carlo
+│   ├── budget.py                 # Tre budgetar, nyckeltal, månadsbudget
+│   ├── standardkost.py           # Avvikelser, fasta omkostnader
+│   ├── explain.py                # Uträkningar och tolkningar utan LLM
+│   ├── quiz_generator.py         # Kontrollräknade quizfrågor
+│   ├── scenarios.py              # Genererade exempelföretag
+│   ├── page_blocks.py            # Gemensamma sidblock (scenario, chatt, delning)
+│   ├── i18n.py, i18n_en.py       # Språkväljare och engelska texter
 │   ├── llm.py                    # LLM-klient (HF Inference Providers)
 │   ├── prompts.py                # Promptbibliotek och fallback-mallar
 │   ├── humanizer.py              # Postprocessor för LLM-svar
-│   └── ui.py                     # UI-hjälparfunktioner
+│   ├── tutor.py                  # Förklaringsblock och steg-för-steg-guide
+│   ├── state_save.py             # Autospar och delbara länkar
+│   └── ui.py                     # Designsystem och sidomeny
 ├── data/
-│   └── quiz_fallback.json        # Statisk frågebanksfallback
-├── tests/                        # pytest-enhetstester
-│   ├── test_formatting.py
-│   ├── test_export.py
-│   ├── test_humanizer.py
-│   ├── test_kalkyl.py
-│   ├── test_investering.py
-│   ├── test_budget.py
-│   ├── test_standardkost.py
-│   ├── test_llm.py
-│   ├── test_prompts.py
-│   ├── test_scenarios.py
-│   ├── test_smoke.py
-│   ├── eval_fixtures.json        # Testdata för LLM-utvärdering
-│   ├── eval_llm.py               # Manuell LLM-utvärdering
-│   └── manual_llm_smoke.py       # Manuellt röktest
+│   └── quiz_fallback.json        # Inbyggd frågebank
+├── tests/                        # pytest, inklusive AppTest-körning av alla sidor
 ├── docs/
 │   ├── PRD.md                    # Produktkrav
 │   ├── METHODOLOGY.md            # Formler och antaganden
 │   ├── LIMITATIONS.md            # Kända begränsningar
 │   ├── ROADMAP.md                # Framåtblickande plan
 │   ├── PAGE_WALKTHROUGH.md       # Genomgång sida för sida
-│   └── IMPROVEMENTS.md           # Utvärdering och förbättringsförslag
+│   └── IMPROVEMENTS.md           # Utvärdering och genomförda förbättringar
 ├── .streamlit/
 │   ├── config.toml               # Tema
 │   └── secrets.toml.example      # Mall för hemligheter
@@ -157,7 +150,7 @@ ekonomistyrning/
 - [docs/PRD.md](docs/PRD.md) - Vision, målanvändare, scope, success metrics, risk register
 - [docs/METHODOLOGY.md](docs/METHODOLOGY.md) - Alla formler, antaganden och kapitelreferenser
 - [docs/PAGE_WALKTHROUGH.md](docs/PAGE_WALKTHROUGH.md) - Genomgång av varje sida och interaktion
-- [docs/IMPROVEMENTS.md](docs/IMPROVEMENTS.md) - Utvärdering per sida och realistiska förbättringar
+- [docs/IMPROVEMENTS.md](docs/IMPROVEMENTS.md) - Utvärdering per sida och vad som har genomförts
 
 Läs PRD.md och METHODOLOGY.md innan du börjar utveckla en ny modul.
 
@@ -166,32 +159,32 @@ Läs PRD.md och METHODOLOGY.md innan du börjar utveckla en ny modul.
 Detta är ett portföljprojekt med seriös pedagogisk ambition, inte en
 färdig kommersiell produkt. Kända begränsningar:
 
-### LLM och AI
+### LLM
 - Hugging Face Inference Providers kan ha 10 till 30 sekunders latens
-  vid kalla anrop. Streaming används men en ovan användare kan uppleva
-  väntetid. En GitHub Actions workflow pingar appen var tionde minut
-  under arbetstid för att mildra detta.
-- Qwen3-14B är inte tränad primärt på svensk ekonomistyrningslitteratur.
-  Räkna med enstaka klumpiga formuleringar. En ordlista i systempromten
+  vid kalla anrop. En GitHub Actions workflow pingar appen var tionde
+  minut under arbetstid för att mildra detta.
+- Qwen3 är inte tränad primärt på svensk ekonomistyrningslitteratur.
+  Räkna med enstaka klumpiga formuleringar. En ordlista i systemprompten
   och en utökad humanizer mildrar detta.
 - LLM kan göra logiska feltolkningar även när siffrorna är korrekta.
   Verifiera alltid mot beräkningarna ovan. Appen flaggar när tutorn
   citerar siffror som inte matchar kalkylen.
-- 50 anrop per session. Uppdatera sidan för att fortsätta utan att
-  förlora inmatningar (autospar är aktivt).
+- 50 anrop per session. Beräkningar och offline-förklaringar fungerar
+  även när gränsen är nådd.
 
 ### Omfång
 - 5 moduler täcker cirka 40 procent av Anderssons bok (kapitel 4, 6, 7,
   8, 10, 13, 14, 15, 17). Kapitel 11, 12, 16, 18 till 22 är inte
   implementerade.
-- Monte Carlo antar normalfördelning och oberoende mellan parametrar.
+- Monte Carlo antar normalfördelning och oberoende mellan parametrar
+  (utom den valbara korrelationen mellan årens kassaflöden).
+- Med engelska som språk översätts gränssnittet, uträkningarna och
+  offline-förklaringarna. Förklaringar från förklaringstjänsten och
+  quizfrågorna är på svenska.
 
 ### Teknik
 - Streamlit Community Cloud free tier har 1 GB RAM och kallstart efter
   inaktivitet.
-- Sessionstillstånd förloras vid sidladdning utanför moduler med
-  autospar (kalkyl och investering).
-- Excel-export är begränsad till en huvudchart per modulblad.
 
 ### Pedagogik
 - Författaren är ekonom, inte didaktiker. Designval bygger på
@@ -206,6 +199,10 @@ och [docs/ROADMAP.md](docs/ROADMAP.md) för planerade v2 förbättringar.
 ```bash
 pytest tests/ -v
 ```
+
+`tests/test_pages.py` kör varje sida med Streamlits AppTest (på svenska
+och engelska, utan förklaringstjänst), och `tests/test_i18n.py` kontrollerar
+att varje gränssnittstext har en engelsk översättning.
 
 Med täckningsrapport (coverage):
 
@@ -231,4 +228,4 @@ MIT
 
 Appen är inte officiellt kopplad till boken eller dess förlag. Alla exempelföretag är fiktiva och alla siffror är konstruerade för pedagogiskt syfte.
 
-**Integritet:** När LLM-tutorn används skickas dina prompter till Hugging Face Inference Providers för bearbetning. Mata inte in känsliga personuppgifter. Alla beräkningar sker lokalt i din webbläsare/server, det är endast LLM-förklaringar som går via externt API.
+**Integritet:** När förklaringstjänsten används skickas dina prompter till Hugging Face Inference Providers för bearbetning. Mata inte in känsliga personuppgifter. Alla beräkningar sker lokalt på servern; det är endast förklaringarna som går via externt API.

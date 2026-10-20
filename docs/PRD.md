@@ -5,14 +5,14 @@
 **Owner:** Project author
 **Last updated:** 2026-05-05
 **Build window:** 9 days
-**Major change in v2:** Qwen3-14B integration via Hugging Face Inference Providers across all modules including dynamic quiz, with hybrid banking and academic register and two layer humanizer.
+**Major change in v2:** Qwen3 integration (Qwen3-8B by default, Qwen3-14B selectable) via Hugging Face Inference Providers across all modules including dynamic quiz, with hybrid banking and academic register and two layer humanizer.
 **Major change in v2.1:** Added section 10 (UI architecture and design system) documenting utils/ui.py, color token semantics, component interaction model, sidebar, LLM UI elements, chart theme, and accessibility. Renumbered old sections 10–14 to 11–15.
 
 ---
 
 ## 1. Vision
 
-Build an interactive Swedish language web application that lets students of Göran Andersson's *Ekonomistyrning: beslut och handling* practice the book's quantitative methods through hands on calculation, visualization, scenario testing, and intelligent tutoring. The app converts passive reading into active learning across five integrated modules covering cost calculation, investment appraisal, budgeting, variance analysis, and self assessment, each augmented by a Qwen3-14B language model that explains results, guides users step by step, answers free form questions, and generates contextual quizzes.
+Build an interactive Swedish language web application that lets students of Göran Andersson's *Ekonomistyrning: beslut och handling* practice the book's quantitative methods through hands on calculation, visualization, scenario testing, and intelligent tutoring. The app converts passive reading into active learning across five integrated modules covering cost calculation, investment appraisal, budgeting, variance analysis, and self assessment, each augmented by a Qwen3 language model that explains results, guides users step by step, answers free form questions, and generates contextual quizzes.
 
 ## 2. Why this exists
 
@@ -59,11 +59,11 @@ Andersson's textbook is concept rich but practice poor. Students typically read 
 
 | Module | Coverage | Kapitel | LLM features |
 |---|---|---|---|
-| Kalkyl | Självkostnadskalkyl (pålägg), bidragskalkyl, ABC kalkyl | 4, 6, 7, 8 | Auto explanation, step guide, Q&A chat, LLM-generated scenarios on demand |
-| Investering | NPV, IRR, payback, annuitet, känslighetsanalys, inflation/skatt, Monte Carlo | 10 (all sections) | Auto explanation, sensitivity narrative, Monte Carlo interpretation, Q&A chat |
-| Budget | Resultatbudget, likviditetsbudget, balansbudget med automatisk länkning | 13, 14, 15 | Budget consistency narrative, Q&A chat |
-| Standardkostnadsanalys | Volymavvikelse, prisavvikelse, effektivitetsavvikelse, fasta omkostnader | 17 | Avvikelse interpretation with probable cause analysis, Q&A chat |
-| Kunskapstest | Dynamisk LLM genererad scenariofråga per kapitelkluster med deterministisk verifikation | 4 to 17 | Question generation, answer verification via calculator, explanation |
+| Kalkyl | Självkostnadskalkyl (pålägg) med prissättning, bidragskalkyl med känslighetstabell, ABC kalkyl jämförd med traditionell fördelning | 4, 6, 7, 8 | Auto explanation, step guide, Q&A chat, LLM-generated scenarios on demand |
+| Investering | NPV, IRR, payback, annuitet med restvärde och rörelsekapital, NPV-profil, känslighetsanalys, inflation/skatt, Monte Carlo, jämförelse av alternativ | 10 (all sections) | Auto explanation, sensitivity narrative, Monte Carlo interpretation, Q&A chat |
+| Budget | Resultatbudget, likviditetsbudget, balansbudget med automatisk länkning, nyckeltal, likviditetsbudget per månad | 13, 14, 15 | Budget consistency narrative, Q&A chat |
+| Standardkostnadsanalys | Volym-, pris- och effektivitetsavvikelse för flera kostnadsslag, budget- och volymavvikelse för fasta omkostnader | 17 | Avvikelse interpretation with probable cause analysis, Q&A chat |
+| Kunskapstest | LLM-genererade frågor med kontroller, och offline frågor vars svar räknas fram av kalkylatorerna | 4 to 17 | Question generation, answer verification via calculator, explanation |
 
 ### Out of scope (v1)
 
@@ -72,7 +72,7 @@ Andersson's textbook is concept rich but practice poor. Students typically read 
 * Benchmarking (kapitel 20) — future work
 * Prestationsmätning / balanced scorecard (kapitel 21) — future work
 * User accounts, authentication, persistent server side storage
-* Multi language support (Swedish only)
+* Translation of explanations from the explanation service and of quiz questions (the interface itself has a Swedish / English switch)
 * Mobile native app (web responsive only)
 * Voice interface
 * Per user LLM fine tuning
@@ -120,7 +120,7 @@ Andersson's textbook is concept rich but practice poor. Students typically read 
 ### 7.1 Provider and model
 
 * **Provider:** Hugging Face Inference Providers
-* **Model:** Qwen/Qwen3-14B (or compatible Qwen3 variant exposed by HF Inference Providers)
+* **Model:** Qwen/Qwen3-8B by default, Qwen/Qwen3-14B selectable in the sidebar (or a compatible Qwen3 variant exposed by HF Inference Providers)
 * **Auth:** HF token via Streamlit secrets, fallback to environment variable
 * **Client:** `huggingface_hub.InferenceClient` for synchronous calls; streaming where supported
 
@@ -192,7 +192,7 @@ If LLM is unavailable (timeout, rate limit, missing token):
 
 ## 8. Non functional requirements
 
-* **Language:** All UI text, labels, error messages, help text, and LLM output in Swedish. Code comments in English.
+* **Language:** Swedish by default for all UI text, labels, error messages, help text and LLM output. An English switch translates the interface, worked examples and offline explanations. Code comments in English.
 * **Accessibility:** Color choices must remain readable for color blind users. Use shape and text in addition to color for variance signaling.
 * **Performance:** Monte Carlo with 10,000 iterations completes in under 3 seconds. LLM streaming first token under 3 seconds, full response under 10 seconds typically.
 * **Browser support:** Latest Chrome, Firefox, Safari, Edge.
@@ -310,7 +310,7 @@ Chart axis labels, grid lines, and hover tooltips provide all data in text form 
 
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
-| Scope creep beyond 5 modules + LLM | High | Delay launch | Hard freeze on day 7 morning, only polish after |
+| Scope creep beyond 5 modules + LLM | High | Delay launch | Feature freeze before launch, only polish after |
 | HF Inference Providers latency or outage | Medium | Poor UX or empty explanations | Streaming + deterministic fallback template + status badge |
 | LLM hallucination in quiz answers | Medium | Pedagogical harm | Deterministic verification before display, max 3 retries, static fallback bank |
 | LLM hallucination in explanations | Medium | Credibility loss | Numeric values automatically checked against calculator output; flagged if mismatch |
@@ -360,5 +360,5 @@ A small evaluation harness in `tests/eval_llm.py` runs once per release:
 * Streamlit documentation: https://docs.streamlit.io
 * Plotly Python documentation: https://plotly.com/python
 * Hugging Face Inference Providers: https://huggingface.co/docs/inference-providers
-* Qwen3 model card: https://huggingface.co/Qwen/Qwen3-14B
+* Qwen3 model card: https://huggingface.co/Qwen/Qwen3-8B
 * Humanizer skill (developer reference for prompt engineering): https://github.com/blader/humanizer

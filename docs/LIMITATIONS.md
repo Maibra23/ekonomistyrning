@@ -1,7 +1,7 @@
 # LIMITATIONS: Kända begränsningar i Ekonomistyrning Sandbox
 
-**Version:** 1.0
-**Senast uppdaterad:** 2026-05-19
+**Version:** 1.1
+**Senast uppdaterad:** 2026-10-19
 **Syfte:** Detta dokument är den kanoniska, ärliga inventeringen av allt
 som inte fungerar perfekt, allt som saknas och allt som accepteras som
 en designkompromiss för v1. Det refereras från README.md och kompletteras
@@ -9,8 +9,8 @@ av [docs/ROADMAP.md](ROADMAP.md), som beskriver hur dessa begränsningar
 kan adresseras i v2, v3 och v4.
 
 Att vara öppen med begränsningar är en del av projektets identitet.
-Verktyget är ett pedagogiskt sandlådeexempel byggt på tio dagar av en
-ekonom utan formell programmeringsutbildning. Det är inte en
+Verktyget är ett pedagogiskt sandlådeexempel byggt av en ekonom utan
+formell programmeringsutbildning. Det är inte en
 kommersiell produkt. Den läsare som söker en produktionsfärdig
 ekonomistyrningsapplikation hittar inte den här. Den läsare som vill
 förstå hur en kompetent ekonom tänker kring scope, risk och teknisk
@@ -31,7 +31,7 @@ kärnvärdet och kräver ingen åtgärd före lansering.
 
 ---
 
-## 3.1 LLM och AI begränsningar
+## 3.1 LLM-begränsningar
 
 ### Hugging Face Inference Providers latens 🔴
 
@@ -51,49 +51,52 @@ provider-instansen. Första anropet kan fortfarande vara långsamt på
 helgkvällar. Användare på mobil med dålig anslutning kan uppleva ännu
 längre latens.
 
-### Qwen3-14B svenska kvalitet 🔴 (mildrad efter day 10)
+### Qwen3 svenska kvalitet 🟡 (mildrad)
 
-Modellen är primärt tränad på engelska och kinesiska. Svenska
-ekonomistyrningstermer kan blandas ihop, böjningar bli felaktiga och
-engelska låneord smyga sig in.
+Modellen (Qwen3-8B som standard, Qwen3-14B valbar) är primärt tränad på
+engelska och kinesiska. Svenska ekonomistyrningstermer kan blandas ihop,
+böjningar bli felaktiga och engelska låneord smyga sig in.
 
-**Aktuell hantering:** Day 10 introducerade en ordlista (TERMINOLOGY_GLOSSARY
-i utils/prompts.py) som injiceras i systempromten. En utökad humanizer
-(Layer 2) städar bort vanliga svenska AI-tells och normaliserar dashes.
-Resultatet är professionellt utan att vara perfekt.
+**Aktuell hantering:** En ordlista (TERMINOLOGY_GLOSSARY i
+utils/prompts.py) injiceras i systempromten. En utökad humanizer (Layer 2)
+städar bort vanliga stelfraser och normaliserar tankstreck. Appen räknar
+alltid själv; modellen beskriver bara verifierade siffror. Utan
+förklaringstjänsten visas deterministiska uträkningar och tolkningar, så
+ingen funktion är beroende av modellens språk.
 
 **Kvarvarande risk:** Grammatiska fel kan fortfarande passera. Vissa
 nyanser i svenska ekonomistyrningstexter är subtila och en finetuned
 modell på Andersson-korpus skulle ge betydligt bättre resultat. Detta
 planeras i v3.
 
-### Numerisk hallucination 🟡 (surface warning added day 10)
+### Numerisk hallucination 🟡 (varning i gränssnittet)
 
 Modellen kan citera siffror som inte exakt matchar kalkylatorns utdata.
 En användare som litar på tutorns siffra istället för diagrammets siffra
 får fel mental bild.
 
 **Aktuell hantering:** utils/llm.verify_grounding extraherar siffror ur
-LLM-svaret och jämför mot ett expected_numbers-dict. Day 10 lade till en
-gul varningsruta i alla moduler när grounding mismatch upptäcks.
+LLM-svaret och jämför mot ett expected_numbers-dict. En gul varningsruta
+visas i alla moduler när grounding mismatch upptäcks.
 
 **Kvarvarande risk:** Grounding kan ge falskpositiva när modellen citerar
 ett mellansteg som råkar likna en kalkylsiffra. Användaren måste
 fortfarande själv verifiera att tolkningen är rimlig.
 
-### Quiz pedagogiskt platta frågor 🟡 (quality filter added day 10)
+### Quiz pedagogiskt platta frågor 🟡 (kvalitetsfilter)
 
-En numeriskt korrekt fråga kan ändå vara värdelös som lärtillfälle. Day
-10 introducerade en självvärderingsprompt som ber modellen betygsätta
-pedagogiskt värde, tydlighet och realism på 1 till 5.
+En numeriskt korrekt fråga kan ändå vara värdelös som lärtillfälle. De
+LLM-genererade frågorna innehåller en självvärdering av pedagogiskt värde,
+tydlighet och realism på 1 till 5, som visas i en expander.
 
-**Aktuell hantering:** Frågor med totalpoäng under 12 av 15 regenereras
-upp till två gånger. Efter det accepteras den sista kandidaten för att
-inte blockera användaren. Poängen visas i en expander för transparens.
+**Aktuell hantering:** Offline (och när sessionens gräns är nådd) kommer
+frågorna från en parametriserad generator vars svar räknas fram av appens
+egna kalkylatorer, kompletterad med en frågebank med begreppsfrågor.
+Felaktiga flervalsalternativ bygger på typiska misstag.
 
-**Kvarvarande risk:** Modellen kan vara generös med sina egna poäng.
-Mer robust kvalitet kräver mänsklig validering eller en separat
-betygsättningsmodell.
+**Kvarvarande risk:** Modellen kan vara generös med sina egna poäng. De
+genererade frågorna följer ett begränsat antal mallar per område och är
+skrivna på svenska även när gränssnittet är på engelska.
 
 ### Inget långtidsminne 🟡
 
@@ -109,17 +112,16 @@ repetition saknas dock, och inget följer med över flera enheter.
 **Planerad lösning:** v2 planerar persistent användarkonton, vilket skulle
 möjliggöra att tutorn minns dina tidigare scenarier och svaga punkter.
 
-### 50 anrop session cap 🟡 (friendly UX added day 10)
+### 50 anrop session cap 🟡
 
 För att inte slösa HF-kvot finns en hård gräns på 50 LLM-anrop per
 session. Att slå i taket var tidigare ett kryptiskt fel.
 
-**Aktuell hantering:** Day 10 introducerade LLMSessionCapError och ett
-vänligt svenskt info-kort. Kortet är numera enbart informativt: räknaren
-kan inte nollställas från gränssnittet (kostnadsskydd, se V2 i
-granskningen 2026-06-11), och utöver sessionstaket finns en serverside
+**Aktuell hantering:** LLMSessionCapError visar ett vänligt
+info-kort. Kortet är numera enbart informativt: räknaren
+kan inte nollställas från gränssnittet (kostnadsskydd), och utöver sessionstaket finns en serverside
 dagsbudget (`LLM_DAILY_CAP`, standard 300 anrop/dag) som delas av alla
-sessioner och överlever omladdningar. Efter day 10 centraliserades dessutom anropsräkningen i
+sessioner och överlever omladdningar. Anropsräkningen är centraliserad i
 `cached_chat`: varje unik prompt debiteras taket **en gång per session**,
 så cacheträffar och oavsiktliga rerenderingar (widget-ändring, chatt,
 flikbyte) är gratis. Inmatningssektionerna ligger nu i `st.form` med en
@@ -129,7 +131,8 @@ tömde budgeten enbart genom att man experimenterade.
 
 **Kvarvarande risk:** En entusiastisk användare som kör många quiz eller
 bekräftar många olika scenarier kan fortfarande slå i taket mitt i en
-lärsession. Beräkningar och diagram fungerar normalt utan tutor.
+lärsession. Beräkningar, diagram och offline-förklaringar fungerar normalt
+utan tutor.
 
 ### Provider lock in 🟢
 
@@ -146,7 +149,7 @@ en katastrof.
 
 ## 3.2 Streamlit Cloud begränsningar
 
-### Kallstart latens 🔴 (mitigated by keep alive workflow day 10)
+### Kallstart latens 🔴 (mildrad med keep alive-workflow)
 
 Streamlit Community Cloud spinner ner inaktiva appar efter cirka 15
 minuters inaktivitet. Första besökaren får då vänta 30 till 60 sekunder
@@ -172,16 +175,17 @@ utvecklingsmiljö men kan ta tre till fem på Cloud.
 **Kvarvarande risk:** Vid framtida features med större matriser eller
 DataFrames kan minnesgränsen bita.
 
-### Session state förloras vid reload 🟢 (URL-persistens 2026-06-11)
+### Session state förloras vid reload 🟢 (URL-persistens)
 
 Streamlit nollställer st.session_state vid sidladdning.
 
 **Aktuell hantering:** utils/state_save.py speglar varje moduls sparade
 inmatningar till st.query_params som en komprimerad base64url-blob (en
 parameter per modul). Vid en riktig webbläsaromladdning återställs
-inmatningarna från URL:en, och aktuellt läge kan delas som länk. Kalkyl,
-Investering (alla flikar) och Budget har autospar; avkodningen är
-storleksbegränsad och ignorerar korrupta payloads.
+inmatningarna från URL:en. Varje modulsida har en knapp "Dela dina
+siffror" som visar länken, och språkvalet följer med. Alla moduler har
+autospar; avkodningen är storleksbegränsad och ignorerar korrupta
+payloads.
 
 **Kvarvarande risk:** LLM-förklaringar och chatthistorik följer inte
 med URL:en (medvetet: de är för stora och regenereras på begäran).
@@ -217,8 +221,7 @@ och 17 (standardkostnad). Kapitel 11 (effektivitet), 12 (kvalitet),
 16 (kalkylprinciper i tjänsteföretag), 18 (transferpriser) och 19-22
 (strategisk styrning, balanserat styrkort, prestandamätning) saknas.
 
-**Aktuell hantering:** Ingen, det är ett bevisat scope-val för att hinna
-färdigt på tio dagar.
+**Aktuell hantering:** Ingen, det är ett medvetet scope-val.
 
 **Planerad lösning:** v2 lägger till kapitel 11 och 12. v3 adresserar
 16, 18 till 22.
@@ -239,8 +242,7 @@ mjuka delen av boken.
 Anderssons övningsfacit är upphovsrättsskyddat. Appens scenarier är
 fiktiva men följer samma struktur som typiska bokuppgifter.
 
-**Aktuell hantering:** Day 10 introducerade dynamisk LLM-genererad
-scenariovariation så att studenten ser nya företag i stället för en
+**Aktuell hantering:** Dynamisk scenariovariation så att studenten ser nya företag i stället för en
 fast uppsättning. Detta minskar känslan av läroboksexempel utan att
 kopiera material.
 
@@ -259,7 +261,7 @@ praktiska fall. Användaren kan modellera valfri hierarki.
 **Kvarvarande risk:** En student som söker en specifik mallstruktur från
 boken hittar inte den.
 
-### Monte Carlo antar normalfördelning 🟢 (korrelation tillagd 2026-06-11)
+### Monte Carlo antar normalfördelning 🟢 (korrelation mellan år valbar)
 
 Monte Carlo-modulen antar att varje parameter följer en normalfördelning.
 
@@ -275,49 +277,42 @@ korrelationsmatris (inte bara konstant parvis korrelation).
 
 ## 3.4 Teknik begränsningar
 
-### Inga automatiserade browser tester 🟡
+### Inga riktiga browsertester 🟢
 
-CI kör pytest men ingen Playwright eller motsvarande. UI-regressioner
-upptäcks först vid manuell smoke test.
+CI kör pytest, inklusive tests/test_pages.py som kör varje sida med
+Streamlits AppTest (på svenska och engelska, utan förklaringstjänst) och
+klickar igenom centrala flöden. Det fångar exceptions och logikfel men
+inte layoutproblem i en riktig webbläsare.
 
-**Aktuell hantering:** Day 10 introducerade CI som åtminstone garanterar
-att alla beräknande tester passerar.
+**Planerad lösning:** En minimal Playwright-svit för visuella
+regressioner.
 
-**Planerad lösning:** v2 lägger till en minimal Playwright-svit som
-verifierar att varje sida laddar utan exception.
-
-### IRR konvergens 🟡 (mitigated with edge case messages day 10)
+### IRR konvergens 🟡 (förklarande meddelanden vid kantfall)
 
 numpy_financial.irr returnerade tidigare None vid kantfall
 (flera teckenbyten, alla nollor, positivt initialt kassaflöde) utan
 förklaring. Detta såg ut som en bug.
 
-**Aktuell hantering:** Day 10 introducerade tuple-signaturen
-irr(cash_flows) -> (value, message). Edge cases producerar tydliga
+**Aktuell hantering:** irr(cash_flows) returnerar (value, message). Edge cases producerar tydliga
 svenska meddelanden så att studenten lär sig om mångtydigheten i IRR.
 
 **Kvarvarande risk:** Vid extremt udda kassaflöden kan bisection
 misslyckas på 200 iterationer. I praktiken inträffar detta inte för
 realistiska investeringsfall.
 
-### Excel-export begränsad till en chart per modulblad 🟡 (partial fix day 10)
+### Excel-export utan PDF-alternativ 🟢
 
-xlsxwriter stöder rika charts men appen exporterar i v1 maximalt en
-chart per blad.
+Alla moduler exporterar till Excel med företagsnamn, flera blad och
+diagram (positionerade efter rubrikraderna). En utskriftsfärdig rapport
+finns inte.
 
-**Aktuell hantering:** Day 10 lade till charts-kwargen till
-utils.export.export_to_excel. Varje modul exporterar nu åtminstone
-en chart per huvudblad.
-
-**Planerad lösning:** v2 utforskar flera charts per blad samt PDF-export
-för en mer komplett rapport.
+**Planerad lösning:** v2 utforskar PDF-export för en mer komplett rapport.
 
 ### Streamlits header och meny är dolda på desktop 🟢
 
 Designsystemet gömmer Streamlits inbyggda header, meny och verktygsrad
 på desktop för ett renare uttryck. Det tar också bort inbyggda vägar
-till t.ex. utskrift och skärminställningar (medvetet val, dokumenterat
-efter granskningen 2026-06-11).
+till t.ex. utskrift och skärminställningar (medvetet val).
 
 **Aktuell hantering:** Under 768 px visas headern igen eftersom den
 hostar sidofältets expandera/stäng-kontroll, som är enda vägen till
@@ -330,8 +325,8 @@ mildrar sifferhallucination men inte instruktionskapning ("ignorera
 systemprompten ...").
 
 **Aktuell hantering:** Skadevärdet är lågt i denna app: LLM:en har ingen
-verktygsaccess, all LLM-text HTML-escapas innan rendering (XSS-skyddet
-2026-06-11) och svaren påverkar inga beräkningar. Kvarstående effekt är
+verktygsaccess, all LLM-text HTML-escapas innan rendering och svaren
+påverkar inga beräkningar. Kvarstående effekt är
 i värsta fall ett vilseledande textsvar.
 
 ### Ingen mobil native app 🟢
@@ -344,15 +339,17 @@ slidrar och data_editor är klumpig på små skärmar.
 **Planerad lösning:** v3 utforskar Flutter eller React Native för en
 parallell mobilapp.
 
-### Endast svenska 🟢
+### Förklaringar och quiz endast på svenska 🟢
 
-UI och tutorprompts är hårdkodade på svenska. En engelsk användare kan
-läsa men inte använda appen fullt ut.
+Gränssnittet kan visas på svenska eller engelska (språkväljare i
+sidomenyn). Uträkningar, regelbaserade tolkningar och offline-förklaringar
+översätts också. Förklaringar från förklaringstjänsten och quizfrågorna är
+däremot alltid på svenska, och sidan säger det.
 
-**Aktuell hantering:** Ingen. Målgruppen är svenska ekonomistudenter.
+**Aktuell hantering:** Målgruppen är svenska ekonomistudenter och
+kapitelreferenserna pekar mot den svenska boken.
 
-**Planerad lösning:** v2 utforskar i18n och engelsk översättning som
-en valbar inställning.
+**Planerad lösning:** Engelska tutorpromptar och översatta frågemallar.
 
 ---
 
@@ -407,17 +404,17 @@ verkliga case.
 
 ## 3.6 Portfölj och karriärbegränsningar
 
-### 10 dagar är aggressivt för omfånget 🔴
+### Stort omfång för ett enpersonsprojekt 🟡
 
-Att bygga fem moduler med LLM-integration, fallback, grounding,
-humanizer, autosave, dynamiska scenarier och svensk lokalisation på tio
-dagar är ambitiöst. Kvalitet och scope har konkurrerat hela vägen.
+Fem moduler med LLM-integration, offline-förklaringar, grounding,
+humanizer, autospar, dynamiska scenarier och två språk är mycket för ett
+enpersonsprojekt. Kvalitet och scope har konkurrerat hela vägen.
 
-**Aktuell hantering:** Day 10 är en hardening pass som adresserar de
-viktigaste kvalitetsbristerna identifierade i post build review.
+**Aktuell hantering:** Beräkningarna har enhetstester mot handräknade
+exempel, och varje sida körs i CI med AppTest.
 
 **Kvarvarande risk:** En kritisk granskare kan hitta enskilda buggar
-eller ojämnheter. Detta är pris för tempot.
+eller ojämnheter.
 
 ### Streamlit ensamt är inte imponerande nog för seniora roller 🟡
 
@@ -432,8 +429,8 @@ verktyg, inte som en frontend-portfölj.
 En internationell reviewer kan inte bedöma den språkliga kvaliteten i
 tutorpromptens svar.
 
-**Aktuell hantering:** README och CV-blurb finns både på svenska och
-engelska för att underlätta granskning.
+**Aktuell hantering:** README innehåller en engelsk sammanfattning och
+gränssnittet kan växlas till engelska.
 
 ### HF tokens signalerar medvetenhet, inte expertis 🟡
 
@@ -491,7 +488,7 @@ cookies utöver Streamlits egna session cookies.
 
 1. **Kallstart latens** (🔴). Användare på mobila enheter eller efter
    en helg får vänta. Mildrad av keep alive workflow men inte borta.
-2. **Qwen3 svenska kvalitet** (🔴). Modellen är inte en svensk
+2. **Qwen3 svenska kvalitet** (🟡). Modellen är inte en svensk
    ekonomistyrningsexpert. Ordlistan i systempromten och humanizern
    städar mycket men inte allt.
 3. **5 av 23 kapitel** (🟡). Appen är inte en komplett ersättning för
@@ -499,9 +496,8 @@ cookies utöver Streamlits egna session cookies.
    delarna.
 4. **Ingen användarvalidering före lansering** (🟡). Alla designval är
    hypoteser. Riktig feedback samlas in efter lansering.
-5. **10 dagar är aggressivt** (🔴). Polish och edge cases prioriterades
-   under day 10 men en kritisk reviewer kan fortfarande hitta enskilda
-   sömmar.
+5. **Stort omfång för ett enpersonsprojekt** (🟡). En kritisk reviewer
+   kan fortfarande hitta enskilda sömmar.
 
 ---
 
@@ -509,4 +505,5 @@ cookies utöver Streamlits egna session cookies.
 
 | Version | Datum      | Förändring                                       |
 |---------|------------|--------------------------------------------------|
-| 1.0     | 2026-05-19 | Initial canonical inventory efter day 10         |
+| 1.0     | 2026-05-19 | Initial inventering                              |
+| 1.1     | 2026-10-19 | Uppdaterad efter offline-förklaringar, språkväljare, delbara länkar, AppTest-sidtester och länkad balansbudget |

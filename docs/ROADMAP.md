@@ -1,7 +1,7 @@
 # ROADMAP: Framåtblickande plan för Ekonomistyrning Sandbox
 
-**Version:** 1.0
-**Senast uppdaterad:** 2026-05-19
+**Version:** 1.1
+**Senast uppdaterad:** 2026-10-19
 **Syfte:** Detta dokument beskriver vad som skulle bygga på v1 om
 projektet får fortsatt liv. Varje punkt knyter explicit an till en eller
 flera begränsningar listade i [docs/LIMITATIONS.md](LIMITATIONS.md).
@@ -10,18 +10,18 @@ ROADMAP är inte ett kommersiellt löfte. Detta är ett portföljprojekt och
 inget i denna lista är garanterat. Listan finns för att visa att jag har
 tänkt igenom hur ett seriöst nästa steg skulle se ut.
 
-## v1.0 (denna release)
+## v1 (denna release)
 
-Levererat efter tio dagars bygge och en day 10 hardening pass:
+Levererat:
 
 - Fem moduler: Kalkyl (tre metoder), Investering (fyra tabbar), Budget
   (tre steg), Standardkostnadsanalys, Kunskapstest
-- LLM-tutor via Qwen3-14B (Hugging Face Inference Providers) med
-  deterministisk fallback
+- LLM-tutor via Qwen3-8B (Qwen3-14B valbar, Hugging Face Inference
+  Providers) med deterministisk fallback
 - Två-lager humanizer (system prompt + post processing)
 - Numerisk grounding-verifiering med UI-varning
 - Dynamiska LLM-genererade scenarier per modul och svårighetsgrad
-- Autospar för Kalkyl och Investering
+- Autospar i alla moduler, speglat till webbadressen
 - Excel-export med embedded charts
 - CI workflow för pytest på varje push
 - Keep alive workflow för att mildra Streamlit kallstart
@@ -35,6 +35,23 @@ Levererat efter tio dagars bygge och en day 10 hardening pass:
 - Liggande balansbudgetdiagram och förklarande verktygstips
 - Svensk ordlista i systempromten
 - Begränsningssektion i README, full inventering i docs/LIMITATIONS.md
+
+### v1.1 (2026-10-19)
+
+- Offline-förklaringar: uträkningar steg för steg med studentens siffror
+  och regelbaserade tolkningar; chatt och "Förklara djupare" döljs offline
+- Kunskapstest med parametriserad frågegenerator (svar räknade av
+  kalkylatorerna), inga upprepningar, poäng från sparad progression
+- Kalkyl: prissättning med vinstpålägg, känslighetstabell, ABC mot
+  traditionell fördelning och varning för ofördelad aktivitetskostnad
+- Investering: restvärde och rörelsekapital, NPV-profil, annuitetsrangordning
+  vid olika livslängd med Fishers skärningspunkt, Monte Carlo-export
+- Budget: länkade inmatningar (balansbudgeten går alltid ihop), kontroll av
+  ingående balans, nyckeltal och likviditetsbudget per månad
+- Standardkostnad: flera rörliga kostnadsslag, fasta omkostnaders
+  volymavvikelse och "Visa uträkningen"
+- Delbara länkar och svensk/engelsk språkväljare
+- AppTest-körning av alla sidor i CI
 
 ---
 
@@ -77,28 +94,28 @@ kräver bredare textmaterial för tutorn. Det betyder mer prompt-arbete.
 **Success metric:** Två nya moduler med samma kvalitet (autospar,
 grounding, fallback, scenario generation) som v1-modulerna.
 
-### 2.3 Engelsk språkversion
+### 2.3 Engelska förklaringar och quizfrågor
 
-**Adresserar:** [Endast svenska](LIMITATIONS.md#endast-svenska-).
+**Adresserar:** [Förklaringar och quiz endast på svenska](LIMITATIONS.md#förklaringar-och-quiz-endast-på-svenska-).
 
-**Implementationsskiss:** En i18n-modul med YAML-filer per språk. UI-strängar,
-tooltips, fallback-mallar och systempromten översätts. Tutorprompten
-bytsut beroende på språkval. Modellen byts till en variant med starkare
-engelska om relevant.
+Gränssnittet, uträkningarna och offline-förklaringarna finns redan på
+engelska (utils/i18n.py). Kvar är tutorpromptarna och frågemallarna.
 
-**Estimat:** Tre veckor för en god översättning. Inkluderar manuell
-review av en engelsk-talande ekonom.
+**Implementationsskiss:** Engelska varianter av systemprompten och
+quizpromptarna som väljs efter språkval, och översatta mallar i
+utils/quiz_generator.py via samma t()-funktion som gränssnittet.
+
+**Estimat:** En vecka, plus manuell granskning av en engelsktalande ekonom.
 
 **Blockers:** Andersson är på svenska. Kapitelreferenser måste fortsätta
-peka mot den svenska upplagan eller ersättas med engelska standardverk
+peka mot den svenska upplagan eller kompletteras med engelska standardverk
 (Drury, Horngren).
 
-**Success metric:** En användare kan växla mellan svenska och engelska
-i sidofältet utan att förlora inmatningar.
+**Success metric:** Med engelska valt är all text på sidan engelsk.
 
 ### 2.4 PDF rapport export
 
-**Adresserar:** [Excel-export begränsad till en chart per modulblad](LIMITATIONS.md#excel-export-begränsad-till-en-chart-per-modulblad--partial-fix-day-10).
+**Adresserar:** [Excel-export utan PDF-alternativ](LIMITATIONS.md#excel-export-utan-pdf-alternativ-).
 
 **Implementationsskiss:** ReportLab eller WeasyPrint genererar en PDF
 per modul. Layout med rubrik, sammanfattning, full kalkyl, alla charts
@@ -116,10 +133,10 @@ fil som ser tryckklar ut.
 
 ### 2.5 Förbättrad Swedish quality med utvärderings korpus
 
-**Adresserar:** [Qwen3-14B svenska kvalitet](LIMITATIONS.md#qwen3-14b-svenska-kvalitet--mildrad-efter-day-10).
+**Adresserar:** [Qwen3 svenska kvalitet](LIMITATIONS.md#qwen3-svenska-kvalitet--mildrad).
 
 **Implementationsskiss:** Bygga en utvärderingskorpus med 200 svenska
-ekonomistyrningsprompts och referenssvar. Köra Qwen3-14B, Llama-3-Nordic,
+ekonomistyrningsprompts och referenssvar. Köra Qwen3-8B, Qwen3-14B, Llama-3-Nordic,
 Gpt-4o-mini och kanske andra modeller på samma korpus och poängsätta
 manuellt. Välja den bästa för v2.
 
@@ -129,7 +146,7 @@ manuellt. Välja den bästa för v2.
 en handelshögskola skulle vara värdefull.
 
 **Success metric:** Den valda modellen presterar minst 20 procent bättre
-än Qwen3-14B på blind manuell utvärdering.
+än Qwen3-8B på blind manuell utvärdering.
 
 ---
 
@@ -152,12 +169,12 @@ boken.
 
 ### 3.2 Finetuned Qwen3 på svensk ekonomistyrning korpus
 
-**Adresserar:** [Qwen3-14B svenska kvalitet](LIMITATIONS.md#qwen3-14b-svenska-kvalitet--mildrad-efter-day-10).
+**Adresserar:** [Qwen3 svenska kvalitet](LIMITATIONS.md#qwen3-svenska-kvalitet--mildrad).
 
 **Implementationsskiss:** Samla in 5 000 till 10 000 svenska
 ekonomistyrningsförklaringar från publika källor (myndighetsrapporter,
 företagsårsredovisningar, akademiska artiklar med fri licens). LoRA
-finetuning av Qwen3-14B på denna korpus. Hosta på HF Spaces eller en
+finetuning av Qwen3 på denna korpus. Hosta på HF Spaces eller en
 egen GPU.
 
 **Estimat:** Två till tre månader. Tids bör läggas på korpuskvalitet.
@@ -165,7 +182,7 @@ egen GPU.
 **Blockers:** Begränsad publik svensk korpus för ekonomistyrning. Kräver
 licensundersökning.
 
-**Success metric:** Finetuned modell presterar bättre än base Qwen3-14B
+**Success metric:** Finetuned modell presterar bättre än base Qwen3
 på den interna utvärderingskorpusen.
 
 ### 3.3 Mobil native app eller responsiv förbättring
@@ -295,4 +312,5 @@ bryts ut till GitHub Issues om och när det blir aktuellt.
 
 | Version | Datum      | Förändring                          |
 |---------|------------|-------------------------------------|
-| 1.0     | 2026-05-19 | Initial roadmap efter day 10        |
+| 1.0     | 2026-05-19 | Initial roadmap                     |
+| 1.1     | 2026-10-19 | v1.1-leveransen, engelska kvar endast för förklaringar och quiz |
