@@ -49,6 +49,19 @@ SWEDISH_NUMBER_PATTERN = re.compile(
 )
 
 
+def _with_no_think(user_prompt: str, model: str) -> str:
+    """Switch off Qwen3's reasoning mode for a request.
+
+    Qwen3 otherwise spends part of ``max_tokens`` inside <think> blocks,
+    which are stripped afterwards: answers come back slower and long JSON
+    (quiz questions) gets cut off. The app does the arithmetic itself, so
+    the model only needs to narrate verified numbers.
+    """
+    if "qwen3" not in model.lower() or "/no_think" in user_prompt:
+        return user_prompt
+    return f"{user_prompt}\n/no_think"
+
+
 def _strip_think_tags(text: str) -> str:
     """Remove Qwen3 <think>...</think> reasoning blocks from output.
 
@@ -240,7 +253,7 @@ class LLMClient:
         """Single shot chat completion. Returns the text content."""
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
+            {"role": "user", "content": _with_no_think(user_prompt, self.model)},
         ]
         try:
             response = self._client.chat_completion(
@@ -268,7 +281,7 @@ class LLMClient:
         """
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
+            {"role": "user", "content": _with_no_think(user_prompt, self.model)},
         ]
         try:
             stream = self._client.chat_completion(

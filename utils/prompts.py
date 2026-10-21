@@ -156,6 +156,11 @@ _FIELD_LABELS: dict[str, str] = {
     "FO_procent": "Försäljningsomkostnad FO (%)",
     "antal_enheter": "Antal enheter",
     "sjalvkostnad_per_styck": "Självkostnad per styck (kr)",
+    "MO_per_styck": "Materialomkostnad MO per styck (kr)",
+    "TO_per_styck": "Tillverkningsomkostnad TO per styck (kr)",
+    "tillverkningskostnad_per_styck": "Tillverkningskostnad per styck (kr)",
+    "AO_per_styck": "Administrationsomkostnad AO per styck (kr)",
+    "FO_per_styck": "Försäljningsomkostnad FO per styck (kr)",
     "tillverkningskostnad": "Tillverkningskostnad totalt (kr)",
     "sjalvkostnad_totalt": "Självkostnad totalt (kr)",
     # Bidragskalkyl
@@ -292,6 +297,44 @@ def _format_labeled_block(inputs: dict[str, Any]) -> str:
     return "\n".join(f"- {t(_label_for(k))}: {_format_value(v)}" for k, v in inputs.items())
 
 
+# The textbook rules for each costing method. Without them a small model
+# happily applies every overhead rate to direct labour; with them it
+# narrates the calculator's numbers.
+METHOD_RULES: dict[str, str] = {
+    "sjalvkostnad": (
+        "Påläggsmetoden: MO (materialomkostnad) = direkt material × MO-pålägg. "
+        "TO (tillverkningsomkostnad) = direkt lön × TO-pålägg. "
+        "Tillverkningskostnad = direkt material + MO + direkt lön + TO. "
+        "AO (administrationsomkostnad) = tillverkningskostnad × AO-pålägg. "
+        "FO (försäljningsomkostnad) = tillverkningskostnad × FO-pålägg. "
+        "Självkostnad = tillverkningskostnad + AO + FO. "
+        "AO och FO läggs alltså på tillverkningskostnaden, aldrig på direkt lön."
+    ),
+    "bidrag": (
+        "Bidragskalkyl: täckningsbidrag (TB) per styck = pris − rörlig kostnad. "
+        "Resultat = TB per styck × volym − fasta kostnader. "
+        "Nollpunktsvolym = fasta kostnader / TB per styck. "
+        "Säkerhetsmarginal = (volym − nollpunktsvolym) / volym."
+    ),
+    "abc": (
+        "ABC: kostnad per drivarenhet = aktivitetens totala kostnad / total drivvolym. "
+        "En produkts omkostnad = summan av (drivarenheter som produkten förbrukar × "
+        "kostnad per drivarenhet). Total kostnad = direkt kostnad + omkostnad."
+    ),
+}
+
+
+def _method_rules_block(calc_type: str) -> str:
+    rules = METHOD_RULES.get(calc_type)
+    if not rules:
+        return ""
+    return (
+        f"\nMETODENS REGLER (följ exakt)\n{rules}\n"
+        "Alla mellanresultat finns i de beräknade siffrorna. Räkna inte om dem "
+        "med andra formler; förklara dem."
+    )
+
+
 def build_kalkyl_explanation_prompt(
     calc_type: str,
     inputs: dict[str, Any],
@@ -312,7 +355,7 @@ def build_kalkyl_explanation_prompt(
         f"\nMODULSPECIFIKT\n"
         f"Detta är en {method_label}. Förankra förklaringen i metodens beslutslogik. "
         f"Använd följande exakta siffror i din beräkning."
-    )
+    ) + _method_rules_block(calc_type)
     system_prompt = SYSTEM_PROMPT_BASE + extra_rules
 
     scenario_line = f"Scenario: {scenario_name}\n\n" if scenario_name else ""
@@ -340,7 +383,7 @@ def build_kalkyl_step_guide_prompt(
         "\nMODULSPECIFIKT\n"
         "Visa kalkylen som en lärare som går igenom uppgiften vid tavlan. "
         "Gå igenom varje steg numrerat, visa mellanresultat, motivera valet av metod."
-    )
+    ) + _method_rules_block(calc_type)
     system_prompt = SYSTEM_PROMPT_BASE + extra_rules
     user_prompt = (
         f"Indata:\n{_format_inputs_block(inputs)}\n\n"
@@ -457,6 +500,9 @@ def build_qa_prompt(
         "men förbli grundad i siffrorna och nämn metodens namn när det hjälper "
         "studenten orientera sig."
     )
+    # "kalkyl (sjalvkostnad)" -> the method rules for självkostnad
+    if "(" in module_context:
+        extra_rules += _method_rules_block(module_context.split("(", 1)[1].rstrip(")").strip())
     system_prompt = SYSTEM_PROMPT_BASE + extra_rules
 
     history_block = ""

@@ -477,3 +477,26 @@ def test_qa_prompt_does_not_duplicate_current_question():
     )
     assert usr_p.count(question) == 1
     assert "Vad är nollpunkten?" in usr_p
+
+
+def test_method_rules_reach_kalkyl_prompts():
+    from utils.prompts import (
+        build_kalkyl_explanation_prompt,
+        build_kalkyl_step_guide_prompt,
+        build_qa_prompt,
+    )
+
+    for sys_p, _ in (
+        build_kalkyl_explanation_prompt("sjalvkostnad", {"a": 1}, {"b": 2}),
+        build_kalkyl_step_guide_prompt("sjalvkostnad", {"a": 1}, {"b": 2}),
+        build_qa_prompt("kalkyl (sjalvkostnad)", {"a": 1}, {"b": 2}, "Varför?"),
+    ):
+        assert "AO (administrationsomkostnad) = tillverkningskostnad" in sys_p
+
+
+def test_qwen3_requests_disable_thinking():
+    from utils.llm import _with_no_think
+
+    assert _with_no_think("Fråga", "Qwen/Qwen3-8B").endswith("/no_think")
+    assert _with_no_think("Fråga\n/no_think", "Qwen/Qwen3-8B").count("/no_think") == 1
+    assert _with_no_think("Fråga", "other/model") == "Fråga"

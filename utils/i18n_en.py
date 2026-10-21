@@ -1135,4 +1135,9 @@ EN: dict[str, str] = {
     "Mindre svensk tillverkare som följer upp standardkostnad för en central insatsvara.":
         "Small Swedish manufacturer that tracks the standard cost of a key input.",
     "Frågorna är skrivna på svenska, kursens språk.": "The questions are written in Swedish, the language of the course.",
+    "Materialomkostnad MO per styck (kr)": "Material overhead MO per unit (SEK)",
+    "Tillverkningsomkostnad TO per styck (kr)": "Manufacturing overhead TO per unit (SEK)",
+    "Tillverkningskostnad per styck (kr)": "Manufacturing cost per unit (SEK)",
+    "Administrationsomkostnad AO per styck (kr)": "Administrative overhead AO per unit (SEK)",
+    "Försäljningsomkostnad FO per styck (kr)": "Selling overhead FO per unit (SEK)",
 }

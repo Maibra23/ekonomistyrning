@@ -445,7 +445,14 @@ with tab_sj:
         "FO_procent": fo_pct,
         "antal_enheter": int(units_sj),
     }
+    # Every intermediate per-unit figure goes to the model, so it narrates
+    # the calculator's numbers instead of rebuilding them with its own rules.
     sj_outputs = {
+        "MO_per_styck": dm * mo_pct / 100,
+        "TO_per_styck": dl * to_pct / 100,
+        "tillverkningskostnad_per_styck": tvk_u,
+        "AO_per_styck": ao_u,
+        "FO_per_styck": fo_u,
         "sjalvkostnad_per_styck": sj["sjalvkostnad_per_styck"],
         "tillverkningskostnad": sj["tillverkningskostnad"],
         "sjalvkostnad_totalt": sj["sjalvkostnad_totalt"],
