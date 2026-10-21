@@ -7,6 +7,8 @@ what every visitor sees when the token is missing or the budget is spent.
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 st = pytest.importorskip("streamlit")
@@ -30,8 +32,13 @@ def _offline(monkeypatch):
     monkeypatch.setattr(st, "page_link", lambda *a, **k: None)
 
 
+_ROOT = Path(__file__).resolve().parent.parent
+
+
 def _run(path: str, **query: str) -> AppTest:
-    at = AppTest.from_file(path, default_timeout=120)
+    # Absolute path: newer Streamlit resolves relative paths against the
+    # test file instead of the working directory.
+    at = AppTest.from_file(str(_ROOT / path), default_timeout=120)
     for key, value in query.items():
         at.query_params[key] = value
     at.run()
