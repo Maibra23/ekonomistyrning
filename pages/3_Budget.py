@@ -227,6 +227,18 @@ def _num_or(src: dict, key: str, default: float) -> float:
         return default
 
 
+def _opening(post: str) -> float:
+    """Current opening balance for ``post`` (kundfordringar, lager, ...).
+
+    Prefers the steg 3 widget value, which already holds a just-submitted
+    edit at the start of the run, over the stored value.
+    """
+    widget = st.session_state.get(f"inp_ob_{post}")
+    if widget is not None:
+        return float(widget)
+    return float(st.session_state.get(f"bud_ob_{post}", 0.0))
+
+
 if _bud_scenario is not None:
     intakter = _bud_scenario.get("intakter") or {}
     kostnader = _bud_scenario.get("kostnader") or {}
@@ -556,6 +568,12 @@ with st.expander(t("Steg 2: Likviditetsbudget"), expanded=True):
             finansiering=finansiering_belopp,
             forsaljning=forsaljning,
             inkop=inkop,
+            # The cash effect is the change from the opening balance. Steg 3
+            # renders after this step, so read its submitted widget values
+            # (falling back to the stored value) to avoid a one-run lag.
+            ib_kundfordringar=_opening("kundfordringar"),
+            ib_lager=_opening("lager"),
+            ib_leverantorsskulder=_opening("leverantorsskulder"),
         )
 
         # Extract key metrics
@@ -1123,7 +1141,8 @@ with st.expander(t("Steg 4: Likviditetsbudget per månad"), expanded=False):
             "(30 dagar = en månad). Personal, lokaler, övrigt, räntor och "
             "preliminärskatt betalas med en tolftedel per månad. Saldot i december "
             "kan skilja sig från Likvida medel UB i steg 2, eftersom årsbudgeten "
-            "räknar med lageruppbyggnad och ett förenklat rörelsekapital.")
+            "även räknar med lagrets förändring och månadsbudgeten räknar med "
+            "30-dagarsmånader.")
         )
 
 # ===========================================================================

@@ -312,13 +312,18 @@ plus Finansiering (lån, nyemission)
 = Förändring likvida medel
 ```
 
-Förändring rörelsekapital approximeras i appen som:
+Kredit- och lagertiderna ger rörelsekapitalets **utgående** nivå. Kassaeffekten är förändringen från den ingående balansen:
 
 ```
-Delta RK ungefär Försäljning × kundfordringar dagar / 365
-                plus Inköp × lager dagar / 365
-                minus Inköp × leverantörsskulder dagar / 365
+Kundfordringar UB     = Försäljning × kundfordringar dagar / 365
+Lager UB              = Inköp × lager dagar / 365
+Leverantörsskulder UB = Inköp × leverantörsskulder dagar / 365
+
+Delta RK = (Kundfordringar UB minus IB) plus (Lager UB minus IB)
+           minus (Leverantörsskulder UB minus IB)
 ```
+
+Ökat rörelsekapital binder kassa, minskat frigör kassa. Balansbudgeten använder samma förändring, så dess utgående kundfordringar, lager och leverantörsskulder blir exakt de nivåer som dagarna anger.
 
 Inköpen antas vara lika stora som de rörliga kostnaderna.
 
@@ -361,7 +366,7 @@ Inbetalning i månad m    = (1 minus andel) × Försäljning_(m minus floor(L)) 
 där andel = L minus floor(L)
 ```
 
-Ingående kundfordringar och leverantörsskulder betalas jämnt under den första kreditperioden. Personal, lokaler, övriga kostnader, räntor och preliminärskatt betalas med en tolftedel per månad; investering och finansiering i vald månad. Appen visar lägsta saldo och de månader då kassan blir negativ, alltså behovet av checkkredit. Decembersaldot kan skilja sig från årsbudgetens utgående kassa, eftersom årsbudgeten räknar med lageruppbyggnad och ett förenklat rörelsekapital.
+Ingående kundfordringar och leverantörsskulder betalas jämnt under den första kreditperioden. Personal, lokaler, övriga kostnader, räntor och preliminärskatt betalas med en tolftedel per månad; investering och finansiering i vald månad. Appen visar lägsta saldo och de månader då kassan blir negativ, alltså behovet av checkkredit. Decembersaldot kan skilja sig från årsbudgetens utgående kassa, eftersom årsbudgeten även räknar med lagrets förändring och månadsbudgeten räknar med 30-dagarsmånader.
 
 ---
 

@@ -157,3 +157,72 @@ class TestManadsbudget:
         assert len(norm) == 12
         assert sum(norm) == pytest.approx(1.0)
         assert norm[2] == pytest.approx(0.5)
+
+
+class TestWorkingCapitalUsesOpeningBalances:
+    """The days give the closing level; the cash effect is the change from IB.
+
+    Hand calculation with the app's default company:
+        Kundfordringar UB = 12 000 000 x 30/365 = 986 301   (IB 800 000)
+        Lager UB          =  4 800 000 x 45/365 = 591 781   (IB 500 000)
+        Leverantörsskulder UB = 4 800 000 x 30/365 = 394 521 (IB 400 000)
+        Delta RK = 186 301 + 91 781 + 5 479 = 283 562
+        Årets resultat 1 588 000 + avskrivningar 600 000 - 283 562
+        - investeringar 500 000 + finansiering 300 000 = 1 704 438
+    """
+
+    COSTS = {
+        "Rörliga kostnader": 4_800_000.0, "Personalkostnader": 3_200_000.0,
+        "Lokalkostnader": 800_000.0, "Avskrivningar": 600_000.0,
+        "Övriga kostnader": 400_000.0, "Finansiella kostnader": 200_000.0,
+    }
+    OB = {
+        "Anläggningstillgångar": 3_000_000.0, "Lager": 500_000.0,
+        "Kundfordringar": 800_000.0, "Likvida medel": 500_000.0,
+        "Eget kapital": 3_200_000.0, "Långsiktiga skulder": 1_200_000.0,
+        "Leverantörsskulder": 400_000.0,
+    }
+
+    def _budgets(self, ib_kf=800_000.0, kf_days=30):
+        resultat = build_resultatbudget({"Försäljning": 12_000_000.0}, self.COSTS)
+        likviditet = build_likviditetsbudget(
+            resultat, 500_000.0, kf_days, 30, 45, 500_000.0, 300_000.0,
+            12_000_000.0, 4_800_000.0,
+            ib_kundfordringar=ib_kf, ib_lager=500_000.0, ib_leverantorsskulder=400_000.0,
+        )
+        ob = {**self.OB, "Kundfordringar": ib_kf}
+        ob = balance_opening_equity(ob)
+        balans = build_balansbudget(
+            ob, resultat, likviditet, {"nyanskaffning": 500_000.0, "avskrivningar": 600_000.0}
+        )
+        return resultat, likviditet, balans
+
+    @staticmethod
+    def _post(df, name, col="Belopp"):
+        return float(df.loc[df["Post"] == name, col].values[0])
+
+    def test_cash_change_matches_hand_calculation(self):
+        _, likviditet, _ = self._budgets()
+        assert self._post(likviditet, "Delta rörelsekapital") == pytest.approx(-283_561.64, abs=1)
+        assert self._post(likviditet, "Förändring likvida medel") == pytest.approx(1_704_438.36, abs=1)
+
+    def test_closing_balances_equal_the_day_based_levels(self):
+        _, _, balans = self._budgets()
+        assert self._post(balans, "Kundfordringar", "Utgaende") == pytest.approx(12e6 * 30 / 365)
+        assert self._post(balans, "Lager", "Utgaende") == pytest.approx(4.8e6 * 45 / 365)
+        assert self._post(balans, "Leverantörsskulder", "Utgaende") == pytest.approx(4.8e6 * 30 / 365)
+        assert validate_budget_balance(balans)[0]
+
+    def test_falling_receivables_release_cash(self):
+        # 15 credit days on 12 MSEK = 493 151 closing, below the 800 000 opening:
+        # the receivables shrink, which brings cash in and lowers the balance.
+        _, likviditet, balans = self._budgets(kf_days=15)
+        assert self._post(likviditet, "Delta kundfordringar") == pytest.approx(800_000 - 12e6 * 15 / 365)
+        assert self._post(balans, "Kundfordringar", "Utgaende") == pytest.approx(12e6 * 15 / 365)
+        assert validate_budget_balance(balans)[0]
+
+    def test_cash_balance_reconciles_with_closing_cash(self):
+        _, likviditet, balans = self._budgets()
+        assert self._post(balans, "Likvida medel", "Utgaende") == pytest.approx(
+            500_000 + self._post(likviditet, "Förändring likvida medel")
+        )

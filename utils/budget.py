@@ -84,6 +84,9 @@ def build_likviditetsbudget(
     finansiering: float,
     forsaljning: float,
     inkop: float,
+    ib_kundfordringar: float = 0.0,
+    ib_lager: float = 0.0,
+    ib_leverantorsskulder: float = 0.0,
 ) -> pd.DataFrame:
     """Build a likviditetsbudget (cash flow budget).
 
@@ -91,12 +94,18 @@ def build_likviditetsbudget(
         Årets resultat + Avskrivningar - Delta rörelsekapital
         - Investeringar + Finansiering = Förändring likvida medel
 
-    Working capital change:
-        Delta RK = Försäljning * kf_dagar/365
-                 + Inkop * lager_dagar/365
-                 - Inkop * levsk_dagar/365
+    The credit and inventory days give the *closing* level of each
+    working-capital item; the cash effect is the change from the opening
+    balance:
+        Kundfordringar UB    = Försäljning * kf_dagar/365
+        Lager UB             = Inkop * lager_dagar/365
+        Leverantörsskulder UB = Inkop * levsk_dagar/365
+        Delta RK = (Kundfordringar UB - IB) + (Lager UB - IB)
+                 - (Leverantörsskulder UB - IB)
 
-    Positive delta RK = capital tied up = negative cash effect.
+    Positive delta RK = capital tied up = negative cash effect. With all
+    opening balances at zero (a start-up year) the change equals the
+    closing level.
 
     Args:
         resultat_df: DataFrame from build_resultatbudget.
@@ -108,6 +117,9 @@ def build_likviditetsbudget(
         finansiering: Net financing (positive = inflow, e.g. new loans).
         forsaljning: Total revenue (used for working capital calc).
         inkop: Total purchases (used for working capital calc).
+        ib_kundfordringar: Opening accounts receivable.
+        ib_lager: Opening inventory.
+        ib_leverantorsskulder: Opening accounts payable.
 
     Returns:
         DataFrame with columns ['Post', 'Belopp'].
@@ -124,9 +136,9 @@ def build_likviditetsbudget(
     avskrivningar = abs(avskrivningar_row)
 
     # Working capital change (delta rorelsekapital)
-    delta_kundfordringar = forsaljning * kundfordringar_dagar / 365
-    delta_lager = inkop * lager_dagar / 365
-    delta_leverantorsskulder = inkop * leverantorsskulder_dagar / 365
+    delta_kundfordringar = forsaljning * kundfordringar_dagar / 365 - ib_kundfordringar
+    delta_lager = inkop * lager_dagar / 365 - ib_lager
+    delta_leverantorsskulder = inkop * leverantorsskulder_dagar / 365 - ib_leverantorsskulder
     delta_rorelsekapital = delta_kundfordringar + delta_lager - delta_leverantorsskulder
 
     # Cash flow calculation
@@ -185,9 +197,12 @@ def build_balansbudget(
         row = likviditet_df.loc[likviditet_df["Post"] == post, "Belopp"]
         return row.values[0] if len(row) > 0 else 0.0
 
-    delta_kundfordringar = abs(_get_likviditet("Delta kundfordringar"))
-    delta_lager = abs(_get_likviditet("Delta lager"))
-    delta_leverantorsskulder = abs(_get_likviditet("Delta leverantörsskulder"))
+    # The cash budget stores asset increases as negative cash effects and
+    # payable increases as positive ones; undo that sign (a decrease must
+    # stay a decrease, so no abs()).
+    delta_kundfordringar = -_get_likviditet("Delta kundfordringar")
+    delta_lager = -_get_likviditet("Delta lager")
+    delta_leverantorsskulder = _get_likviditet("Delta leverantörsskulder")
     closing_cash = _get_likviditet("Likvida medel UB")
 
     # Extract arets resultat

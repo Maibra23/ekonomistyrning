@@ -661,8 +661,8 @@ EN: dict[str, str] = {
         "Cash turns negative in {0}. The company needs an overdraft facility of at least {1}, or can move the investment to a stronger month.",
     "Nettoflöde": "Net flow",
     "Kassaflöde och saldo per månad": "Cash flow and balance per month",
-    "Inbetalningar och leverantörsbetalningar förskjuts med kredittiderna (30 dagar = en månad). Personal, lokaler, övrigt, räntor och preliminärskatt betalas med en tolftedel per månad. Saldot i december kan skilja sig från Likvida medel UB i steg 2, eftersom årsbudgeten räknar med lageruppbyggnad och ett förenklat rörelsekapital.":
-        "Customer receipts and supplier payments are shifted by the credit periods (30 days = one month). Personnel, premises, other costs, interest and preliminary tax are paid at one twelfth per month. The December balance can differ from closing cash in step 2, because the annual budget includes inventory build-up and a simplified working capital.",
+    "Inbetalningar och leverantörsbetalningar förskjuts med kredittiderna (30 dagar = en månad). Personal, lokaler, övrigt, räntor och preliminärskatt betalas med en tolftedel per månad. Saldot i december kan skilja sig från Likvida medel UB i steg 2, eftersom årsbudgeten även räknar med lagrets förändring och månadsbudgeten räknar med 30-dagarsmånader.":
+        "Customer receipts and supplier payments are shifted by the credit periods (30 days = one month). Personnel, premises, other costs, interest and preliminary tax are paid at one twelfth per month. The December balance can differ from closing cash in step 2, because the annual budget also includes the change in inventory and the monthly budget uses 30-day months.",
     "### Sammanfattande analys": "### Summary analysis",
     "Analyserar budgetkonsistens...": "Analysing budget consistency...",
     "Fråga om budgeten": "Ask about the budget",
