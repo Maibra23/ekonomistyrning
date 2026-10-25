@@ -222,6 +222,8 @@ def npv_with_inflation_tax(
     inflation_rate: float,
     tax_rate: float,
     depreciation_per_year: float,
+    *,
+    initial_investment: float,
 ) -> dict:
     """Compute NPV adjusted for inflation and corporate tax (kapitel 10.11).
 
@@ -237,6 +239,9 @@ def npv_with_inflation_tax(
         inflation_rate: Expected annual inflation rate.
         tax_rate: Corporate tax rate as a decimal.
         depreciation_per_year: Annual straight-line depreciation (tax-deductible).
+        initial_investment: Grundinvestering paid at t=0, subtracted from
+            both NPVs. Keyword-only and required, so the outlay can never be
+            left out by accident.
 
     Returns:
         Dict with keys: nominal_discount_rate, npv_before_tax, npv_after_tax,
@@ -247,7 +252,7 @@ def npv_with_inflation_tax(
     npv_before = sum(
         cf / (1 + nominal_rate) ** (t + 1)
         for t, cf in enumerate(nominal_cash_flows)
-    )
+    ) - initial_investment
 
     after_tax_flows = [
         cf - max(0.0, (cf - depreciation_per_year) * tax_rate)
@@ -257,7 +262,7 @@ def npv_with_inflation_tax(
     npv_after = sum(
         cf / (1 + nominal_rate) ** (t + 1)
         for t, cf in enumerate(after_tax_flows)
-    )
+    ) - initial_investment
 
     return {
         "nominal_discount_rate": nominal_rate,

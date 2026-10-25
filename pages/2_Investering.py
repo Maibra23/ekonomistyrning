@@ -22,7 +22,7 @@ from utils.explain import (
     interpret_sensitivity,
 )
 from utils.export import export_to_excel, table_range
-from utils.formatting import format_percent, format_sek, format_years
+from utils.formatting import format_number, format_percent, format_sek, format_years
 from utils.i18n import t, t_frame
 from utils.investering import (
     annuity,
@@ -981,7 +981,7 @@ with tab3:
         st.caption(
             t(
                 "Real kalkylränta och avskrivning följer inte automatiskt med när du ändrar flik 1 (kalkylränta just nu: {0} %, rak avskrivning {1}/år). Tryck på knappen för att hämta dem.",
-                format(st.session_state['inv_rate'], ".1f"),
+                format_number(float(st.session_state['inv_rate']), 1),
                 format_sek(float(st.session_state['inv_initial']) / max(int(st.session_state['inv_years']), 1)),
             )
         )
@@ -1064,6 +1064,7 @@ with tab3:
                 inflation_pct / 100.0,
                 tax_pct / 100.0,
                 depreciation,
+                initial_investment=float(st.session_state["inv_initial"]),
             )
 
             nom_rate = it_res["nominal_discount_rate"]
@@ -1072,7 +1073,7 @@ with tab3:
                 kpi_card(
                     t("Nominell kalkylränta"),
                     format_percent(nom_rate),
-                    delta=t("Fishers ekvation: {0}%", format(nom_rate * 100, ".2f")),
+                    delta=t("Fishers ekvation: {0}%", format_number(nom_rate * 100, 2)),
                     delta_direction="flat",
                 ),
                 kpi_card(
@@ -1130,9 +1131,9 @@ with tab3:
             st.caption(
                 t(
                     "Fishers ekvation: (1 + {0}%)(1 + {1}%) - 1 = {2}%",
-                    format(real_rate_pct, ".1f"),
-                    format(inflation_pct, ".1f"),
-                    format(nom_rate * 100, ".2f"),
+                    format_number(real_rate_pct, 1),
+                    format_number(inflation_pct, 1),
+                    format_number(nom_rate * 100, 2),
                 )
             )
 
@@ -1143,6 +1144,7 @@ with tab3:
             "inflation": inflation_pct / 100.0,
             "skattesats": tax_pct / 100.0,
             "avskrivning_per_ar": depreciation,
+            "grundinvestering": float(st.session_state["inv_initial"]),
         }
         it_outputs_llm = {
             "nominell_kalkylranta": it_res["nominal_discount_rate"],
@@ -1222,7 +1224,7 @@ with tab4:
             t(
                 "Grundinvestering, kalkylränta och kassaflöden följer inte automatiskt med när du ändrar flik 1 (grundinvestering just nu: {0}, kalkylränta {1} %). Tryck på knappen för att hämta dem, inklusive restvärde och rörelsekapital.",
                 format_sek(float(st.session_state['inv_initial'])),
-                format(st.session_state['inv_rate'], ".1f"),
+                format_number(float(st.session_state['inv_rate']), 1),
             )
         )
 

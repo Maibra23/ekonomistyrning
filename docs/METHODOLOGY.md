@@ -239,8 +239,11 @@ Används när investeringar med olika livslängd ska jämföras (ekvivalent års
 Skattepliktigt resultat år t = Kassaflöde_t minus Avskrivningar_t
 Skatt år t                     = max(0, Skattepliktigt × skattesats)
 Kassaflöde efter skatt år t   = Kassaflöde_t minus Skatt_t
-NPV efter skatt                = summa (CF_efter_skatt_t / (1 plus r_nominell)^t)
+NPV före skatt                 = summa (CF_t / (1 plus r_nominell)^t) minus Grundinvestering
+NPV efter skatt                = summa (CF_efter_skatt_t / (1 plus r_nominell)^t) minus Grundinvestering
 ```
+
+Grundinvesteringen hämtas från fliken Grundläggande metoder och betalas år 0. Restvärde och rörelsekapital från den fliken ingår inte i den här kalkylen.
 
 **Antaganden:**
 * Avskrivningar är skatteavdragsgilla

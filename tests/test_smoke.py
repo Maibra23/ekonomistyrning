@@ -283,6 +283,7 @@ class TestInvesteringSmoke:
             inflation_rate=0.02,
             tax_rate=0.206,
             depreciation_per_year=200_000,
+            initial_investment=600_000,
         )
         assert "npv_before_tax" in result
         assert "npv_after_tax" in result

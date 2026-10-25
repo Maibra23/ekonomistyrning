@@ -175,6 +175,7 @@ class TestNpvWithInflationTax:
             inflation_rate=0.03,
             tax_rate=0.22,
             depreciation_per_year=150_000.0,
+            initial_investment=0.0,
         )
         assert set(result.keys()) == {
             "nominal_discount_rate",
@@ -191,6 +192,7 @@ class TestNpvWithInflationTax:
             inflation_rate=0.03,
             tax_rate=0.0,
             depreciation_per_year=0.0,
+            initial_investment=0.0,
         )
         assert abs(result["nominal_discount_rate"] - 0.0918) < 0.001
 
@@ -201,6 +203,7 @@ class TestNpvWithInflationTax:
             inflation_rate=0.03,
             tax_rate=0.22,
             depreciation_per_year=150_000.0,
+            initial_investment=0.0,
         )
         assert result["npv_after_tax"] < result["npv_before_tax"]
         assert result["tax_shield_npv"] > 0
@@ -212,8 +215,45 @@ class TestNpvWithInflationTax:
             inflation_rate=0.02,
             tax_rate=0.0,
             depreciation_per_year=0.0,
+            initial_investment=0.0,
         )
         assert abs(result["npv_before_tax"] - result["npv_after_tax"]) < 1e-6
+
+    def test_investment_is_subtracted_hand_calculated(self):
+        # Bakery oven: 1 200 000 kr, 300 000 kr/yr for 6 years, real rate 8 %,
+        # inflation 3 %, tax 20,6 %, straight-line depreciation 200 000 kr/yr.
+        # r_nom = 1,08 × 1,03 − 1 = 11,24 %; PV of 300 000 over 6 years at
+        # 11,24 % = 1 260 435 kr, so NPV before tax = 60 435 kr.
+        # Tax = (300 000 − 200 000) × 20,6 % = 20 600 kr/yr, after-tax flow
+        # 279 400 kr, PV = 1 173 885 kr, NPV after tax = −26 115 kr.
+        result = npv_with_inflation_tax(
+            nominal_cash_flows=[300_000.0] * 6,
+            real_discount_rate=0.08,
+            inflation_rate=0.03,
+            tax_rate=0.206,
+            depreciation_per_year=200_000.0,
+            initial_investment=1_200_000.0,
+        )
+        assert result["nominal_discount_rate"] == pytest.approx(0.1124)
+        assert result["npv_before_tax"] == pytest.approx(60_435, abs=1)
+        assert result["npv_after_tax"] == pytest.approx(-26_115, abs=1)
+        assert result["tax_shield_npv"] == pytest.approx(86_550, abs=1)
+
+    def test_no_tax_no_inflation_matches_plain_npv(self):
+        flows = [400_000.0, 350_000.0, 300_000.0]
+        result = npv_with_inflation_tax(
+            nominal_cash_flows=flows,
+            real_discount_rate=0.10,
+            inflation_rate=0.0,
+            tax_rate=0.0,
+            depreciation_per_year=0.0,
+            initial_investment=900_000.0,
+        )
+        assert result["npv_before_tax"] == pytest.approx(npv(flows, 0.10, 900_000.0))
+
+    def test_initial_investment_is_required(self):
+        with pytest.raises(TypeError):
+            npv_with_inflation_tax([100_000.0], 0.05, 0.02, 0.2, 0.0)
 
 
 # ---------------------------------------------------------------------------
