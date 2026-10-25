@@ -702,9 +702,11 @@ with st.expander(t("Steg 3: Balansbudget"), expanded=True):
             # Sync likvida medel IB from Step 2 opening cash to avoid mismatches
             ob_likvida = float(st.session_state["bud_opening_cash"])
             st.session_state["bud_ob_likvida"] = ob_likvida
+            # Streamlit ignores value= once a keyed widget exists, so the
+            # synced figures are written to the widget keys instead.
+            st.session_state["inp_ob_likvida"] = ob_likvida
             st.number_input(
                 t("Likvida medel IB (kr)"),
-                value=ob_likvida,
                 format="%.0f",
                 key="inp_ob_likvida",
                 help=t("Synkroniserad från Steg 2 (Ingående likvida medel)"),
@@ -750,9 +752,10 @@ with st.expander(t("Steg 3: Balansbudget"), expanded=True):
             st.markdown(t("**Anläggningstillgångarnas förändring**"))
             nyanskaffning = float(investeringar_belopp)
             avskrivningar_balans = float(avskrivningar)
+            st.session_state["inp_nyanskaffning"] = nyanskaffning
+            st.session_state["inp_avskrivningar_balans"] = avskrivningar_balans
             st.number_input(
                 t("Nyanskaffning (kr)"),
-                value=nyanskaffning,
                 format="%.0f",
                 key="inp_nyanskaffning",
                 help=t("Synkroniserad från Steg 2 (Investeringar)"),
@@ -760,7 +763,6 @@ with st.expander(t("Steg 3: Balansbudget"), expanded=True):
             )
             st.number_input(
                 t("Avskrivningar (kr)"),
-                value=avskrivningar_balans,
                 format="%.0f",
                 key="inp_avskrivningar_balans",
                 help=t("Synkroniserad från Steg 1 (Avskrivningar)"),

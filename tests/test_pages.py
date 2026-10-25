@@ -115,3 +115,47 @@ def test_share_link_restores_inputs():
 
     reopened = _run("pages/3_Budget.py", **{k: v[0] if isinstance(v, list) else v for k, v in params.items()})
     assert reopened.session_state["bud_forsaljning"] == pytest.approx(sales)
+
+
+def _submit_budget_step(at: AppTest, step: int, values: dict) -> None:
+    for key, value in values.items():
+        at.number_input(key=key).set_value(value)
+    at.button(key=f"FormSubmitter:bud_step{step}_form-Uppdatera värden").click().run()
+    assert not at.exception, [e.message for e in at.exception]
+
+
+def test_budget_step3_readonly_fields_follow_edits():
+    # The read-only figures in steg 3 must show what steg 1 and 2 hold after
+    # a user edit, not the values from the first render.
+    at = _run("pages/3_Budget.py")
+    _submit_budget_step(at, 1, {"inp_avskrivningar": 250_000.0})
+    _submit_budget_step(at, 2, {"inp_opening_cash": 350_000.0, "inp_investeringar": 400_000.0})
+    assert at.number_input(key="inp_ob_likvida").value == pytest.approx(350_000.0)
+    assert at.number_input(key="inp_nyanskaffning").value == pytest.approx(400_000.0)
+    assert at.number_input(key="inp_avskrivningar_balans").value == pytest.approx(250_000.0)
+    # The balance table uses the same opening cash the field shows.
+    balans = next(df.value for df in at.dataframe if "Likvida medel" in df.value.to_string()
+                  and "Summa tillgångar" in df.value.to_string())
+    assert "350 000" in balans.to_string().replace(" ", " ")
+
+
+def test_inflation_tab_subtracts_the_investment():
+    at = AppTest.from_file(str(_ROOT / "pages/2_Investering.py"), default_timeout=120)
+    import pandas as pd
+
+    at.session_state["inv_years"] = 6
+    at.session_state["inv_initial"] = 1_200_000.0
+    at.session_state["inv_rate"] = 8
+    at.session_state["inv_cf_df"] = pd.DataFrame(
+        {"År": list(range(1, 7)), "Kassaflöde (kr)": [300_000.0] * 6}
+    )
+    at.run()
+    at.button(key="it_pull_tab1").click().run()
+    assert not at.exception
+    html = " ".join(
+        getattr(el.proto, "body", "")
+        for el in at.get("html")
+    ).replace(" ", " ")
+    # Hand calculation in test_investering: 60 435 kr before, −26 115 kr after tax.
+    assert "60 435 kr" in html and "1 260 435 kr" not in html
+    assert "-26 115 kr" in html
