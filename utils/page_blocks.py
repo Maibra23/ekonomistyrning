@@ -22,7 +22,7 @@ from utils.llm import (
     is_llm_available,
     verify_grounding,
 )
-from utils.prompts import build_qa_prompt
+from utils.prompts import QA_QUESTION_MAX_CHARS, build_qa_prompt
 from utils.scenario_continuity import render_adopt_button
 from utils.scenarios import generate_scenario, set_current_scenario
 from utils.ui import SCENARIO_DIFFICULTY_HELP, render_session_cap_card
@@ -149,6 +149,11 @@ def render_scenario_info(prefix: str, desc_key: str = "bransch_beskrivning") -> 
 # ---------------------------------------------------------------------------
 
 
+# Q&A answers are meant to be short ("Kortare för Q&A svar", utils/prompts.py).
+# The default cap fits a full 600-word explanation; a chat answer never needs it.
+QA_MAX_TOKENS = 1000
+
+
 def render_qa_chat(
     *,
     chat_key: str,
@@ -175,7 +180,7 @@ def render_qa_chat(
         st.caption(t(OFFLINE_CHAT_CAPTION))
         return
 
-    question = st.chat_input(placeholder, key=input_key)
+    question = st.chat_input(placeholder, key=input_key, max_chars=QA_QUESTION_MAX_CHARS)
     if not question:
         return
     with st.chat_message("user"):
@@ -186,7 +191,7 @@ def render_qa_chat(
         )
         with st.chat_message("assistant"):
             with st.spinner(t("Tänker...")):
-                raw = cached_chat(sys_p, usr_p)
+                raw = cached_chat(sys_p, usr_p, max_new_tokens=QA_MAX_TOKENS)
             result = humanize(raw)
             st.markdown(result.text)
             expected = {

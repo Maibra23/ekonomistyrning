@@ -336,11 +336,7 @@ def cached_chat(
     Raises LLMSessionCapError only when a *new* call is required and the cap
     is used up, so answers already generated this session keep rendering.
     """
-    from utils.llm_budget import (
-        DAILY_CAP_MESSAGE,
-        get_daily_calls_remaining,
-        record_daily_call,
-    )
+    from utils.llm_budget import cap_message, get_calls_remaining, record_daily_call
 
     config = get_llm_config()
     try:
@@ -349,8 +345,8 @@ def cached_chat(
         # No Streamlit runtime (e.g. pytest): call directly, no cache/counting.
         if get_session_calls_remaining() <= 0:
             raise LLMSessionCapError(SESSION_CAP_MESSAGE) from None
-        if get_daily_calls_remaining() <= 0:
-            raise LLMDailyCapError(DAILY_CAP_MESSAGE) from None
+        if get_calls_remaining() <= 0:
+            raise LLMDailyCapError(cap_message()) from None
         client = LLMClient(token=config.token, model=config.model, provider=config.provider)
         result = client.chat(
             system_prompt, user_prompt, max_new_tokens=max_new_tokens, temperature=temperature
@@ -380,11 +376,11 @@ def cached_chat(
     is_new = counted is None or prompt_hash not in counted
     if is_new and get_session_calls_remaining() <= 0:
         raise LLMSessionCapError(SESSION_CAP_MESSAGE)
-    # Server-side guard: the shared daily budget is independent of session
-    # state, so it survives reloads and protects the HF token on public
-    # deploys.
-    if is_new and get_daily_calls_remaining() <= 0:
-        raise LLMDailyCapError(DAILY_CAP_MESSAGE)
+    # Server-side guard: the shared daily and hourly budget is independent
+    # of session state, so it survives reloads and protects the HF token on
+    # public deploys.
+    if is_new and get_calls_remaining() <= 0:
+        raise LLMDailyCapError(cap_message())
 
     result = _call(
         prompt_hash, system_prompt, user_prompt, max_new_tokens, temperature, config.model

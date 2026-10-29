@@ -47,7 +47,13 @@ from utils.prompts import (
     build_kalkyl_explanation_prompt,
     build_kalkyl_step_guide_prompt,
 )
-from utils.state_save import clear_state, load_state, save_state
+from utils.state_save import (
+    clear_state,
+    link_records,
+    load_state,
+    restore_number,
+    save_state,
+)
 from utils.tutor import (
     get_cached_tutor_text,
     render_step_guide,
@@ -284,9 +290,14 @@ with tab_sj:
     # Autosave: restore saved input values into session_state before widgets render
     _sj_saved = load_state("kalkyl_sjalvkostnad")
     if _sj_saved is not None:
-        for _k in _SJ_INIT:
-            if _k in _sj_saved:
-                st.session_state[_k] = float(_sj_saved[_k])
+        # Bounds are the widgets' own min_value and max_value.
+        _SJ_BOUNDS = {
+            "sj_dm": (0.0, None), "sj_dl": (0.0, None), "sj_mo": (0.0, 500.0),
+            "sj_to": (0.0, 500.0), "sj_ao": (0.0, 200.0), "sj_fo": (0.0, 200.0),
+            "sj_units": (1.0, None), "sj_markup": (0.0, 500.0),
+        }
+        for _k, (_lo, _hi) in _SJ_BOUNDS.items():
+            restore_number(_sj_saved, _k, lo=_lo, hi=_hi)
 
     # Generated values go straight into the widget keys before the widgets
     # render, so the autosave below records them on the same run.
@@ -519,9 +530,9 @@ with tab_bid:
     # Autosave: restore saved input values into session_state before widgets render
     _bid_saved = load_state("kalkyl_bidrag")
     if _bid_saved is not None:
-        for _k in ("bid_pris", "bid_rorlig", "bid_fasta", "bid_units"):
-            if _k in _bid_saved:
-                st.session_state[_k] = float(_bid_saved[_k])
+        for _k in ("bid_pris", "bid_rorlig", "bid_fasta"):
+            restore_number(_bid_saved, _k)
+        restore_number(_bid_saved, "bid_units", lo=1.0)
 
     _bid_scenario, _bid_code, _ = render_scenario_controls("bid", "kalkyl_bidrag")
     if _bid_scenario is not None:
@@ -797,12 +808,21 @@ with tab_abc:
     # Autosave: restore saved ABC tables before widgets render
     _abc_saved = load_state("kalkyl_abc")
     if _abc_saved is not None:
+        _abc_act_rows = link_records(
+            _abc_saved, "abc_act_records",
+            ("Aktivitet", "Total kostnad (kr)", "Kostnadsdrivare", "Total drivvolym"),
+            ("Aktivitet", "Kostnadsdrivare"),
+        )
+        _abc_prod_rows = link_records(
+            _abc_saved, "abc_prod_records",
+            ("Produkt", "Direkt kostnad (kr)", "Enheter"), ("Produkt",),
+        )
         try:
             _set_abc_base(
-                pd.DataFrame(_abc_saved.get("abc_act_records") or [])
-                if "abc_act_records" in _abc_saved else st.session_state.abc_act_df,
-                pd.DataFrame(_abc_saved.get("abc_prod_records") or [])
-                if "abc_prod_records" in _abc_saved else st.session_state.abc_prod_df,
+                pd.DataFrame(_abc_act_rows)
+                if _abc_act_rows is not None else st.session_state.abc_act_df,
+                pd.DataFrame(_abc_prod_rows)
+                if _abc_prod_rows is not None else st.session_state.abc_prod_df,
             )
         except (ValueError, TypeError):
             pass

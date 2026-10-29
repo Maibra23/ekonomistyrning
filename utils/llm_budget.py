@@ -15,12 +15,19 @@ from __future__ import annotations
 import json
 import logging
 import os
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_DAILY_CALL_CAP = 300
+# The daily cap is also split into clock hours (by default a sixth of it per
+# hour). Reloading resets the session cap, so without this one visitor could
+# use all 300 calls in minutes and every student would lose the tutor until
+# tomorrow; now the same abuse costs at most one hour's share. The app has no
+# login and the host's proxy makes the visitor IP unreliable, so the cap
+# cannot be per visitor.
+MIN_HOURLY_CALL_CAP = 10
 
 DAILY_CAP_MESSAGE = (
     "Dagens gemensamma budget för förklaringar är förbrukad. "
@@ -28,18 +35,29 @@ DAILY_CAP_MESSAGE = (
     "Förklaringarna är tillgängliga igen i morgon."
 )
 
+HOURLY_CAP_MESSAGE = (
+    "Många har bett om förklaringar den senaste timmen, så den gemensamma "
+    "budgeten för den här timmen är förbrukad. Beräkningar, diagram och "
+    "export fungerar som vanligt. Prova igen nästa timme."
+)
 
-def get_daily_cap() -> int:
-    """Daily call cap from the LLM_DAILY_CAP setting, or the default."""
-    raw = os.environ.get("LLM_DAILY_CAP")
+
+def _read_setting(key: str) -> str | None:
+    raw = os.environ.get(key)
     if raw is None:
         try:
             import streamlit as st
 
-            if "LLM_DAILY_CAP" in st.secrets:
-                raw = str(st.secrets["LLM_DAILY_CAP"])
+            if key in st.secrets:
+                raw = str(st.secrets[key])
         except Exception:
             raw = None
+    return raw
+
+
+def get_daily_cap() -> int:
+    """Daily call cap from the LLM_DAILY_CAP setting, or the default."""
+    raw = _read_setting("LLM_DAILY_CAP")
     if raw is None:
         return DEFAULT_DAILY_CALL_CAP
     try:
@@ -50,6 +68,19 @@ def get_daily_cap() -> int:
     return max(0, value)
 
 
+def get_hourly_cap() -> int:
+    """Per clock hour cap from LLM_HOURLY_CAP, or a sixth of the daily cap."""
+    default = max(MIN_HOURLY_CALL_CAP, get_daily_cap() // 6)
+    raw = _read_setting("LLM_HOURLY_CAP")
+    if raw is None:
+        return default
+    try:
+        return max(0, int(str(raw).strip()))
+    except ValueError:
+        logger.warning("Invalid LLM_HOURLY_CAP %r, using default", raw)
+        return default
+
+
 def _usage_file() -> Path:
     custom = os.environ.get("LLM_BUDGET_FILE")
     if custom:
@@ -58,9 +89,10 @@ def _usage_file() -> Path:
 
 
 def _read_usage() -> dict:
-    """Read today's usage record. Stale dates and corrupt files reset to zero."""
+    """Read today's and this hour's usage. Stale dates and corrupt files reset to zero."""
     today = date.today().isoformat()
-    fresh = {"date": today, "calls": 0}
+    hour = datetime.now().strftime("%Y-%m-%dT%H")
+    fresh = {"date": today, "calls": 0, "hour": hour, "hour_calls": 0}
     path = _usage_file()
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
@@ -73,9 +105,10 @@ def _read_usage() -> dict:
         return fresh
     try:
         calls = max(0, int(raw.get("calls", 0)))
+        hour_calls = max(0, int(raw.get("hour_calls", 0))) if raw.get("hour") == hour else 0
     except (TypeError, ValueError):
         return fresh
-    return {"date": today, "calls": calls}
+    return {"date": today, "calls": calls, "hour": hour, "hour_calls": hour_calls}
 
 
 def get_daily_calls_used() -> int:
@@ -88,14 +121,29 @@ def get_daily_calls_remaining() -> int:
     return max(0, get_daily_cap() - get_daily_calls_used())
 
 
+def get_hourly_calls_remaining() -> int:
+    """Calls left this clock hour. Never negative."""
+    return max(0, get_hourly_cap() - _read_usage()["hour_calls"])
+
+
+def get_calls_remaining() -> int:
+    """Calls allowed right now: the smaller of today's and this hour's rest."""
+    return min(get_daily_calls_remaining(), get_hourly_calls_remaining())
+
+
+def cap_message() -> str:
+    """Message for the cap that was hit: today's if it is spent, else this hour's."""
+    return DAILY_CAP_MESSAGE if get_daily_calls_remaining() <= 0 else HOURLY_CAP_MESSAGE
+
+
 def record_daily_call() -> None:
-    """Record one LLM call in today's shared counter.
+    """Record one LLM call in today's and this hour's shared counters.
 
     Fails open on filesystem errors: the budget protects spend, it must
     never take the app down.
     """
     usage = _read_usage()
-    usage = {"date": usage["date"], "calls": usage["calls"] + 1}
+    usage = {**usage, "calls": usage["calls"] + 1, "hour_calls": usage["hour_calls"] + 1}
     path = _usage_file()
     try:
         path.parent.mkdir(parents=True, exist_ok=True)

@@ -37,7 +37,13 @@ from utils.standardkost import (
     variance_fixed_overhead_volume,
     variance_summary,
 )
-from utils.state_save import clear_state, load_state, save_state
+from utils.state_save import (
+    clear_state,
+    link_records,
+    load_state,
+    restore_number,
+    save_state,
+)
 from utils.tutor import render_tutor_explanation
 from utils.ui import (
     APP_UPDATED,
@@ -163,10 +169,10 @@ with tab1:
     _sk_saved = load_state("standardkost_rorlig")
     if _sk_saved is not None:
         for _k in ("std_volym", "verk_volym"):
-            if _k in _sk_saved:
-                st.session_state[_k] = float(_sk_saved[_k])
-        if isinstance(_sk_saved.get("items"), list) and _sk_saved["items"]:
-            _set_items_base(_items_df(_sk_saved["items"]))
+            restore_number(_sk_saved, _k)
+        _sk_rows = link_records(_sk_saved, "items", _ITEM_COLUMNS, (_C_NAME, _C_UNIT))
+        if _sk_rows:
+            _set_items_base(_items_df(_sk_rows))
         elif "std_pris" in _sk_saved:
             # Saved before the table existed: one item with the old fields.
             _set_items_base(_items_df([{
@@ -446,8 +452,7 @@ with tab2:
     _sk_fast_saved = load_state("standardkost_fast")
     if _sk_fast_saved is not None:
         for _k in ("fast_budget", "fast_verkligt", "fast_normal_volym", "fast_verklig_volym"):
-            if _k in _sk_fast_saved:
-                st.session_state[_k] = float(_sk_fast_saved[_k])
+            restore_number(_sk_fast_saved, _k)
 
     if st.button(t("Hämta volymer från Rörliga kostnader"), key="fast_pull_volumes"):
         st.session_state["fast_normal_volym"] = float(st.session_state["std_volym"])

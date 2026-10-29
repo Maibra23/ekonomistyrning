@@ -54,7 +54,13 @@ from utils.prompts import (
     TUTOR_REQUIRED_SECTIONS,
     build_investering_explanation_prompt,
 )
-from utils.state_save import clear_state, load_state, save_state
+from utils.state_save import (
+    clear_state,
+    link_records,
+    load_state,
+    restore_number,
+    save_state,
+)
 from utils.tutor import render_tutor_explanation
 from utils.ui import (
     APP_UPDATED,
@@ -261,18 +267,15 @@ with tab1:
     # Autosave: restore saved input values before widgets render
     _tab1_saved = load_state("investering_basic")
     if _tab1_saved is not None:
-        if "inv_years" in _tab1_saved:
-            st.session_state["inv_years"] = int(_tab1_saved["inv_years"])
-        if "inv_initial" in _tab1_saved:
-            st.session_state["inv_initial"] = float(_tab1_saved["inv_initial"])
-        if "inv_rate" in _tab1_saved:
-            st.session_state["inv_rate"] = int(_tab1_saved["inv_rate"])
+        restore_number(_tab1_saved, "inv_years", lo=1, hi=15, integer=True)
+        restore_number(_tab1_saved, "inv_initial")
+        restore_number(_tab1_saved, "inv_rate", lo=0, hi=30, integer=True)
         for _k in ("inv_restvarde", "inv_rorelsekapital"):
-            if _k in _tab1_saved:
-                st.session_state[_k] = float(_tab1_saved[_k])
-        if "inv_cf_records" in _tab1_saved:
+            restore_number(_tab1_saved, _k)
+        _inv_cf_rows = link_records(_tab1_saved, "inv_cf_records", ("År", "Kassaflöde (kr)"))
+        if _inv_cf_rows is not None:
             try:
-                st.session_state["inv_cf_df"] = pd.DataFrame(_tab1_saved["inv_cf_records"])
+                st.session_state["inv_cf_df"] = pd.DataFrame(_inv_cf_rows)
                 st.session_state.pop("cf_editor_tab1", None)
             except (ValueError, TypeError):
                 pass
@@ -707,12 +710,10 @@ with tab2:
     # Restore saved sensitivity inputs
     _sa_saved = load_state("investering_sensitivity")
     if _sa_saved is not None:
-        if "sa_param" in _sa_saved:
-            st.session_state["sa_param"] = str(_sa_saved["sa_param"])
-        if "sa_min" in _sa_saved:
-            st.session_state["sa_min"] = int(_sa_saved["sa_min"])
-        if "sa_max" in _sa_saved:
-            st.session_state["sa_max"] = int(_sa_saved["sa_max"])
+        if _sa_saved.get("sa_param") in ("cash_flows", "discount_rate", "initial_investment"):
+            st.session_state["sa_param"] = _sa_saved["sa_param"]
+        restore_number(_sa_saved, "sa_min", lo=-50, hi=0, integer=True)
+        restore_number(_sa_saved, "sa_max", lo=0, hi=100, integer=True)
 
     base_cfs, base_inv = _effective_investment()
     base_rate = st.session_state["inv_rate"] / 100.0
@@ -963,9 +964,10 @@ with tab3:
     # Restore saved inflation inputs
     _it_saved = load_state("investering_inflation")
     if _it_saved is not None:
-        for _k in ("it_real_rate_pct", "it_inflation_pct", "it_tax_pct", "it_depreciation"):
-            if _k in _it_saved:
-                st.session_state[_k] = float(_it_saved[_k])
+        restore_number(_it_saved, "it_real_rate_pct", hi=50.0)
+        restore_number(_it_saved, "it_inflation_pct", hi=30.0)
+        restore_number(_it_saved, "it_tax_pct", hi=50.0)
+        restore_number(_it_saved, "it_depreciation")
 
     # The button sits above the inputs, so on the click run it can still
     # write their session keys before they are created.
@@ -1198,14 +1200,18 @@ with tab4:
     # Restore saved Monte Carlo input parameters (not result arrays)
     _mc_saved = load_state("investering_monte_carlo")
     if _mc_saved is not None:
-        for _k in ("mc_inv_mean", "mc_inv_std", "mc_rate_mean", "mc_rate_std", "mc_corr"):
-            if _k in _mc_saved:
-                st.session_state[_k] = float(_mc_saved[_k])
-        if "mc_n_sims" in _mc_saved:
-            st.session_state["mc_n_sims"] = int(_mc_saved["mc_n_sims"])
-        if "mc_cf_records" in _mc_saved:
+        restore_number(_mc_saved, "mc_inv_mean")
+        restore_number(_mc_saved, "mc_inv_std")
+        restore_number(_mc_saved, "mc_rate_mean", hi=50.0)
+        restore_number(_mc_saved, "mc_rate_std", hi=20.0)
+        restore_number(_mc_saved, "mc_corr", hi=0.9)
+        restore_number(_mc_saved, "mc_n_sims", lo=1000, hi=50000, integer=True)
+        _mc_cf_rows = link_records(
+            _mc_saved, "mc_cf_records", ("År", "Medel (kr)", "Std (kr)")
+        )
+        if _mc_cf_rows is not None:
             try:
-                st.session_state["mc_cf_df"] = pd.DataFrame(_mc_saved["mc_cf_records"])
+                st.session_state["mc_cf_df"] = pd.DataFrame(_mc_cf_rows)
             except (ValueError, TypeError):
                 pass
 
@@ -1574,13 +1580,15 @@ with tab5:
     _cmp_saved = load_state("investering_jamforelse")
     if _cmp_saved is not None:
         for _k in _CMP_DEFAULTS:
-            if _k in _cmp_saved:
-                if _k.endswith("_name"):
-                    st.session_state[_k] = str(_cmp_saved[_k])
-                elif _k.endswith("_years"):
-                    st.session_state[_k] = int(_cmp_saved[_k])
-                else:
-                    st.session_state[_k] = float(_cmp_saved[_k])
+            if _k.endswith("_name"):
+                if isinstance(_cmp_saved.get(_k), str):
+                    st.session_state[_k] = _cmp_saved[_k]
+            elif _k.endswith("_years"):
+                restore_number(_cmp_saved, _k, lo=1, hi=30, integer=True)
+            elif _k == "cmp_rate":
+                restore_number(_cmp_saved, _k, hi=50.0)
+            else:
+                restore_number(_cmp_saved, _k)
 
     if st.button(t("Hämta alternativ A från Grundläggande metoder"), key="cmp_pull_tab1"):
         _eff_flows, _eff_initial = _effective_investment()

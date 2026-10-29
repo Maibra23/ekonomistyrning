@@ -22,12 +22,23 @@ from __future__ import annotations
 
 import base64
 import json
+import math
+import re
 import zlib
 from typing import Any
 
 # Hard cap on the decoded payload size. Input dicts are a few hundred
 # bytes; anything bigger is not ours.
 _MAX_DECODED_BYTES = 16_384
+
+# Limits on what a link may carry. A link is written by whoever sends it, and
+# its strings (company and product names) end up in the tutor's prompts, so a
+# string is one short line: no line breaks to start a fake instruction on.
+_MAX_STRING_CHARS = 80
+_MAX_LIST_ITEMS = 200
+_MAX_DEPTH = 4
+_MAX_ABS_NUMBER = 1e12
+_CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]+")
 
 
 def _get_session_state() -> Any | None:
@@ -95,7 +106,47 @@ def _decode_params(encoded: str | None) -> dict | None:
         value = json.loads(raw.decode("utf-8"))
     except (ValueError, zlib.error, UnicodeError):
         return None
-    return value if isinstance(value, dict) else None
+    return _clean(value) if isinstance(value, dict) else None
+
+
+_DROP = object()
+
+
+def _clean(value: Any, depth: int = 0) -> Any:
+    """Keep only plain, bounded values from a link; ``_DROP`` marks the rest.
+
+    Numbers must be finite and are clamped, strings are cut to one short
+    line, lists and nesting are capped. A top-level None is dropped, since
+    the pages pass restored values straight to float() and int(); inside a
+    list or a table row it stays, and so does a list's length (a bad item
+    becomes None), because pages read lists such as the twelve month
+    weights by position.
+    """
+    if value is None:
+        return None if depth >= 2 else _DROP
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        if not math.isfinite(value):
+            return _DROP
+        return max(-_MAX_ABS_NUMBER, min(_MAX_ABS_NUMBER, value))
+    if isinstance(value, str):
+        return _CONTROL_CHARS.sub(" ", value).strip()[:_MAX_STRING_CHARS]
+    if depth >= _MAX_DEPTH:
+        return _DROP
+    if isinstance(value, list):
+        items = (_clean(v, depth + 1) for v in value[:_MAX_LIST_ITEMS])
+        return [None if v is _DROP else v for v in items]
+    if isinstance(value, dict):
+        cleaned = {}
+        for k, v in value.items():
+            if not isinstance(k, str) or len(k) > 64:
+                continue
+            v = _clean(v, depth + 1)
+            if v is not _DROP:
+                cleaned[k] = v
+        return cleaned
+    return _DROP
 
 
 def save_state(module_key: str, inputs: dict) -> None:
@@ -167,6 +218,69 @@ def load_state(module_key: str) -> dict | None:
     if isinstance(value, dict):
         return value
     return None
+
+
+def restore_number(
+    saved: dict,
+    key: str,
+    *,
+    lo: float | None = 0.0,
+    hi: float | None = None,
+    integer: bool = False,
+) -> None:
+    """Copy ``saved[key]`` into ``st.session_state[key]`` as a bounded number.
+
+    A link is written by whoever sends it, so a value that is not a number
+    is skipped (the widget keeps its value) and one outside the widget's
+    range is clamped into it. Without this, ``float("abc")`` or a value
+    below a widget's ``min_value`` stops the whole page. ``lo`` and ``hi``
+    are the widget's own ``min_value`` and ``max_value``.
+    """
+    value = saved.get(key)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return
+    if not math.isfinite(value):
+        return
+    if lo is not None:
+        value = max(lo, value)
+    if hi is not None:
+        value = min(hi, value)
+    session = _get_session_state()
+    if session is None:
+        return
+    session[key] = int(round(value)) if integer else float(value)
+
+
+def link_records(
+    saved: dict,
+    key: str,
+    columns: tuple[str, ...],
+    text_columns: tuple[str, ...] = (),
+) -> list[dict] | None:
+    """``saved[key]`` as table rows that are safe to build a DataFrame from.
+
+    Returns None unless the value is a non-empty list of dicts. Every row
+    gets the ``columns`` the page reads (a missing one is filled in).
+    Columns in ``text_columns`` become strings; every other column must
+    hold a number, and anything else in it becomes 0.0.
+    """
+    value = saved.get(key)
+    if not value or not isinstance(value, list):
+        return None
+    if not all(isinstance(row, dict) for row in value):
+        return None
+    rows = []
+    for row in value:
+        clean: dict = {}
+        for col, cell in {**dict.fromkeys(columns), **row}.items():
+            if col in text_columns:
+                clean[col] = "" if cell is None else str(cell)
+            elif isinstance(cell, (int, float)) and not isinstance(cell, bool) and math.isfinite(cell):
+                clean[col] = float(cell)
+            else:
+                clean[col] = 0.0
+        rows.append(clean)
+    return rows
 
 
 def clear_state(module_key: str) -> None:

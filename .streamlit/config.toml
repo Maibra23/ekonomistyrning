@@ -11,3 +11,7 @@ enableStaticServing = true
 
 [browser]
 gatherUsageStats = false
+
+[client]
+# An error shows a short generic message, not source code and a stack trace.
+showErrorDetails = "none"

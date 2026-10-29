@@ -44,7 +44,13 @@ from utils.prompts import (
     TUTOR_REQUIRED_SECTIONS,
     build_budget_consistency_prompt,
 )
-from utils.state_save import clear_state, load_state, save_state
+from utils.state_save import (
+    clear_state,
+    link_records,
+    load_state,
+    restore_number,
+    save_state,
+)
 from utils.tutor import render_tutor_explanation
 from utils.ui import (
     APP_UPDATED,
@@ -160,18 +166,27 @@ st.session_state.setdefault("bud_fin_manad", _DEFAULT_FIN_MANAD)
 # Autosave: restore saved values once per session, before widgets render.
 _bud_saved = load_state("budget")
 if _bud_saved is not None:
+    # Bounds are the min_value and max_value of the matching inp_ widgets.
     for _k in _BUD_STATE_KEYS:
-        if _k in _bud_saved:
-            st.session_state[_k] = float(_bud_saved[_k])
+        if _k in ("bud_finansiering", "bud_ob_likvida"):
+            restore_number(_bud_saved, _k, lo=None)
+        elif _k == "bud_skattesats":
+            restore_number(_bud_saved, _k, hi=100.0)
+        elif _k.endswith("_dagar"):
+            restore_number(_bud_saved, _k, hi=365.0)
+        else:
+            restore_number(_bud_saved, _k)
     _profile = str(_bud_saved.get("bud_season_profile", ""))
     if _profile in SEASON_PROFILES or _profile == "Egen":
         st.session_state["bud_season_profile"] = _profile
     _weights = _bud_saved.get("bud_season_weights")
     if isinstance(_weights, list) and len(_weights) == 12:
-        st.session_state["bud_season_weights"] = [float(x or 0) for x in _weights]
+        st.session_state["bud_season_weights"] = [
+            float(x) if isinstance(x, (int, float)) and not isinstance(x, bool) else 0.0
+            for x in _weights
+        ]
     for _k in ("bud_inv_manad", "bud_fin_manad"):
-        if _k in _bud_saved:
-            st.session_state[_k] = min(max(int(_bud_saved[_k]), 1), 12)
+        restore_number(_bud_saved, _k, lo=1, hi=12, integer=True)
 
 # ---------------------------------------------------------------------------
 # Page header
