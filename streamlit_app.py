@@ -23,8 +23,9 @@ from utils.ui import (  # noqa: E402
     footer_note,
     hero,
     inject_css,
-    module_map,
-    pipeline_steps,
+    module_card_desc,
+    module_card_head,
+    numbered_steps,
     render_sidebar,
     section_heading,
     stat_strip,
@@ -63,16 +64,23 @@ def render_landing() -> None:
             t("Förklaringstjänsten är inte aktiv just nu. Alla beräkningar, diagram "
             "och exporter fungerar ändå: förklaringarna visas som uträkningar med "
             "dina egna siffror, och kunskapstestet använder frågor vars svar räknas "
-            "fram av appens kalkylatorer.")
+            "fram av appens kalkylatorer."),
+            icon=":material/info:",
         )
 
-    # Primary first-visit CTA: the pipeline says "Välj modul", so the main
-    # area needs a link that actually starts somewhere.
-    st.page_link(
-        "pages/1_Kalkyl.py",
-        label=t("Börja här: Kalkylering →"),
-        use_container_width=False,
-    )
+    # Primary first action plus a secondary route into the quiz.
+    cta_primary, cta_secondary, _cta_pad = st.columns([2, 2, 5], gap="small")
+    with cta_primary:
+        if st.button(
+            t("Börja med Kalkylering"),
+            type="primary",
+            icon=":material/arrow_forward:",
+            use_container_width=True,
+        ):
+            st.switch_page("pages/1_Kalkyl.py")
+    with cta_secondary:
+        if st.button(t("Gör ett kunskapstest"), use_container_width=True):
+            st.switch_page("pages/5_Kunskapstest.py")
 
     # --- Interconnected module map ---------------------------------------
     st.html(section_heading(t("EKONOMISTYRNINGENS KRETSLOPP"), t("Så hänger modulerna ihop")))
@@ -85,66 +93,38 @@ def render_landing() -> None:
             "vänster när du vill börja.")
         )
     )
-    st.html(
-        module_map([
-            {
-                "role": t("Beräkna"),
-                "title": t("Kalkylering"),
-                "tag": t("Kap. 4, 6–8"),
-                "desc": t("Självkostnad med prissättning, bidragskalkyl med "
-                "känslighet och ABC jämfört med traditionell fördelning."),
-            },
-            {
-                "role": t("Bedöm"),
-                "title": t("Investering"),
-                "tag": t("Kap. 10"),
-                "desc": t("NPV, IRR, payback och annuitet med restvärde och "
-                "rörelsekapital, NPV-profil, känslighet och Monte Carlo."),
-            },
-            {
-                "role": t("Planera"),
-                "title": t("Budget"),
-                "tag": t("Kap. 13–15"),
-                "desc": t("Resultat-, likviditets- och balansbudget som går ihop, "
-                "nyckeltal och likviditetsbudget per månad."),
-            },
-            {
-                "role": t("Följ upp"),
-                "title": t("Standardkostnadsanalys"),
-                "tag": t("Kap. 17"),
-                "desc": t("Volym-, pris- och effektivitetsavvikelser per kostnadsslag "
-                "samt budget- och volymavvikelse för fasta omkostnader."),
-            },
-            {
-                "role": t("Pröva"),
-                "title": t("Kunskapstest"),
-                "tag": t("Kap. 4–17"),
-                "desc": t("Obegränsat med frågor vars svar räknas fram av "
-                "kalkylatorerna, med lösning steg för steg."),
-            },
-        ])
-    )
-    # Real links under the map: the nodes themselves are not clickable, so
-    # give each module an actual navigation affordance.
-    link_cols = st.columns(5)
-    for col, (label, path) in zip(
-        link_cols,
-        # strict: exactly one link per column by construction
-        [
-            ("Kalkylering →", "pages/1_Kalkyl.py"),
-            ("Investering →", "pages/2_Investering.py"),
-            ("Budget →", "pages/3_Budget.py"),
-            ("Standardkostnadsanalys →", "pages/4_Standardkostnadsanalys.py"),
-            ("Kunskapstest →", "pages/5_Kunskapstest.py"),
-        ],
-        strict=True,
-    ):
-        with col:
-            st.page_link(path, label=t(label))
+    modules = [
+        ("Beräkna", "Kalkylering", "Kap. 4, 6–8", "pages/1_Kalkyl.py",
+         "Självkostnad med prissättning, bidragskalkyl med "
+         "känslighet och ABC jämfört med traditionell fördelning."),
+        ("Bedöm", "Investering", "Kap. 10", "pages/2_Investering.py",
+         "NPV, IRR, payback och annuitet med restvärde och "
+         "rörelsekapital, NPV-profil, känslighet och Monte Carlo."),
+        ("Planera", "Budget", "Kap. 13–15", "pages/3_Budget.py",
+         "Resultat-, likviditets- och balansbudget som går ihop, "
+         "nyckeltal och likviditetsbudget per månad."),
+        ("Följ upp", "Standardkostnadsanalys", "Kap. 17",
+         "pages/4_Standardkostnadsanalys.py",
+         "Volym-, pris- och effektivitetsavvikelser per kostnadsslag "
+         "samt budget- och volymavvikelse för fasta omkostnader."),
+        ("Pröva", "Kunskapstest", "Kap. 4–17", "pages/5_Kunskapstest.py",
+         "Obegränsat med frågor vars svar räknas fram av "
+         "kalkylatorerna, med lösning steg för steg."),
+    ]
+    # Each module card is itself the navigation: role, title, chapter badge,
+    # description and a link, replacing the old map plus separate link row.
+    card_cols = st.columns(len(modules), gap="medium")
+    for col, (role, title, tag, path, desc) in zip(card_cols, modules, strict=True):
+        with col, st.container(border=True):
+            st.html(module_card_head(t(role), t(title)))
+            st.badge(t(tag))
+            st.html(module_card_desc(t(desc)))
+            st.page_link(path, label=t("Öppna →"))
+
     # --- How each module works ------------------------------------------
     st.html(section_heading(t("ARBETSGÅNG"), t("Så arbetar du i varje modul")))
     st.html(
-        pipeline_steps([
+        numbered_steps([
             t("Välj modul"),
             t("Ange data"),
             t("Beräkna och tolka"),

@@ -26,6 +26,9 @@ EN: dict[str, str] = {
     "Förklaringstjänsten är inte aktiv just nu. Alla beräkningar, diagram och exporter fungerar ändå: förklaringarna visas som uträkningar med dina egna siffror, och kunskapstestet använder frågor vars svar räknas fram av appens kalkylatorer.":
         "The explanation service is not active right now. All calculations, charts and exports still work: explanations are shown as worked calculations with your own numbers, and the quiz uses questions whose answers are computed by the app's calculators.",
     "Börja här: Kalkylering →": "Start here: Costing →",
+    "Börja med Kalkylering": "Start with Costing",
+    "Gör ett kunskapstest": "Take a quiz",
+    "Öppna →": "Open →",
     "EKONOMISTYRNINGENS KRETSLOPP": "THE MANAGEMENT ACCOUNTING CYCLE",
     "Så hänger modulerna ihop": "How the modules fit together",
     "Modulerna bildar en sammanhängande arbetsgång. Du räknar fram kostnader, bedömer investeringar, planerar i budget och följer upp utfallet med avvikelseanalys. Slutsatserna återförs till nästa budget, så kretsloppet börjar om. Öppna en modul i menyn till vänster när du vill börja.":

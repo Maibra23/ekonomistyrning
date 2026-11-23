@@ -299,11 +299,12 @@ section[data-testid="stSidebar"] div[data-testid="stPageLink"] a {
 
 /* --- Hero block --- */
 .eks-hero {
-    background: linear-gradient(135deg, %(primary)s 0%%, %(primary_hover)s 100%%);
-    border-left: 4px solid %(focus_ring)s;
+    background: %(canvas)s;
+    border: 1px solid %(border)s;
+    border-top: 4px solid %(primary)s;
     border-radius: 4px;
-    padding: 36px 40px;
-    margin-bottom: 24px;
+    padding: 32px 36px;
+    margin-bottom: 16px;
 }
 .eks-eyebrow {
     font-family: %(font_ui)s;
@@ -315,21 +316,21 @@ section[data-testid="stSidebar"] div[data-testid="stPageLink"] a {
     margin-bottom: 8px;
 }
 .eks-hero .eks-eyebrow {
-    color: rgba(255,255,255,0.7);
+    color: %(focus_ring)s;
     letter-spacing: 2px;
 }
 .eks-hero h1 {
     font-family: %(font_ui)s;
-    font-size: clamp(22px, 2.8vw, 34px);
+    font-size: clamp(24px, 2.6vw, 32px);
     font-weight: 700;
-    color: #FFFFFF;
+    color: %(text_primary)s;
     margin: 8px 0 12px 0;
 }
 .eks-lead {
     font-family: %(font_ui)s;
-    font-size: 15px;
+    font-size: 16px;
     font-weight: 400;
-    color: rgba(255,255,255,0.85);
+    color: %(text_secondary)s;
     max-width: 720px;
     line-height: 1.6;
 }
@@ -445,42 +446,32 @@ section[data-testid="stSidebar"] div[data-testid="stPageLink"] a {
 .eks-kpi-delta.delta-down { color: %(negative)s; }
 .eks-kpi-delta.delta-flat { color: %(text_tertiary)s; }
 
-/* --- Stat strip --- */
+/* --- Stat strip (quiet inline row) --- */
 .eks-stat-strip {
     display: flex;
-    gap: 0;
-    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 8px 40px;
+    margin: 0 0 24px 0;
+    padding: 0 4px;
 }
 .eks-stat-cell {
-    flex: 1;
     min-width: 0;
-    text-align: center;
-    padding: 16px 12px;
-    background: %(canvas)s;
-    border: 1px solid %(border)s;
-    border-right: none;
 }
-.eks-stat-cell:first-child { border-radius: 4px 0 0 4px; }
-.eks-stat-cell:last-child  { border-right: 1px solid %(border)s; border-radius: 0 4px 4px 0; }
 .eks-stat-value {
-    font-family: %(font_mono)s;
-    font-size: clamp(16px, 1.7vw, 22px);
-    font-weight: 500;
+    font-family: %(font_ui)s;
+    font-size: 18px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
     color: %(text_primary)s;
-    display: block;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    display: inline;
+    margin-right: 8px;
 }
 .eks-stat-label {
     font-family: %(font_ui)s;
-    font-size: 11.5px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
+    font-size: 12px;
+    font-weight: 400;
     color: %(text_tertiary)s;
-    margin-top: 4px;
-    display: block;
+    display: inline;
 }
 
 /* --- Pipeline steps --- */
@@ -531,39 +522,20 @@ section[data-testid="stSidebar"] div[data-testid="stPageLink"] a {
     margin: 2px 0 0 0;
 }
 
-/* --- Module map (interconnected modules) --- */
-.eks-map {
-    display: flex;
-    align-items: stretch;
-    gap: 0;
-    margin: 4px 0 18px 0;
-}
-.eks-map-node {
-    flex: 1 1 0;
-    min-width: 0;
-    background: %(canvas)s;
-    border: 1px solid %(border)s;
-    border-top: 3px solid %(primary)s;
-    border-radius: 4px;
-    padding: 16px 18px;
-    display: flex;
-    flex-direction: column;
-}
-.eks-map-role {
-    font-family: %(font_mono)s;
-    font-size: 10px;
-    font-weight: 500;
+/* --- Landing: module cards and numbered steps --- */
+.eks-card-role {
+    font-family: %(font_ui)s;
+    font-size: 11px;
+    font-weight: 600;
     letter-spacing: 1.5px;
     text-transform: uppercase;
     color: %(focus_ring)s;
     display: block;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
 }
-.eks-map-node h4 {
+.eks-card-title {
     font-family: %(font_ui)s;
-    /* Scale slightly with the card so long names like
-       "Standardkostnadsanalys" never overflow a narrow column. */
-    font-size: clamp(13px, 1vw, 14px);
+    font-size: clamp(12px, 0.95vw, 14px);
     font-weight: 700;
     color: %(text_primary)s;
     margin: 0 0 6px 0;
@@ -571,39 +543,24 @@ section[data-testid="stSidebar"] div[data-testid="stPageLink"] a {
     overflow-wrap: anywhere;
     hyphens: auto;
 }
-.eks-map-tag {
-    font-family: %(font_mono)s;
-    font-size: 10px;
-    color: %(text_tertiary)s;
-    background: %(surface_input)s;
-    padding: 2px 7px;
-    border-radius: 3px;
-    align-self: flex-start;
-    margin-bottom: 10px;
-}
-.eks-map-node p {
+.eks-card-desc {
     font-family: %(font_ui)s;
-    font-size: 12px;
+    font-size: 13px;
     line-height: 1.5;
     color: %(text_secondary)s;
-    margin: 0;
+    margin: 8px 0 0 0;
     overflow-wrap: anywhere;
     hyphens: auto;
 }
-.eks-map-arrow {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: %(focus_ring)s;
-    font-size: 17px;
-    padding: 0 7px;
-    flex: 0 0 auto;
+.eks-steps {
+    font-family: %(font_ui)s;
+    font-size: 15px;
+    color: %(text_primary)s;
+    margin: 4px 0 20px 0;
+    padding-left: 24px;
+    line-height: 1.7;
 }
-/* Stack the map vertically on narrow screens; arrows point downward. */
-@media (max-width: 900px) {
-    .eks-map { flex-direction: column; }
-    .eks-map-arrow { transform: rotate(90deg); padding: 6px 0; }
-}
+.eks-steps li::marker { font-weight: 600; color: %(focus_ring)s; }
 
 /* --- Inline info tooltip (hover badge) --- */
 .eks-tip {
@@ -1166,31 +1123,24 @@ def section_heading(eyebrow: str, title: str) -> str:
     )
 
 
-def module_map(nodes: list[dict[str, str]]) -> str:
-    """Render the modules as an interconnected flow of nodes.
+# --- Landing page helpers (T09) ---
+def module_card_head(role: str, title: str) -> str:
+    """Role eyebrow and title for a landing-page module card."""
+    return (
+        f'<span class="eks-card-role">{role}</span>'
+        f'<h4 class="eks-card-title">{title}</h4>'
+    )
 
-    Each node dict accepts ``role`` (short stage label), ``title``, ``tag``
-    (e.g. chapter reference) and ``desc``. Arrow connectors are inserted
-    between nodes to show the modules belong to one continuous workflow.
-    Nodes are not links; navigation happens through the sidebar.
-    """
-    parts: list[str] = []
-    for i, node in enumerate(nodes):
-        role = node.get("role", "")
-        tag = node.get("tag", "")
-        role_html = f'<span class="eks-map-role">{role}</span>' if role else ""
-        tag_html = f'<span class="eks-map-tag">{tag}</span>' if tag else ""
-        parts.append(
-            f'<div class="eks-map-node">'
-            f"{role_html}"
-            f'<h4>{node["title"]}</h4>'
-            f"{tag_html}"
-            f'<p>{node["desc"]}</p>'
-            f"</div>"
-        )
-        if i < len(nodes) - 1:
-            parts.append('<div class="eks-map-arrow">&#8594;</div>')
-    return f'<div class="eks-map">{"".join(parts)}</div>'
+
+def module_card_desc(desc: str) -> str:
+    """Description paragraph for a landing-page module card."""
+    return f'<p class="eks-card-desc">{desc}</p>'
+
+
+def numbered_steps(steps: list[str]) -> str:
+    """Compact numbered list of workflow steps."""
+    items = "".join(f"<li>{step}</li>" for step in steps)
+    return f'<ol class="eks-steps">{items}</ol>'
 
 
 def summary_box(text: str) -> str:
