@@ -143,7 +143,7 @@ def _render_llm_section(
 st.set_page_config(
     page_title="Kalkylering, Ekonomistyrning",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="auto",
 )
 inject_css()
 render_sidebar("kalkyl")

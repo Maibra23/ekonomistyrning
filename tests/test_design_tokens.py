@@ -115,6 +115,8 @@ KNOWN_TESTIDS: frozenset[str] = frozenset(
         "stHeader",
         "stDecoration",  # fallback
         "stToolbar",
+        "stToolbarActions",
+        "stAppDeployButton",
         "stSidebarNav",
         "stSidebar",
         "stSidebarCollapseButton",

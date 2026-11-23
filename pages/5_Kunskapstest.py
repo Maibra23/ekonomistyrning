@@ -83,7 +83,7 @@ _QUIZ_MAX_ATTEMPTS = 2
 st.set_page_config(
     page_title="Kunskapstest, Ekonomistyrning",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="auto",
 )
 inject_css()
 render_sidebar("quiz")

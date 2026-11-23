@@ -11,7 +11,7 @@ st.set_page_config(
     page_title="Ekonomistyrning Sandbox",
     page_icon=None,
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="auto",
     menu_items={"Get Help": None, "Report a bug": None},
 )
 

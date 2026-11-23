@@ -81,8 +81,10 @@ EN: dict[str, str] = {
         "Qwen3-8B is the default and the fastest. Qwen3-14B often gives somewhat fuller explanations but responds more slowly.",
     "FÖRKLARINGAR": "EXPLANATIONS",
     "Kvar denna session: {0}/{1}": "Left this session: {0}/{1}",
-    "Kalkyl &middot; Investering &middot; Budget &middot; Avvikelser": "Costing &middot; Investment &middot; Budget &middot; Variances",
+    "Andersson kap. 4–17": "Andersson ch. 4–17",
+    "ÖVERSIKT": "OVERVIEW",
     "MODULER": "MODULES",
+    "ÖVNING": "PRACTICE",
     "Beräkningar och diagram fungerar normalt även utan förklaringar.": "Calculations and charts work normally even without explanations.",
     "Sessionens gräns för förklaringar är uppnådd. Beräkningar, diagram och export fungerar som vanligt. Gränsen nollställs när du börjar en ny session.":
         "This session's limit for explanations has been reached. Calculations, charts and exports work as usual. The limit resets when you start a new session.",

@@ -71,7 +71,7 @@ from utils.ui import (
 st.set_page_config(
     page_title="Budget och budgetering, Ekonomistyrning",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="auto",
 )
 inject_css()
 render_sidebar("budget")

@@ -116,7 +116,7 @@ def _num(value: object) -> float:
 st.set_page_config(
     page_title="Standardkostnadsanalys, Ekonomistyrning",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="auto",
 )
 inject_css()
 render_sidebar("standardkostnad")

@@ -89,7 +89,7 @@ def _header_lines() -> list[str]:
 st.set_page_config(
     page_title="Investeringsbedömning, Ekonomistyrning",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="auto",
 )
 inject_css()
 render_sidebar("investering")

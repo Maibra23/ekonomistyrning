@@ -198,36 +198,35 @@ div[data-testid="stMainBlockContainer"] {
     header[data-testid="stHeader"] {
         display: block !important;
     }
+    /* The expand button lives inside the toolbar; show the toolbar but
+       keep its other actions hidden. */
+    div[data-testid="stToolbar"] {
+        display: flex !important;
+    }
+    div[data-testid="stToolbarActions"],
+    div[data-testid="stAppDeployButton"] {
+        display: none !important;
+    }
     div[data-testid="stMainBlockContainer"] {
         padding-left: 16px;
         padding-right: 16px;
     }
 }
 .eks-sidebar-brand {
-    padding: 20px 16px 16px 16px;
+    padding: 12px 8px 12px 8px;
     border-bottom: 1px solid %(border)s;
-    margin-bottom: 16px;
 }
 .eks-brand-bar {
-    width: 32px;
+    width: 24px;
     height: 3px;
     background: %(primary)s;
-    margin-bottom: 12px;
-}
-.eks-brand-mark {
-    font-family: %(font_mono)s;
-    font-size: 11px;
-    font-weight: 500;
-    color: %(primary)s;
-    letter-spacing: 2px;
-    display: block;
+    margin-bottom: 8px;
 }
 .eks-brand-title {
     font-family: %(font_ui)s;
     font-size: 15px;
     font-weight: 700;
     color: %(text_primary)s;
-    margin-top: 4px;
     display: block;
 }
 .eks-brand-sub {
@@ -242,9 +241,26 @@ div[data-testid="stMainBlockContainer"] {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: %(text_secondary)s;
-    padding: 12px 16px 6px 16px;
+    color: %(text_tertiary)s;
+    padding: 8px 8px 0 8px;
     display: block;
+}
+.eks-sidebar-divider {
+    border-top: 1px solid %(border)s;
+    margin: 4px 0;
+}
+/* Grouped navigation. Each group is a keyed container (.st-key-eks_nav_*);
+   the current page sits inside .st-key-eks_nav_active. */
+section[data-testid="stSidebar"] div[data-testid="stPageLink"] a {
+    min-height: 36px;
+    margin: 0;
+}
+.st-key-eks_nav_active div[data-testid="stPageLink"] a,
+.st-key-eks_nav_active div[data-testid="stPageLink"] a:hover {
+    background-color: %(primary_subtle)s;
+}
+.st-key-eks_nav_active div[data-testid="stPageLink"] a * {
+    color: %(primary)s;
 }
 .eks-company {
     padding: 8px 16px 4px 16px;
@@ -1069,13 +1085,36 @@ def footer_note(version: str = APP_VERSION, updated: str = "") -> str:
 # Sidebar
 # ---------------------------------------------------------------------------
 
-_NAV_PAGES: list[tuple[str, str, str]] = [
-    ("hem", "Hem", "streamlit_app.py"),
-    ("kalkyl", "Kalkylering", "pages/1_Kalkyl.py"),
-    ("investering", "Investering", "pages/2_Investering.py"),
-    ("budget", "Budget", "pages/3_Budget.py"),
-    ("standardkostnad", "Standardkostnadsanalys", "pages/4_Standardkostnadsanalys.py"),
-    ("quiz", "Kunskapstest", "pages/5_Kunskapstest.py"),
+# Grouped sidebar navigation: (group label, [(key, label, path, icon)]).
+# Labels are Swedish source text, translated through t() at render time.
+_NAV_GROUPS: list[tuple[str, list[tuple[str, str, str, str]]]] = [
+    (
+        "ÖVERSIKT",
+        [("hem", "Hem", "streamlit_app.py", ":material/home:")],
+    ),
+    (
+        "MODULER",
+        [
+            ("kalkyl", "Kalkylering", "pages/1_Kalkyl.py", ":material/calculate:"),
+            (
+                "investering",
+                "Investering",
+                "pages/2_Investering.py",
+                ":material/trending_up:",
+            ),
+            ("budget", "Budget", "pages/3_Budget.py", ":material/account_balance:"),
+            (
+                "standardkostnad",
+                "Standardkostnadsanalys",
+                "pages/4_Standardkostnadsanalys.py",
+                ":material/difference:",
+            ),
+        ],
+    ),
+    (
+        "ÖVNING",
+        [("quiz", "Kunskapstest", "pages/5_Kunskapstest.py", ":material/quiz:")],
+    ),
 ]
 
 
@@ -1224,7 +1263,6 @@ def _render_language_switch() -> None:
         format_func=lambda code: {"sv": "Svenska", "en": "English"}[code],
         key="lang",
         horizontal=True,
-        label_visibility="collapsed",
     )
     sync_lang_param()
 
@@ -1232,27 +1270,38 @@ def _render_language_switch() -> None:
 def render_sidebar(active_page: str) -> None:
     """Render the full sidebar with brand, navigation, LLM status, and session info.
 
+    Order: brand, grouped navigation, divider, language switch, then the
+    current company card, model selector and explanation budget meter.
+
     Args:
         active_page: One of 'hem', 'kalkyl', 'investering', 'budget',
-                     'standardkostnad', 'quiz'.
+                     'standardkostnad', 'quiz'. Marks the current page link
+                     with the ``eks_nav_active`` style hook.
     """
     with st.sidebar:
         st.html(
             '<div class="eks-sidebar-brand">'
             '<div class="eks-brand-bar"></div>'
-            '<span class="eks-brand-mark">EKS</span>'
             '<span class="eks-brand-title">Ekonomistyrning</span>'
-            '<span class="eks-brand-sub">'
-            + t("Kalkyl &middot; Investering &middot; Budget &middot; Avvikelser")
-            + "</span>"
+            f'<span class="eks-brand-sub">{t("Andersson kap. 4–17")}</span>'
             "</div>"
         )
 
-        _render_language_switch()
+        for group_label, links in _NAV_GROUPS:
+            st.html(f'<span class="eks-sidebar-section-label">{t(group_label)}</span>')
+            with st.container(key=f"eks_nav_{links[0][0]}", gap=None):
+                for key, label, path, icon in links:
+                    if key == active_page:
+                        # Streamlit's own current-page styling cannot be
+                        # targeted from CSS; this wrapper carries the
+                        # .st-key-eks_nav_active hook instead.
+                        with st.container(key="eks_nav_active", gap=None):
+                            st.page_link(path, label=t(label), icon=icon)
+                    else:
+                        st.page_link(path, label=t(label), icon=icon)
 
-        st.html(f'<span class="eks-sidebar-section-label">{t("MODULER")}</span>')
-        for _key, label, path in _NAV_PAGES:
-            st.page_link(path, label=t(label))
+        st.html('<div class="eks-sidebar-divider"></div>')
+        _render_language_switch()
 
         _render_current_scenario_banner()
         _render_model_selector()
