@@ -14,11 +14,11 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from utils.charts import COLORS, PALETTE, apply_layout, show_chart
+from utils.charts import CHART_CATEGORICAL, COLORS, apply_layout, show_chart
 from utils.explain import interpret_variances, steps_fixed_overhead, steps_variance
 from utils.export import export_to_excel, table_range
-from utils.formatting import format_sek
-from utils.i18n import t, t_frame
+from utils.formatting import format_sek, format_signed_sek, variance_status
+from utils.i18n import t
 from utils.page_blocks import (
     finish_scenario,
     render_qa_chat,
@@ -47,6 +47,7 @@ from utils.state_save import (
     restore_number,
     save_state,
 )
+from utils.tables import fin_dataframe
 from utils.tutor import render_tutor_explanation, tutor_panel
 from utils.ui import (
     APP_UPDATED,
@@ -56,6 +57,7 @@ from utils.ui import (
     page_header,
     render_kpi_row,
     render_sidebar,
+    status_pill,
 )
 
 _XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -112,6 +114,30 @@ def _num(value: object) -> float:
     return 0.0 if pd.isna(out) else out
 
 
+def _variance_card(label: str, value: float, *, size: str = "md") -> str:
+    """KPI card for a variance with a text status (F/O), not colour alone."""
+    status, tone = variance_status(value)
+    glyph = {"negative": "▲", "positive": "▼"}.get(tone)
+    return kpi_card(
+        label,
+        format_sek(value),
+        variant="success" if value <= 0 else "danger",
+        status=t(status),
+        status_tone=tone,
+        status_glyph=glyph,
+        size=size,
+    )
+
+
+def _fo_label(value: float) -> str:
+    """Short F/O marker for a table row total (positive = unfavourable)."""
+    if value > 0:
+        return "O"
+    if value < 0:
+        return "F"
+    return "-"
+
+
 # ---------------------------------------------------------------------------
 # Page config
 # ---------------------------------------------------------------------------
@@ -149,6 +175,15 @@ header_actions = page_header(
         "och i budget- och volymavvikelse för fasta omkostnader.")
     ),
     chapter=t("Kap. 17"),
+)
+
+# Sign convention, visible on every tab (the bottom caption stays too).
+st.html(
+    '<div class="eks-sign-legend" style="display:flex;flex-wrap:wrap;'
+    'align-items:center;gap:6px 14px;margin:2px 0 10px 0;font-size:0.85rem;">'
+    f'<span>{status_pill(t("Ofördelaktig ▲"), "negative", glyph="")} {t("positivt belopp")}</span>'
+    f'<span>{status_pill(t("Fördelaktig ▼"), "positive", glyph="")} {t("negativt belopp")}</span>'
+    "</div>"
 )
 
 tab1, tab2, tab3 = st.tabs([
@@ -231,14 +266,28 @@ with tab1:
             hide_index=True,
             key="sk_items_de",
             column_config={
-                _C_NAME: st.column_config.TextColumn(t(_C_NAME), required=True),
-                _C_UNIT: st.column_config.TextColumn(
-                    t(_C_UNIT), help=t("Insatsens enhet, t.ex. kg eller timmar")
+                _C_NAME: st.column_config.TextColumn(
+                    t("Kostnadsslag"), required=True, help=t(_C_NAME)
                 ),
-                _C_SP: st.column_config.NumberColumn(t(_C_SP), min_value=0.0, format="%.2f"),
-                _C_SF: st.column_config.NumberColumn(t(_C_SF), min_value=0.0, format="%.3f"),
-                _C_VP: st.column_config.NumberColumn(t(_C_VP), min_value=0.0, format="%.2f"),
-                _C_VF: st.column_config.NumberColumn(t(_C_VF), min_value=0.0, format="%.3f"),
+                _C_UNIT: st.column_config.TextColumn(
+                    t("Enhet"), help=t("Insatsens enhet, t.ex. kg eller timmar"), width="small"
+                ),
+                _C_SP: st.column_config.NumberColumn(
+                    t("Std-pris (kr/enh)"), help=t(_C_SP),
+                    min_value=0.0, format="%.2f", width="small",
+                ),
+                _C_SF: st.column_config.NumberColumn(
+                    t("Std-förbr. (enh/st)"), help=t(_C_SF),
+                    min_value=0.0, format="%.3f", width="small",
+                ),
+                _C_VP: st.column_config.NumberColumn(
+                    t("Verkl. pris (kr/enh)"), help=t(_C_VP),
+                    min_value=0.0, format="%.2f", width="small",
+                ),
+                _C_VF: st.column_config.NumberColumn(
+                    t("Verkl. förbr. (enh/st)"), help=t(_C_VF),
+                    min_value=0.0, format="%.3f", width="small",
+                ),
             },
         )
         st.form_submit_button(t("Uppdatera värden"), type="primary")
@@ -281,15 +330,9 @@ with tab1:
             ],
         }
 
-        def _variant(value: float) -> str:
-            return "success" if value <= 0 else "danger"
-
         render_kpi_row([
-            kpi_card(t("Total avvikelse"), format_sek(totals["total"]), variant=_variant(totals["total"])),
-            *[
-                kpi_card(t(_COMPONENT_LABELS[c]), format_sek(totals[c]), variant=_variant(totals[c]))
-                for c in _COMPONENTS
-            ],
+            _variance_card(t("Total avvikelse"), totals["total"]),
+            *[_variance_card(t(_COMPONENT_LABELS[c]), totals[c]) for c in _COMPONENTS],
         ])
 
         # Waterfall: standard cost -> the three components -> actual cost
@@ -325,8 +368,8 @@ with tab1:
                 name=t(_COMPONENT_LABELS[comp]),
                 x=[t(k) for k in summary_df["komponent"]],
                 y=summary_df[comp],
-                marker_color=PALETTE[i % len(PALETTE)],
-                text=[format_sek(v) for v in summary_df[comp]],
+                marker_color=CHART_CATEGORICAL[i % 3],
+                text=[format_signed_sek(v) for v in summary_df[comp]],
                 textposition="outside",
                 textfont=dict(size=11),
             ))
@@ -335,14 +378,16 @@ with tab1:
         apply_layout(fig_items, title=t("Avvikelser per kostnadsslag (positivt = ofördelaktigt)"), height=400)
         show_chart(fig_items)
 
-        st.dataframe(
-            t_frame(pd.DataFrame({
+        fin_dataframe(
+            pd.DataFrame({
                 "Kostnadsslag": summary_df["komponent"],
-                **{_COMPONENT_LABELS[c]: summary_df[c].map(format_sek) for c in _COMPONENTS},
-                "Totalt": summary_df["total"].map(format_sek),
-            })),
-            use_container_width=True,
-            hide_index=True,
+                **{_COMPONENT_LABELS[c]: summary_df[c] for c in _COMPONENTS},
+                "Totalt": summary_df["total"],
+                "F/O": summary_df["total"].map(_fo_label),
+            }),
+            money=[*(_COMPONENT_LABELS[c] for c in _COMPONENTS), "Totalt"],
+            text=["Kostnadsslag", "F/O"],
+            total_row="Summa",
         )
 
         if totals["reconciliation_ok"]:
@@ -509,25 +554,10 @@ with tab2:
         )
         st.session_state["sk_fast_result"] = fast_result
 
-        def _fvariant(value: float) -> str:
-            return "success" if value <= 0 else "danger"
-
         render_kpi_row([
-            kpi_card(
-                t("Budgetavvikelse"),
-                format_sek(fast_result["budgetavvikelse"]),
-                variant=_fvariant(fast_result["budgetavvikelse"]),
-            ),
-            kpi_card(
-                t("Volymavvikelse"),
-                format_sek(fast_result["volymavvikelse"]),
-                variant=_fvariant(fast_result["volymavvikelse"]),
-            ),
-            kpi_card(
-                t("Total avvikelse"),
-                format_sek(fast_result["total"]),
-                variant=_fvariant(fast_result["total"]),
-            ),
+            _variance_card(t("Budgetavvikelse"), fast_result["budgetavvikelse"]),
+            _variance_card(t("Volymavvikelse"), fast_result["volymavvikelse"]),
+            _variance_card(t("Total avvikelse"), fast_result["total"]),
         ])
         if normal_volym <= 0:
             st.warning(t("Ange en normalvolym över noll för att räkna ut volymavvikelsen."))
@@ -693,21 +723,9 @@ with tab3:
         total_all = rorlig_total + fast_total
 
         render_kpi_row([
-            kpi_card(
-                t("Total avvikelse (alla)"),
-                format_sek(total_all),
-                variant="success" if total_all <= 0 else "danger",
-            ),
-            kpi_card(
-                t("Rörliga kostnader"),
-                format_sek(rorlig_total),
-                variant="success" if rorlig_total <= 0 else "danger",
-            ),
-            kpi_card(
-                t("Fasta omkostnader"),
-                format_sek(fast_total),
-                variant="success" if fast_total <= 0 else "danger",
-            ),
+            _variance_card(t("Total avvikelse (alla)"), total_all),
+            _variance_card(t("Rörliga kostnader"), rorlig_total),
+            _variance_card(t("Fasta omkostnader"), fast_total),
         ])
 
         summary_rows: list[dict] = []
@@ -736,23 +754,6 @@ with tab3:
             bar_names.extend([t("Budgetavvikelse (fasta)"), t("Volymavvikelse (fasta)")])
             bar_values.extend([fast_res["budgetavvikelse"], fast_res["volymavvikelse"]])
 
-        bar_colors = [
-            COLORS["success"] if v < 0 else (COLORS["danger"] if v > 0 else COLORS["neutral"])
-            for v in bar_values
-        ]
-        fig_summary = go.Figure()
-        fig_summary.add_trace(go.Bar(
-            x=bar_names,
-            y=bar_values,
-            marker_color=bar_colors,
-            text=[format_sek(v) for v in bar_values],
-            textposition="outside",
-            textfont=dict(size=11),
-        ))
-        fig_summary.add_hline(y=0, line_dash="dot", line_color=COLORS["neutral"], line_width=1)
-        apply_layout(fig_summary, title=t("Sammanställning av alla avvikelser"), height=420)
-        show_chart(fig_summary)
-
         if summary_rows:
             dominant = max(summary_rows, key=lambda r: abs(r["Belopp (kr)"]))
             direction = t("fördelaktig") if dominant["Belopp (kr)"] < 0 else t("ofördelaktig")
@@ -765,13 +766,35 @@ with tab3:
                 )
             )
 
+        bar_colors = [
+            COLORS["success"] if v < 0 else (COLORS["danger"] if v > 0 else COLORS["neutral"])
+            for v in bar_values
+        ]
+        fig_summary = go.Figure()
+        fig_summary.add_trace(go.Bar(
+            x=bar_names,
+            y=bar_values,
+            marker_color=bar_colors,
+            text=[format_signed_sek(v) for v in bar_values],
+            textposition="outside",
+            textfont=dict(size=11),
+        ))
+        fig_summary.add_hline(y=0, line_dash="dot", line_color=COLORS["neutral"], line_width=1)
+        apply_layout(fig_summary, title=t("Sammanställning av alla avvikelser"), height=420)
+        show_chart(fig_summary)
+
+        # Display: per-row F/O and a Summa row from fin_dataframe; the export
+        # frame keeps its own TOTALT row and original columns.
+        display_df = pd.DataFrame(summary_rows)
+        display_df["F/O"] = display_df["Belopp (kr)"].map(_fo_label)
+        fin_dataframe(
+            display_df,
+            money=["Belopp (kr)"],
+            text=["Komponent", "Typ", "F/O"],
+            total_row="Summa",
+        )
         summary_rows.append({"Komponent": "TOTALT", "Belopp (kr)": total_all, "Typ": ""})
         export_df = pd.DataFrame(summary_rows)
-        st.dataframe(
-            t_frame(export_df.assign(**{"Belopp (kr)": export_df["Belopp (kr)"].map(format_sek)})),
-            use_container_width=True,
-            hide_index=True,
-        )
 
         _sum_header = scenario_header_lines(st.session_state.get("sk_scenario_info"))
         toolbar_download(
