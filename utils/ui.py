@@ -14,6 +14,7 @@ import html
 import re
 
 import streamlit as st
+from streamlit.delta_generator import DeltaGenerator
 
 from utils.i18n import get_lang, sync_lang_param, t
 
@@ -711,14 +712,34 @@ section[data-testid="stSidebar"] div[data-testid="stPageLink"] a {
 }
 .eks-grounding-warn {
     font-family: %(font_ui)s;
-    font-size: 12px;
-    color: %(negative)s;
-    background: %(negative_subtle)s;
-    border: 1px solid %(negative)s;
-    padding: 4px 12px;
-    border-radius: 4px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: %(caution)s;
+    background: %(caution_subtle)s;
+    border: 1px solid %(caution)s;
+    border-left-width: 4px;
+    padding: 6px 12px;
+    border-radius: 6px;
     display: inline-block;
     margin-top: 8px;
+}
+
+/* --- Company card (page_blocks.render_scenario_info) --- */
+.eks-company-card {
+    font-family: %(font_ui)s;
+    border-top: 1px solid %(border)s;
+    padding-top: 12px;
+}
+.eks-company-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: %(text_primary)s;
+    margin-bottom: 2px;
+}
+.eks-company-desc {
+    font-size: 13px;
+    line-height: 1.5;
+    color: %(text_secondary)s;
 }
 
 /* --- Statement table (utils.tables.statement_table) --- */
@@ -841,6 +862,44 @@ def page_title(eyebrow: str, title: str, subtitle: str = "") -> str:
         f"{sub_html}"
         f"</div>"
     )
+
+
+def page_header(
+    eyebrow: str,
+    title: str,
+    subtitle: str = "",
+    chapter: str | None = None,
+) -> DeltaGenerator:
+    """Render the module page header and return its right-hand action slot.
+
+    The title block (eyebrow, optional chapter, ``h1``, subtitle) goes in a
+    wide left column; the returned container is a narrow right column for
+    page-level actions. Pages fill it with the share popover at the end of
+    the script, after every ``save_state`` call has written the query
+    string::
+
+        header_actions = page_header(t("BUDGETERING"), t("Budget"), ...)
+        ...                                   # the rest of the page
+        render_share_link(header_actions)     # last, so the URL is complete
+
+    All text is escaped. Pass already translated strings.
+    """
+    eyebrow_text = html.escape(eyebrow)
+    if chapter:
+        eyebrow_text += (
+            ' <span aria-hidden="true">·</span> '
+            f"{html.escape(chapter)}"
+        )
+    left, right = st.columns([5, 1], vertical_alignment="top")
+    with left:
+        st.html(
+            '<div class="eks-page-title">'
+            f'<div class="eks-eyebrow">{eyebrow_text}</div>'
+            f"<h1>{html.escape(title)}</h1>"
+            + (f'<div class="eks-subtitle">{html.escape(subtitle)}</div>' if subtitle else "")
+            + "</div>"
+        )
+    return right.container(horizontal_alignment="right")
 
 
 # variant (legacy) -> status tone. "default" has no tone: neutral border.

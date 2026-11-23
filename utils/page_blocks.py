@@ -2,17 +2,39 @@
 
 Every module page has the same pieces of UI: a scenario row
 (difficulty, "Generera ett exempelföretag", optional reset and the
-cross-module adopt button), a Q&A chat about the current numbers, an
-Excel header naming the company and a share link with every input. Keeping them here means a fix lands
-on every page at once instead of in five copies.
+cross-module adopt button), a results toolbar (export and reset), a Q&A
+chat about the current numbers, an Excel header naming the company and a
+share link with every input. Keeping them here means a fix lands on every
+page at once instead of in five copies.
+
+Page anatomy (see also ``utils.ui.page_header`` and
+``utils.tutor.tutor_panel``)::
+
+    header_actions = page_header(eyebrow, title, subtitle, chapter)
+    scenario, code, _ = render_scenario_controls(prefix, module)
+    render_scenario_info(prefix)              # company card, same bordered box
+    ...inputs...
+    export_slot, reset_slot = results_toolbar()   # where the results begin
+    ...KPIs, charts, tables...
+    with tutor_panel("Förklaring"):
+        render_tutor_explanation(..., heading=None)
+        render_qa_chat(...)
+    toolbar_download(export_slot, t("Exportera till Excel"), data=..., ...)
+    if toolbar_reset(reset_slot, t("Återställ till standardvärden"), key=...):
+        ...
+    render_share_link(header_actions)         # after every save_state call
+    st.html(footer_note(updated=APP_UPDATED)) # once, at the end of the page
 """
 from __future__ import annotations
 
+import html
+import threading
+from contextlib import nullcontext
 from urllib.parse import urlencode
 
 import streamlit as st
+from streamlit.delta_generator import DeltaGenerator
 
-from utils.grounding_ui import show_grounding_warning
 from utils.humanizer import humanize
 from utils.i18n import t
 from utils.llm import (
@@ -39,6 +61,10 @@ OFFLINE_CHAT_CAPTION = (
 # ---------------------------------------------------------------------------
 # Scenario row
 # ---------------------------------------------------------------------------
+
+
+# Per-run hand-off from render_scenario_controls to render_scenario_info.
+_SCENARIO_BOX = threading.local()
 
 
 def scenario_header_lines(
@@ -75,34 +101,35 @@ def render_scenario_controls(
     Returns ``(scenario or None, difficulty_code, reset_clicked)``.
     ``reset_clicked`` is always False when ``reset_label`` is None.
     """
-    cols = st.columns([2, 1, 1])
-    with cols[0]:
-        label = st.selectbox(
-            t("Svårighetsgrad"),
-            DIFFICULTY_OPTIONS,
-            index=1,
-            key=f"{prefix}_scenario_difficulty",
-            format_func=t,
-            help=t(SCENARIO_DIFFICULTY_HELP),
-        )
-    with cols[1]:
-        st.write("")
-        st.write("")
-        generate = st.button(
-            t("Generera ett exempelföretag"),
-            key=f"{prefix}_gen_scenario",
-            use_container_width=True,
-        )
-    reset = False
-    if reset_label:
-        with cols[2]:
-            st.write("")
-            st.write("")
-            reset = st.button(
-                t(reset_label), key=f"{prefix}_reset_defaults", use_container_width=True
+    box = st.container(border=True)
+    # render_scenario_info() later in the same run puts the company card in
+    # this box. Thread-local: every script run has its own thread.
+    _SCENARIO_BOX.boxes = {**getattr(_SCENARIO_BOX, "boxes", {}), prefix: box}
+    with box:
+        cols = st.columns([2, 1, 1], vertical_alignment="bottom")
+        with cols[0]:
+            label = st.selectbox(
+                t("Svårighetsgrad"),
+                DIFFICULTY_OPTIONS,
+                index=1,
+                key=f"{prefix}_scenario_difficulty",
+                format_func=t,
+                help=t(SCENARIO_DIFFICULTY_HELP),
             )
+        with cols[1]:
+            generate = st.button(
+                t("Generera ett exempelföretag"),
+                key=f"{prefix}_gen_scenario",
+                use_container_width=True,
+            )
+        reset = False
+        if reset_label:
+            with cols[2]:
+                reset = st.button(
+                    t(reset_label), key=f"{prefix}_reset_defaults", use_container_width=True
+                )
 
-    adopt = render_adopt_button(module, f"{prefix}_adopt_scenario")
+        adopt = render_adopt_button(module, f"{prefix}_adopt_scenario")
     if not (generate or adopt):
         return None, DIFFICULTY_MAP[label], reset
 
@@ -138,10 +165,25 @@ def finish_scenario(
 
 
 def render_scenario_info(prefix: str, desc_key: str = "bransch_beskrivning") -> None:
-    """Show the generated company's name and description, if any."""
+    """Show the generated company as a card, if there is one.
+
+    The card goes into the bordered box that :func:`render_scenario_controls`
+    drew earlier in the same run, so the scenario row and the company read
+    as one context bar. Without that box it renders in place.
+    """
+    box = getattr(_SCENARIO_BOX, "boxes", {}).pop(prefix, None)
     info = st.session_state.get(f"{prefix}_scenario_info")
-    if info:
-        st.info(f"**{info.get('foretag_namn', '')}**\n\n{t(str(info.get(desc_key, '')))}")
+    if not info:
+        return
+    name = html.escape(str(info.get("foretag_namn", "")))
+    desc = html.escape(t(str(info.get(desc_key, ""))))
+    with box if box is not None else nullcontext():
+        st.html(
+            '<div class="eks-company-card">'
+            f'<div class="eks-company-name">{name}</div>'
+            + (f'<div class="eks-company-desc">{desc}</div>' if desc else "")
+            + "</div>"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -200,13 +242,14 @@ def render_qa_chat(
             }
             if ground and expected:
                 grounding = verify_grounding(result.text, expected)
-                if grounding["missing"]:
+                # One warning only: this box also covers the "wrong" case
+                # that grounding_ui.show_grounding_warning reported.
+                if grounding.get("missing") or grounding.get("wrong"):
                     st.html(
                         '<div class="eks-grounding-warn">'
                         + t("OBS: Svaret kan ha refererat fel siffra, verifiera mot beräkningen ovan.")
                         + "</div>"
                     )
-                show_grounding_warning(grounding)
         history.append(("user", question))
         history.append(("assistant", result.text))
     except LLMSessionCapError:
@@ -234,12 +277,16 @@ def share_url(base_url: str, params: dict[str, str]) -> str:
     return f"{base}?{query}" if query else base
 
 
-def render_share_link() -> None:
+def render_share_link(target: DeltaGenerator | None = None) -> None:
     """Popover with a link that reopens the page with the same inputs.
 
     ``utils.state_save.save_state`` already mirrors every module's inputs
     into the query string, so the current URL is the share link. Call
-    this after the page's save_state calls.
+    this after the page's save_state calls, i.e. at the end of the script.
+    Pass the container returned by ``utils.ui.page_header`` as ``target``
+    to place the popover top right in the page header (Streamlit lets a
+    run fill a container created earlier); without it the popover renders
+    where it is called.
     """
     params = {k: st.query_params[k] for k in st.query_params}
     if not params:
@@ -248,10 +295,69 @@ def render_share_link() -> None:
         base = str(st.context.url or "")
     except AttributeError:  # older Streamlit without st.context.url
         base = ""
-    with st.popover(t("Dela dina siffror")):
-        st.caption(
-            t("Länken innehåller alla värden du har matat in här. Den som öppnar "
-            "den ser samma kalkyl, och du kan själv använda den för att komma "
-            "tillbaka senare.")
-        )
-        st.code(share_url(base, params), language=None, wrap_lines=True)
+    with target if target is not None else nullcontext():
+        with st.popover(t("Dela dina siffror"), icon=":material/share:"):
+            st.caption(
+                t("Länken innehåller alla värden du har matat in här. Den som öppnar "
+                "den ser samma kalkyl, och du kan själv använda den för att komma "
+                "tillbaka senare.")
+            )
+            st.code(share_url(base, params), language=None, wrap_lines=True)
+
+
+# ---------------------------------------------------------------------------
+# Results toolbar
+# ---------------------------------------------------------------------------
+
+
+def results_toolbar() -> tuple[DeltaGenerator, DeltaGenerator]:
+    """Right-aligned action row at the top of a results area.
+
+    Returns ``(export_slot, reset_slot)``. Create the toolbar where the
+    results begin and fill the slots later in the run (an export often
+    needs data computed further down, e.g. the cached explanation text),
+    preferably with :func:`toolbar_download` and :func:`toolbar_reset`.
+    An unused slot renders nothing. Not for use inside a form.
+    """
+    bar = st.container(
+        horizontal=True,
+        horizontal_alignment="right",
+        vertical_alignment="center",
+        gap="small",
+    )
+    export_slot = bar.container(width="content")
+    reset_slot = bar.container(width="content")
+    return export_slot, reset_slot
+
+
+def toolbar_download(
+    slot: DeltaGenerator,
+    label: str,
+    *,
+    data: bytes,
+    file_name: str,
+    mime: str,
+    key: str | None = None,
+) -> bool:
+    """Export button in a toolbar slot (secondary, download icon).
+
+    ``label`` is already translated. Key, file name and data pass through
+    unchanged, so the downloaded file is the same as before.
+    """
+    return slot.download_button(
+        label,
+        data=data,
+        file_name=file_name,
+        mime=mime,
+        key=key,
+        icon=":material/download:",
+    )
+
+
+def toolbar_reset(slot: DeltaGenerator, label: str, *, key: str) -> bool:
+    """Reset button in a toolbar slot (tertiary, restart icon).
+
+    ``label`` is already translated. Returns True on the run it was
+    clicked; the page keeps its own reset logic.
+    """
+    return slot.button(label, key=key, type="tertiary", icon=":material/restart_alt:")

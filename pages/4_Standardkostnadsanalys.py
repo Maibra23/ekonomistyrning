@@ -25,7 +25,10 @@ from utils.page_blocks import (
     render_scenario_controls,
     render_scenario_info,
     render_share_link,
+    results_toolbar,
     scenario_header_lines,
+    toolbar_download,
+    toolbar_reset,
 )
 from utils.prompts import (
     FALLBACK_TEMPLATES,
@@ -44,13 +47,13 @@ from utils.state_save import (
     restore_number,
     save_state,
 )
-from utils.tutor import render_tutor_explanation
+from utils.tutor import render_tutor_explanation, tutor_panel
 from utils.ui import (
     APP_UPDATED,
     footer_note,
     inject_css,
     kpi_card,
-    page_title,
+    page_header,
     render_kpi_row,
     render_sidebar,
 )
@@ -136,16 +139,16 @@ if st.session_state.pop("_reset_sk", False):
 # Page header
 # ---------------------------------------------------------------------------
 
-st.html(
-    page_title(
-        eyebrow=t("AVVIKELSEANALYS"),
-        title=t("Standardkostnadsanalys"),
-        subtitle=(
-            t("Analysera avvikelser mellan standardkostnad och verkligt utfall. "
-            "Bryt ner i volym-, pris- och effektivitetsavvikelser för rörliga kostnader, "
-            "och i budget- och volymavvikelse för fasta omkostnader.")
-        ),
-    )
+# The right-hand slot gets the share popover at the end of the script.
+header_actions = page_header(
+    eyebrow=t("AVVIKELSEANALYS"),
+    title=t("Standardkostnadsanalys"),
+    subtitle=(
+        t("Analysera avvikelser mellan standardkostnad och verkligt utfall. "
+        "Bryt ner i volym-, pris- och effektivitetsavvikelser för rörliga kostnader, "
+        "och i budget- och volymavvikelse för fasta omkostnader.")
+    ),
+    chapter=t("Kap. 17"),
 )
 
 tab1, tab2, tab3 = st.tabs([
@@ -261,6 +264,7 @@ with tab1:
         )
         items.append(res)
 
+    sk_rorlig_export_slot, sk_reset_slot = results_toolbar()
     if not items:
         st.session_state["sk_rorlig_result"] = None
         st.info(t("Lägg till minst ett kostnadsslag i tabellen för att beräkna avvikelser."))
@@ -371,26 +375,27 @@ with tab1:
             for r in items
         ]
         _rorlig_outputs = {"total_avvikelse": totals["total"], **{c: totals[c] for c in _COMPONENTS}}
-        render_tutor_explanation(
-            state_key="sk_rorlig_llm",
-            inputs={
-                "standard_volym": std_volym,
-                "verklig_volym": verk_volym,
-                "kostnadsslag": ", ".join(r["komponent"] for r in items),
-            },
-            outputs=_rorlig_outputs,
-            build_prompt=lambda: build_standardkost_interpretation_prompt(_rorlig_components),
-            fallback_text=lambda: FALLBACK_TEMPLATES["standardkost"](
-                "standardkost",
-                {"standard_volym": std_volym, "verklig_volym": verk_volym},
-                _rorlig_outputs,
-                interpretation=interpret_variances(totals),
-            ),
-            required_sections=TUTOR_REQUIRED_SECTIONS,
-            expected_numbers=_rorlig_outputs,
-            heading=t("### Tolkning"),
-            spinner_label=t("Analyserar avvikelser..."),
-        )
+        with tutor_panel("Tolkning"):
+            render_tutor_explanation(
+                state_key="sk_rorlig_llm",
+                inputs={
+                    "standard_volym": std_volym,
+                    "verklig_volym": verk_volym,
+                    "kostnadsslag": ", ".join(r["komponent"] for r in items),
+                },
+                outputs=_rorlig_outputs,
+                build_prompt=lambda: build_standardkost_interpretation_prompt(_rorlig_components),
+                fallback_text=lambda: FALLBACK_TEMPLATES["standardkost"](
+                    "standardkost",
+                    {"standard_volym": std_volym, "verklig_volym": verk_volym},
+                    _rorlig_outputs,
+                    interpretation=interpret_variances(totals),
+                ),
+                required_sections=TUTOR_REQUIRED_SECTIONS,
+                expected_numbers=_rorlig_outputs,
+                heading=None,
+                spinner_label=t("Analyserar avvikelser..."),
+            )
 
         _sk_header = scenario_header_lines(st.session_state.get("sk_scenario_info"))
         _rorlig_export_df = pd.DataFrame({
@@ -400,8 +405,9 @@ with tab1:
             },
             "Total avvikelse": [*summary_df["total"], totals["total"]],
         })
-        st.download_button(
-            label=t("Exportera till Excel"),
+        toolbar_download(
+            sk_rorlig_export_slot,
+            t("Exportera till Excel"),
             data=export_to_excel(
                 {"Rorliga avvikelser": _rorlig_export_df},
                 header_lines=_sk_header or None,
@@ -428,13 +434,11 @@ with tab1:
         },
     )
 
-    if st.button(t("Återställ till standardvärden"), key="sk_reset_autosave"):
+    if toolbar_reset(sk_reset_slot, t("Återställ till standardvärden"), key="sk_reset_autosave"):
         clear_state("standardkost_rorlig")
         clear_state("standardkost_fast")
         st.session_state["_reset_sk"] = True
         st.rerun()
-
-    st.html(footer_note(updated=APP_UPDATED))
 
 # ===========================================================================
 # TAB 2 -- FASTA OMKOSTNADER (kapitel 17.7)
@@ -499,6 +503,7 @@ with tab2:
             st.form_submit_button(t("Uppdatera värden"), type="primary")
 
     with col_fix_res:
+        sk_fast_export_slot, _ = results_toolbar()
         fast_result = variance_fixed_overhead_volume(
             budget_belopp, verkligt_belopp, normal_volym, fast_verklig_volym
         )
@@ -588,8 +593,9 @@ with tab2:
                 fast_result["total"],
             ],
         })
-        st.download_button(
-            label=t("Exportera till Excel"),
+        toolbar_download(
+            sk_fast_export_slot,
+            t("Exportera till Excel"),
             data=export_to_excel(
                 {"Fasta omkostnader": _fast_export_df},
                 header_lines=_sk_header_fast or None,
@@ -629,33 +635,32 @@ with tab2:
         "volymavvikelse": fast_result["volymavvikelse"],
         "total_avvikelse": fast_result["total"],
     }
-    render_tutor_explanation(
-        state_key="sk_fast_llm",
-        inputs={
-            "budgeterat": budget_belopp,
-            "verkligt": verkligt_belopp,
-            "normalvolym": normal_volym,
-            "verklig_volym": fast_verklig_volym,
-        },
-        outputs=_fast_outputs,
-        build_prompt=lambda: build_standardkost_interpretation_prompt(_fast_components),
-        fallback_text=lambda: FALLBACK_TEMPLATES["standardkost"](
-            "standardkost",
-            {"budgeterat": budget_belopp, "verkligt": verkligt_belopp},
-            _fast_outputs,
-            interpretation=(
-                "Budgetavvikelsen följs upp av den som ansvarar för kostnaderna, "
-                "volymavvikelsen av den som planerar produktion och försäljning. "
-                "Volymavvikelsen är ingen verklig kostnad utan visar hur mycket av "
-                "de fasta omkostnaderna som inte fördelades ut på produkterna."
+    with tutor_panel("Tolkning"):
+        render_tutor_explanation(
+            state_key="sk_fast_llm",
+            inputs={
+                "budgeterat": budget_belopp,
+                "verkligt": verkligt_belopp,
+                "normalvolym": normal_volym,
+                "verklig_volym": fast_verklig_volym,
+            },
+            outputs=_fast_outputs,
+            build_prompt=lambda: build_standardkost_interpretation_prompt(_fast_components),
+            fallback_text=lambda: FALLBACK_TEMPLATES["standardkost"](
+                "standardkost",
+                {"budgeterat": budget_belopp, "verkligt": verkligt_belopp},
+                _fast_outputs,
+                interpretation=(
+                    "Budgetavvikelsen följs upp av den som ansvarar för kostnaderna, "
+                    "volymavvikelsen av den som planerar produktion och försäljning. "
+                    "Volymavvikelsen är ingen verklig kostnad utan visar hur mycket av "
+                    "de fasta omkostnaderna som inte fördelades ut på produkterna."
+                ),
             ),
-        ),
-        expected_numbers={"total_avvikelse": fast_result["total"]},
-        heading=t("### Tolkning"),
-        spinner_label=t("Analyserar..."),
-    )
-
-    st.html(footer_note(updated=APP_UPDATED))
+            expected_numbers={"total_avvikelse": fast_result["total"]},
+            heading=None,
+            spinner_label=t("Analyserar..."),
+        )
 
 # ===========================================================================
 # TAB 3 -- SAMMANSTÄLLNING
@@ -678,6 +683,7 @@ with tab3:
     rorlig_total = rorlig_res["total"] if rorlig_res else 0.0
     fast_total = fast_res["total"] if fast_res else 0.0
 
+    sk_sum_export_slot, _ = results_toolbar()
     if rorlig_res is None and fast_res is None:
         st.info(
             t("Inga beräkningar tillgängliga. "
@@ -768,7 +774,8 @@ with tab3:
         )
 
         _sum_header = scenario_header_lines(st.session_state.get("sk_scenario_info"))
-        st.download_button(
+        toolbar_download(
+            sk_sum_export_slot,
             t("Exportera till Excel"),
             data=export_to_excel(
                 {"Sammanställning": export_df},
@@ -786,54 +793,56 @@ with tab3:
             mime=_XLSX_MIME,
         )
 
-    if bar_values:
-        _all_components: list[dict] = []
-        if rorlig_res:
-            for item in rorlig_res["items"]:
-                _all_components.append({"typ": item["komponent"], **{c: item[c] for c in _COMPONENTS}})
-        if fast_res:
-            _all_components.append({
-                "typ": "Fast omkostnad",
-                "budgetavvikelse": fast_res["budgetavvikelse"],
-                "volymavvikelse": fast_res["volymavvikelse"],
-            })
-        _expected: dict[str, float] = {"total_avvikelse": total_all}
-        if rorlig_res:
-            for comp in _COMPONENTS:
-                _expected[comp] = rorlig_res[comp]
-        render_tutor_explanation(
-            state_key="sk_summary_llm",
-            inputs={"rorlig_total": rorlig_total, "fast_avvikelse": fast_total},
-            outputs=_expected,
-            build_prompt=lambda: build_standardkost_interpretation_prompt(_all_components),
-            fallback_text=lambda: FALLBACK_TEMPLATES["standardkost"](
-                "standardkost",
-                {"rorlig_total": rorlig_total, "fast_avvikelse": fast_total},
-                {"total_avvikelse": total_all},
-                interpretation=(
-                    interpret_variances(rorlig_res) if rorlig_res else None
+    with tutor_panel("Tolkning"):
+        if bar_values:
+            _all_components: list[dict] = []
+            if rorlig_res:
+                for item in rorlig_res["items"]:
+                    _all_components.append({"typ": item["komponent"], **{c: item[c] for c in _COMPONENTS}})
+            if fast_res:
+                _all_components.append({
+                    "typ": "Fast omkostnad",
+                    "budgetavvikelse": fast_res["budgetavvikelse"],
+                    "volymavvikelse": fast_res["volymavvikelse"],
+                })
+            _expected: dict[str, float] = {"total_avvikelse": total_all}
+            if rorlig_res:
+                for comp in _COMPONENTS:
+                    _expected[comp] = rorlig_res[comp]
+            render_tutor_explanation(
+                state_key="sk_summary_llm",
+                inputs={"rorlig_total": rorlig_total, "fast_avvikelse": fast_total},
+                outputs=_expected,
+                build_prompt=lambda: build_standardkost_interpretation_prompt(_all_components),
+                fallback_text=lambda: FALLBACK_TEMPLATES["standardkost"](
+                    "standardkost",
+                    {"rorlig_total": rorlig_total, "fast_avvikelse": fast_total},
+                    {"total_avvikelse": total_all},
+                    interpretation=(
+                        interpret_variances(rorlig_res) if rorlig_res else None
+                    ),
                 ),
-            ),
-            expected_numbers=_expected,
-            heading=t("### Tolkning"),
-            spinner_label=t("Analyserar sammanställning..."),
-        )
+                expected_numbers=_expected,
+                heading=None,
+                spinner_label=t("Analyserar sammanställning..."),
+            )
 
-    render_qa_chat(
-        chat_key="sk_chat_history",
-        input_key="sk_chat_input",
-        placeholder=t("Fråga om standardkostnadsanalysen"),
-        context="standardkost",
-        inputs={"total_avvikelse": total_all} if bar_values else {},
-        outputs={"total_avvikelse": total_all} if bar_values else {},
-        ground=False,
-    )
+        render_qa_chat(
+            chat_key="sk_chat_history",
+            input_key="sk_chat_input",
+            placeholder=t("Fråga om standardkostnadsanalysen"),
+            context="standardkost",
+            inputs={"total_avvikelse": total_all} if bar_values else {},
+            outputs={"total_avvikelse": total_all} if bar_values else {},
+            ground=False,
+        )
     st.caption(
         t("Positivt belopp = ofördelaktig avvikelse (högre kostnad än standard), "
         "negativt belopp = fördelaktig.")
     )
 
-    st.html(footer_note(updated=APP_UPDATED))
-
 # One share link for the whole page: the URL holds the inputs of every tab.
-render_share_link()
+# Rendered last (after every save_state) into the header's action slot.
+render_share_link(header_actions)
+
+st.html(footer_note(updated=APP_UPDATED))

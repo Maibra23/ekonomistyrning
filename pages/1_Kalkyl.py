@@ -39,7 +39,10 @@ from utils.page_blocks import (
     render_scenario_controls,
     render_scenario_info,
     render_share_link,
+    results_toolbar,
     scenario_header_lines,
+    toolbar_download,
+    toolbar_reset,
 )
 from utils.prompts import (
     FALLBACK_TEMPLATES,
@@ -58,13 +61,14 @@ from utils.tutor import (
     get_cached_tutor_text,
     render_step_guide,
     render_tutor_explanation,
+    tutor_panel,
 )
 from utils.ui import (
     APP_UPDATED,
     footer_note,
     inject_css,
     kpi_card,
-    page_title,
+    page_header,
     render_kpi_row,
     render_sidebar,
 )
@@ -97,43 +101,45 @@ def _render_llm_section(
         k: v for k, v in outputs.items() if isinstance(v, (int, float))
     }
 
-    render_tutor_explanation(
-        state_key=f"{tab_key}_llm",
-        inputs=inputs,
-        outputs=outputs,
-        build_prompt=lambda: build_kalkyl_explanation_prompt(
-            calc_type, inputs, outputs, scenario_name
-        ),
-        fallback_text=lambda: FALLBACK_TEMPLATES["kalkyl"](
-            calc_type, inputs, outputs, interpretation=interpretation
-        ),
-        required_sections=TUTOR_REQUIRED_SECTIONS,
-        expected_numbers=expected_numbers or None,
-    )
+    with tutor_panel("Förklaring"):
+        render_tutor_explanation(
+            state_key=f"{tab_key}_llm",
+            inputs=inputs,
+            outputs=outputs,
+            build_prompt=lambda: build_kalkyl_explanation_prompt(
+                calc_type, inputs, outputs, scenario_name
+            ),
+            fallback_text=lambda: FALLBACK_TEMPLATES["kalkyl"](
+                calc_type, inputs, outputs, interpretation=interpretation
+            ),
+            required_sections=TUTOR_REQUIRED_SECTIONS,
+            expected_numbers=expected_numbers or None,
+            heading=None,
+        )
 
-    # Kept under a plain key so the Excel export can include the text.
-    _cached = get_cached_tutor_text(f"{tab_key}_llm")
-    if _cached is not None:
-        st.session_state[f"{tab_key}_llm_text"] = _cached
+        # Kept under a plain key so the Excel export can include the text.
+        _cached = get_cached_tutor_text(f"{tab_key}_llm")
+        if _cached is not None:
+            st.session_state[f"{tab_key}_llm_text"] = _cached
 
-    render_step_guide(
-        state_key=f"{tab_key}_step_guide",
-        inputs=inputs,
-        outputs=outputs,
-        build_prompt=lambda: build_kalkyl_step_guide_prompt(
-            calc_type, inputs, outputs
-        ),
-        fallback_text=steps_text,
-    )
+        render_step_guide(
+            state_key=f"{tab_key}_step_guide",
+            inputs=inputs,
+            outputs=outputs,
+            build_prompt=lambda: build_kalkyl_step_guide_prompt(
+                calc_type, inputs, outputs
+            ),
+            fallback_text=steps_text,
+        )
 
-    render_qa_chat(
-        chat_key=f"{tab_key}_chat_history",
-        input_key=f"{tab_key}_chat_input",
-        placeholder=t("Fråga om denna kalkyl"),
-        context=f"kalkyl ({calc_type})",
-        inputs=inputs,
-        outputs=outputs,
-    )
+        render_qa_chat(
+            chat_key=f"{tab_key}_chat_history",
+            input_key=f"{tab_key}_chat_input",
+            placeholder=t("Fråga om denna kalkyl"),
+            context=f"kalkyl ({calc_type})",
+            inputs=inputs,
+            outputs=outputs,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -267,15 +273,15 @@ if "abc_prod_df" not in st.session_state:
 # Page header
 # ---------------------------------------------------------------------------
 
-st.html(
-    page_title(
-        eyebrow=t("KALKYLERING"),
-        title=t("Kalkylering"),
-        subtitle=(
-            t("Tre kalkyleringsmetoder: självkostnadskalkyl (påläggsmetoden), "
-            "bidragskalkyl med nollpunktsanalys, och aktivitetsbaserad kalkylering (ABC).")
-        ),
-    )
+# The right-hand slot gets the share popover at the end of the script.
+header_actions = page_header(
+    eyebrow=t("KALKYLERING"),
+    title=t("Kalkylering"),
+    subtitle=(
+        t("Tre kalkyleringsmetoder: självkostnadskalkyl (påläggsmetoden), "
+        "bidragskalkyl med nollpunktsanalys, och aktivitetsbaserad kalkylering (ABC).")
+    ),
+    chapter=t("Kap. 4, 6–8"),
 )
 
 tab_sj, tab_bid, tab_abc = st.tabs(
@@ -377,6 +383,7 @@ with tab_sj:
     sj = self_cost_palagg(dm, dl, mo_pct, to_pct, ao_pct, fo_pct, int(units_sj))
     pricing = price_from_markup(sj["sjalvkostnad_per_styck"], markup_pct)
 
+    sj_export_slot, sj_reset_slot = results_toolbar()
     render_kpi_row([
         kpi_card(t("Självkostnad / styck"), format_sek(sj["sjalvkostnad_per_styck"], decimals=2)),
         kpi_card(t("Tillverkningskostnad"), format_sek(sj["tillverkningskostnad"])),
@@ -505,8 +512,9 @@ with tab_sj:
         header_lines={"Sjalvkostnad": sj_header_lines} if sj_header_lines else None,
         charts=sj_charts,
     )
-    st.download_button(
-        label=t("Exportera till Excel"),
+    toolbar_download(
+        sj_export_slot,
+        t("Exportera till Excel"),
         data=xlsx_sj,
         file_name="sjalvkostnadskalkyl.xlsx",
         mime=_XLSX_MIME,
@@ -515,12 +523,10 @@ with tab_sj:
 
     st.caption(t("Metod: Självkostnadskalkylering med påläggsmetoden"))
 
-    if st.button(t("Återställ till standardvärden"), key="sj_reset_autosave"):
+    if toolbar_reset(sj_reset_slot, t("Återställ till standardvärden"), key="sj_reset_autosave"):
         clear_state("kalkyl_sjalvkostnad")
         st.session_state["_reset_sj"] = True
         st.rerun()
-
-    st.html(footer_note(updated=APP_UPDATED))
 
 # ===========================================================================
 # TAB 2 — BIDRAGSKALKYL (kapitel 8)
@@ -583,6 +589,7 @@ with tab_bid:
     bid = contribution_calc(pris, rorlig, fasta, int(units_bid))
     tb = bid["tackningsbidrag_per_styck"]
 
+    bid_export_slot, bid_reset_slot = results_toolbar()
     if tb <= 0:
         st.warning(
             t(
@@ -772,8 +779,9 @@ with tab_bid:
         header_lines=bid_header_lines or None,
         charts=bid_charts,
     )
-    st.download_button(
-        label=t("Exportera till Excel"),
+    toolbar_download(
+        bid_export_slot,
+        t("Exportera till Excel"),
         data=xlsx_bid,
         file_name="bidragskalkyl.xlsx",
         mime=_XLSX_MIME,
@@ -782,12 +790,10 @@ with tab_bid:
 
     st.caption(t("Metod: Bidragskalkyl och nollpunktsanalys"))
 
-    if st.button(t("Återställ till standardvärden"), key="bid_reset_autosave"):
+    if toolbar_reset(bid_reset_slot, t("Återställ till standardvärden"), key="bid_reset_autosave"):
         clear_state("kalkyl_bidrag")
         st.session_state["_reset_bid"] = True
         st.rerun()
-
-    st.html(footer_note(updated=APP_UPDATED))
 
 # ===========================================================================
 # TAB 3 — ABC-KALKYL (kapitel 7)
@@ -887,6 +893,8 @@ with tab_abc:
             "abc_prod_records": prod_df.to_dict(orient="records"),
         },
     )
+
+    abc_export_slot, abc_reset_slot = results_toolbar()
 
     def _num(value: object, default: float) -> float:
         try:
@@ -1099,8 +1107,9 @@ with tab_abc:
                 header_lines=abc_header_lines or None,
                 charts=abc_charts,
             )
-            st.download_button(
-                label=t("Exportera till Excel"),
+            toolbar_download(
+                abc_export_slot,
+                t("Exportera till Excel"),
                 data=xlsx_abc,
                 file_name="abc_kalkyl.xlsx",
                 mime=_XLSX_MIME,
@@ -1109,7 +1118,7 @@ with tab_abc:
 
     st.caption(t("Metod: Aktivitetsbaserad kalkylering (ABC)"))
 
-    if st.button(t("Återställ till standardvärden"), key="abc_reset_autosave"):
+    if toolbar_reset(abc_reset_slot, t("Återställ till standardvärden"), key="abc_reset_autosave"):
         clear_state("kalkyl_abc")
         _set_abc_base(
             _activities_to_df(_ABC_DEFAULT_ACT),
@@ -1117,7 +1126,8 @@ with tab_abc:
         )
         st.rerun()
 
-    st.html(footer_note(updated=APP_UPDATED))
-
 # One share link for the whole page: the URL holds the inputs of every tab.
-render_share_link()
+# Rendered last (after every save_state) into the header's action slot.
+render_share_link(header_actions)
+
+st.html(footer_note(updated=APP_UPDATED))

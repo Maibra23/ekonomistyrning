@@ -37,7 +37,9 @@ from utils.page_blocks import (
     render_scenario_controls,
     render_scenario_info,
     render_share_link,
+    results_toolbar,
     scenario_header_lines,
+    toolbar_download,
 )
 from utils.prompts import (
     FALLBACK_TEMPLATES,
@@ -50,7 +52,7 @@ from utils.state_save import (
     restore_number,
     save_state,
 )
-from utils.tutor import render_tutor_explanation
+from utils.tutor import render_tutor_explanation, tutor_panel
 from utils.ui import (
     APP_UPDATED,
     BUDGET_VS_RAKNING_HELP,
@@ -58,7 +60,7 @@ from utils.ui import (
     info_tooltip,
     inject_css,
     kpi_card,
-    page_title,
+    page_header,
     pipeline_steps,
     render_kpi_row,
     render_sidebar,
@@ -191,15 +193,15 @@ if _bud_saved is not None:
 # Page header
 # ---------------------------------------------------------------------------
 
-st.html(
-    page_title(
-        eyebrow=t("BUDGETERING"),
-        title=t("Budget och budgetering"),
-        subtitle=(
-            t("Bygg resultatbudget, likviditetsbudget och balansbudget steg för steg. "
-            "Generera ett fiktivt exempelföretag eller fyll i egna siffror.")
-        ),
-    )
+# The right-hand slot gets the share popover at the end of the script.
+header_actions = page_header(
+    eyebrow=t("BUDGETERING"),
+    title=t("Budget och budgetering"),
+    subtitle=(
+        t("Bygg resultatbudget, likviditetsbudget och balansbudget steg för steg. "
+        "Generera ett fiktivt exempelföretag eller fyll i egna siffror.")
+    ),
+    chapter=t("Kap. 13–15"),
 )
 
 # Pipeline visualization
@@ -292,6 +294,10 @@ if _bud_scenario is not None:
     finish_scenario("bud", "budget", _bud_scenario, _bud_code)
 
 render_scenario_info("bud")
+
+# Results toolbar: the export is filled in at the end of the script, once
+# every budget is computed. Reset lives in the scenario row above.
+bud_export_slot, _ = results_toolbar()
 
 # ===========================================================================
 # STEG 1 — RESULTATBUDGET
@@ -1165,8 +1171,6 @@ with st.expander(t("Steg 4: Likviditetsbudget per månad"), expanded=False):
 # SAMMANFATTANDE ANALYS
 # ===========================================================================
 
-st.markdown(t("### Sammanfattande analys"))
-
 # Build summary dicts from the computed DataFrames
 resultat_summary = {
     "forsaljning": forsaljning,
@@ -1195,52 +1199,51 @@ _budget_fallback_outputs = {
     "summa_tillgangar_ub": summa_tillgangar_ub,
     "balanserad": is_balanced,
 }
-render_tutor_explanation(
-    state_key="budget_consistency_llm",
-    inputs={
-        **resultat_summary,
-        **likviditet_summary,
-        **balans_summary_dict,
-        "is_balanced": is_balanced,
-    },
-    outputs={"difference": difference},
-    build_prompt=lambda: build_budget_consistency_prompt(
-        resultat_summary, likviditet_summary, balans_summary_dict,
-        is_balanced, difference,
-    ),
-    fallback_text=lambda: FALLBACK_TEMPLATES["budget"](
-        "budget", _budget_fallback_inputs, _budget_fallback_outputs,
-        interpretation=interpret_budget(
-            forsaljning, rorelseresultat, likvida_ub, is_balanced,
-            key_ratios["soliditet"],
+with tutor_panel("Sammanfattande analys"):
+    render_tutor_explanation(
+        state_key="budget_consistency_llm",
+        inputs={
+            **resultat_summary,
+            **likviditet_summary,
+            **balans_summary_dict,
+            "is_balanced": is_balanced,
+        },
+        outputs={"difference": difference},
+        build_prompt=lambda: build_budget_consistency_prompt(
+            resultat_summary, likviditet_summary, balans_summary_dict,
+            is_balanced, difference,
         ),
-    ),
-    required_sections=TUTOR_REQUIRED_SECTIONS,
-    expected_numbers={
-        "arets_resultat": arets_resultat,
-        "forandring_likvida_medel": forandring,
-        "summa_tillgangar": summa_tillgangar_ub,
-        "balansavvikelse": difference,
-    },
-    heading=None,
-    spinner_label=t("Analyserar budgetkonsistens..."),
-)
+        fallback_text=lambda: FALLBACK_TEMPLATES["budget"](
+            "budget", _budget_fallback_inputs, _budget_fallback_outputs,
+            interpretation=interpret_budget(
+                forsaljning, rorelseresultat, likvida_ub, is_balanced,
+                key_ratios["soliditet"],
+            ),
+        ),
+        required_sections=TUTOR_REQUIRED_SECTIONS,
+        expected_numbers={
+            "arets_resultat": arets_resultat,
+            "forandring_likvida_medel": forandring,
+            "summa_tillgangar": summa_tillgangar_ub,
+            "balansavvikelse": difference,
+        },
+        heading=None,
+        spinner_label=t("Analyserar budgetkonsistens..."),
+    )
 
-render_qa_chat(
-    chat_key="budget_chat_history",
-    input_key="budget_chat_input",
-    placeholder=t("Fråga om budgeten"),
-    context="budget",
-    inputs={"forsaljning": forsaljning, "arets_resultat": arets_resultat},
-    outputs={"likvida_medel_ub": likvida_ub, "balanserad": is_balanced},
-    ground=False,
-)
+    render_qa_chat(
+        chat_key="budget_chat_history",
+        input_key="budget_chat_input",
+        placeholder=t("Fråga om budgeten"),
+        context="budget",
+        inputs={"forsaljning": forsaljning, "arets_resultat": arets_resultat},
+        outputs={"likvida_medel_ub": likvida_ub, "balanserad": is_balanced},
+        ground=False,
+    )
 
 # ===========================================================================
 # BOTTOM -- EXPORT
 # ===========================================================================
-
-st.divider()
 
 _bud_header = scenario_header_lines(st.session_state.get("bud_scenario_info"))
 nyckeltal_df = pd.DataFrame({
@@ -1285,7 +1288,8 @@ budget_charts = {
     }],
 }
 
-st.download_button(
+toolbar_download(
+    bud_export_slot,
     t("Exportera budgetarna till Excel"),
     data=export_to_excel(
         {
@@ -1314,6 +1318,7 @@ save_state(
     },
 )
 
-render_share_link()
+# Rendered last (after save_state) into the header's action slot.
+render_share_link(header_actions)
 
 st.html(footer_note(updated=APP_UPDATED))

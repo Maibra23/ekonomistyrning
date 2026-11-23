@@ -62,7 +62,7 @@ from utils.ui import (
     footer_note,
     inject_css,
     kpi_card,
-    page_title,
+    page_header,
     render_kpi_row,
     render_session_cap_card,
     render_sidebar,
@@ -202,15 +202,16 @@ FALLBACK_BANK = _load_fallback()
 # Page header
 # ---------------------------------------------------------------------------
 
-st.html(
-    page_title(
-        eyebrow=t("KUNSKAPSTEST"),
-        title=t("Kunskapstest"),
-        subtitle=(
-            t("Testa dina kunskaper med dynamiskt genererade frågor. "
-            "Välj ämnesområde, svårighetsgrad och frågetyp.")
-        ),
-    )
+# No share link on this page, so the header's action slot stays empty. It
+# holds no widget: "Generera fråga" must stay the first button on the page.
+page_header(
+    eyebrow=t("KUNSKAPSTEST"),
+    title=t("Kunskapstest"),
+    subtitle=(
+        t("Testa dina kunskaper med dynamiskt genererade frågor. "
+        "Välj ämnesområde, svårighetsgrad och frågetyp.")
+    ),
+    chapter=t("Kap. 4–17"),
 )
 
 if get_lang() == "en":

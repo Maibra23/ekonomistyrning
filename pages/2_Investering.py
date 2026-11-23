@@ -47,7 +47,10 @@ from utils.page_blocks import (
     render_scenario_controls,
     render_scenario_info,
     render_share_link,
+    results_toolbar,
     scenario_header_lines,
+    toolbar_download,
+    toolbar_reset,
 )
 from utils.prompts import (
     FALLBACK_TEMPLATES,
@@ -61,13 +64,13 @@ from utils.state_save import (
     restore_number,
     save_state,
 )
-from utils.tutor import render_tutor_explanation
+from utils.tutor import render_tutor_explanation, tutor_panel
 from utils.ui import (
     APP_UPDATED,
     footer_note,
     inject_css,
     kpi_card,
-    page_title,
+    page_header,
     render_kpi_row,
     render_sidebar,
 )
@@ -210,45 +213,47 @@ def _render_investering_llm(
         if isinstance(v, (int, float)) and v is not None
         and (ground_keys is None or k in ground_keys)
     }
-    render_tutor_explanation(
-        state_key=f"{tab_key}_llm",
-        inputs=inputs,
-        outputs=outputs,
-        build_prompt=lambda: build_investering_explanation_prompt(
-            method, inputs, outputs
-        ),
-        fallback_text=lambda: FALLBACK_TEMPLATES["investering"](
-            method, inputs, outputs, interpretation=interpretation
-        ),
-        required_sections=TUTOR_REQUIRED_SECTIONS,
-        expected_numbers=expected or None,
-    )
+    with tutor_panel("Förklaring"):
+        render_tutor_explanation(
+            state_key=f"{tab_key}_llm",
+            inputs=inputs,
+            outputs=outputs,
+            build_prompt=lambda: build_investering_explanation_prompt(
+                method, inputs, outputs
+            ),
+            fallback_text=lambda: FALLBACK_TEMPLATES["investering"](
+                method, inputs, outputs, interpretation=interpretation
+            ),
+            required_sections=TUTOR_REQUIRED_SECTIONS,
+            expected_numbers=expected or None,
+            heading=None,
+        )
 
-    # One chat for the whole page, rendered under every tab.
-    render_qa_chat(
-        chat_key="inv_chat_history",
-        input_key=f"{tab_key}_chat_input",
-        placeholder=t("Fråga om denna investering"),
-        context=f"investering ({method})",
-        inputs=inputs,
-        outputs=outputs,
-    )
+        # One chat for the whole page, rendered under every tab.
+        render_qa_chat(
+            chat_key="inv_chat_history",
+            input_key=f"{tab_key}_chat_input",
+            placeholder=t("Fråga om denna investering"),
+            context=f"investering ({method})",
+            inputs=inputs,
+            outputs=outputs,
+        )
 
 
 # ---------------------------------------------------------------------------
 # Page header
 # ---------------------------------------------------------------------------
 
-st.html(
-    page_title(
-        eyebrow=t("INVESTERINGSBEDÖMNING"),
-        title=t("Investeringsbedömning"),
-        subtitle=(
-            t("Analysera lönsamheten i en investering med NPV, IRR, "
-            "återbetalningstid och annuitetsmetoden. "
-            "Inkluderar känslighetsanalys, inflations- och skattejustering samt Monte Carlo-simulering.")
-        ),
-    )
+# The right-hand slot gets the share popover at the end of the script.
+header_actions = page_header(
+    eyebrow=t("INVESTERINGSBEDÖMNING"),
+    title=t("Investeringsbedömning"),
+    subtitle=(
+        t("Analysera lönsamheten i en investering med NPV, IRR, "
+        "återbetalningstid och annuitetsmetoden. "
+        "Inkluderar känslighetsanalys, inflations- och skattejustering samt Monte Carlo-simulering.")
+    ),
+    chapter=t("Kap. 10"),
 )
 
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
@@ -408,6 +413,7 @@ with tab1:
         )
 
     with col_res:
+        inv_basic_export_slot, inv_basic_reset_slot = results_toolbar()
         operating_flows = [float(v or 0) for v in cf_df["Kassaflöde (kr)"].tolist()]
         cash_flows, total_initial = with_residual_and_working_capital(
             operating_flows, grundinvestering, restvarde, rorelsekapital
@@ -640,7 +646,8 @@ with tab1:
             "y_axis_title": "NPV (kr)",
         }],
     }
-    st.download_button(
+    toolbar_download(
+        inv_basic_export_slot,
         t("Exportera till Excel"),
         data=export_to_excel(
             {"Resultat": export_rows, "Kassaflöden": export_cf, "NPV-profil": export_profile},
@@ -680,12 +687,12 @@ with tab1:
         interpretation=interpret_npv(npv_val, rate, irr_val, payback_val, antal_ar),
     )
 
-    if st.button(t("Återställ till standardvärden"), key="inv_basic_reset_autosave"):
+    if toolbar_reset(
+        inv_basic_reset_slot, t("Återställ till standardvärden"), key="inv_basic_reset_autosave"
+    ):
         clear_state("investering_basic")
         st.session_state["_reset_inv_basic"] = True
         st.rerun()
-
-    st.html(footer_note(updated=APP_UPDATED))
 
 # ===========================================================================
 # TAB 2 — KÄNSLIGHETSANALYS (kapitel 10.9)
@@ -779,6 +786,7 @@ with tab2:
     param_label = "Kassaflöden"
 
     with col_sa_res:
+        _, inv_sens_reset_slot = results_toolbar()
         if not base_cfs:
             st.warning(t("Ange kassaflöden i fliken 'Grundläggande metoder' först."))
         else:
@@ -928,12 +936,12 @@ with tab2:
         interpretation=interpret_sensitivity(base_npv, critical_var, param_label),
     )
 
-    if st.button(t("Återställ till standardvärden"), key="inv_sens_reset_autosave"):
+    if toolbar_reset(
+        inv_sens_reset_slot, t("Återställ till standardvärden"), key="inv_sens_reset_autosave"
+    ):
         clear_state("investering_sensitivity")
         st.session_state["_reset_inv_sens"] = True
         st.rerun()
-
-    st.html(footer_note(updated=APP_UPDATED))
 
 # ===========================================================================
 # TAB 3 — INFLATION OCH SKATT (kapitel 10.11)
@@ -1055,6 +1063,7 @@ with tab3:
         )
 
     with col_it_res:
+        _, inv_inflation_reset_slot = results_toolbar()
         it_cfs = it_cf_df["Kassaflöde (kr)"].tolist()
 
         if not it_cfs:
@@ -1160,12 +1169,12 @@ with tab3:
             ),
         )
 
-    if st.button(t("Återställ till standardvärden"), key="inv_inflation_reset_autosave"):
+    if toolbar_reset(
+        inv_inflation_reset_slot, t("Återställ till standardvärden"), key="inv_inflation_reset_autosave"
+    ):
         clear_state("investering_inflation")
         st.session_state["_reset_inv_inflation"] = True
         st.rerun()
-
-    st.html(footer_note(updated=APP_UPDATED))
 
 # ===========================================================================
 # TAB 4 — MONTE CARLO (kapitel 10.9)
@@ -1335,6 +1344,7 @@ with tab4:
         run_sim = st.button(t("Kör simulering"), type="primary", use_container_width=True)
 
     with col_mc_res:
+        inv_mc_export_slot, inv_mc_reset_slot = results_toolbar()
         mc_cf_means_tup = tuple(mc_cf_df["Medel (kr)"].tolist())
         mc_cf_stds_tup = tuple(mc_cf_df["Std (kr)"].tolist())
 
@@ -1495,7 +1505,8 @@ with tab4:
                 ],
             })
             _mc_header = _header_lines()
-            st.download_button(
+            toolbar_download(
+                inv_mc_export_slot,
                 t("Exportera simuleringen till Excel"),
                 data=export_to_excel(
                     {"Sammanfattning": mc_summary_df, "Percentiler": mc_pct_df},
@@ -1538,12 +1549,12 @@ with tab4:
             ),
         )
 
-    if st.button(t("Återställ till standardvärden"), key="inv_mc_reset_autosave"):
+    if toolbar_reset(
+        inv_mc_reset_slot, t("Återställ till standardvärden"), key="inv_mc_reset_autosave"
+    ):
         clear_state("investering_monte_carlo")
         st.session_state["_reset_inv_mc"] = True
         st.rerun()
-
-    st.html(footer_note(updated=APP_UPDATED))
 
 # ===========================================================================
 # TAB 5 — JÄMFÖRELSE AV ALTERNATIV (kapitel 10: val mellan investeringar)
@@ -1676,6 +1687,8 @@ with tab5:
 
     _best_row = cmp_df.sort_values([_rank_col, "npv"], ascending=[True, False]).iloc[0]
     _other_row = cmp_df.loc[cmp_df["name"] != _best_row["name"]].iloc[0]
+
+    inv_cmp_export_slot, inv_cmp_reset_slot = results_toolbar()
 
     render_kpi_row([
         kpi_card(
@@ -1810,7 +1823,8 @@ with tab5:
         "Payback (år)": cmp_df["payback"],
     })
     _cmp_header = _header_lines()
-    st.download_button(
+    toolbar_download(
+        inv_cmp_export_slot,
         t("Exportera jämförelsen till Excel"),
         data=export_to_excel(
             {"Jämförelse": _cmp_export},
@@ -1829,12 +1843,15 @@ with tab5:
         key="cmp_export",
     )
 
-    if st.button(t("Återställ till standardvärden"), key="inv_cmp_reset_autosave"):
+    if toolbar_reset(
+        inv_cmp_reset_slot, t("Återställ till standardvärden"), key="inv_cmp_reset_autosave"
+    ):
         clear_state("investering_jamforelse")
         st.session_state["_reset_inv_cmp"] = True
         st.rerun()
 
-    st.html(footer_note(updated=APP_UPDATED))
-
 # One share link for the whole page: the URL holds the inputs of every tab.
-render_share_link()
+# Rendered last (after every save_state) into the header's action slot.
+render_share_link(header_actions)
+
+st.html(footer_note(updated=APP_UPDATED))
