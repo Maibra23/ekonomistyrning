@@ -59,6 +59,7 @@ from utils.quiz_ui import (
 from utils.state_save import clear_state, load_state, save_state
 from utils.ui import (
     APP_UPDATED,
+    TOKENS,
     footer_note,
     inject_css,
     kpi_card,
@@ -87,97 +88,6 @@ st.set_page_config(
 )
 inject_css()
 render_sidebar("quiz")
-
-# ---------------------------------------------------------------------------
-# Quiz-specific styling
-# ---------------------------------------------------------------------------
-
-_QUIZ_CSS = """
-<style>
-.eks-quiz-card {
-    background: #FFFFFF;
-    border: 1px solid #E5E7EB;
-    border-radius: 6px;
-    padding: 22px 26px;
-    margin: 18px 0;
-    box-shadow: 0 1px 2px rgba(17,24,39,0.04);
-}
-.eks-quiz-badges {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-bottom: 14px;
-}
-.eks-quiz-badge {
-    font-family: Inter, sans-serif;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.4px;
-    color: #1E40AF;
-    background: rgba(30,64,175,0.08);
-    border: 1px solid rgba(30,64,175,0.18);
-    padding: 3px 10px;
-    border-radius: 999px;
-    text-transform: uppercase;
-}
-.eks-quiz-badge.diff-latt   { color: #059669; background: rgba(5,150,105,0.08);   border-color: rgba(5,150,105,0.20); }
-.eks-quiz-badge.diff-medel  { color: #D97706; background: rgba(217,119,6,0.08);   border-color: rgba(217,119,6,0.20); }
-.eks-quiz-badge.diff-svar   { color: #DC2626; background: rgba(220,38,38,0.08);   border-color: rgba(220,38,38,0.22); }
-.eks-quiz-scenario {
-    font-family: Inter, sans-serif;
-    font-size: 13px;
-    color: #4B5563;
-    background: #F9FAFB;
-    border-left: 3px solid #3B82F6;
-    padding: 10px 14px;
-    border-radius: 0 4px 4px 0;
-    margin-bottom: 16px;
-    line-height: 1.55;
-}
-.eks-quiz-question {
-    font-family: Inter, sans-serif;
-    font-size: 17px;
-    font-weight: 600;
-    color: #111827;
-    line-height: 1.45;
-    margin-bottom: 16px;
-}
-.eks-quiz-given {
-    background: #F3F4F6;
-    border-radius: 4px;
-    padding: 12px 16px;
-    margin-bottom: 16px;
-}
-.eks-quiz-given-title {
-    font-family: Inter, sans-serif;
-    font-size: 10.5px;
-    font-weight: 700;
-    letter-spacing: 0.7px;
-    text-transform: uppercase;
-    color: #6B7280;
-    margin-bottom: 8px;
-}
-.eks-quiz-given ul {
-    margin: 0;
-    padding-left: 18px;
-    font-family: "IBM Plex Mono", monospace;
-    font-size: 12.5px;
-    color: #111827;
-}
-.eks-quiz-given li { margin: 2px 0; }
-.eks-quiz-chip {
-    display: inline-block;
-    font-family: "IBM Plex Mono", monospace;
-    font-size: 11px;
-    color: #6B7280;
-    background: #F3F4F6;
-    border: 1px solid #E5E7EB;
-    padding: 2px 9px;
-    border-radius: 999px;
-}
-</style>
-"""
-st.html(_QUIZ_CSS)
 
 # ---------------------------------------------------------------------------
 # Fallback bank
@@ -465,7 +375,12 @@ def _generate_question(kluster: str, diff: str, qtype: str) -> dict | None:
 # Generate button
 # ---------------------------------------------------------------------------
 
-if st.button(t("Generera fråga"), type="primary", use_container_width=True):
+if st.button(
+    t("Generera fråga"),
+    type="primary",
+    icon=":material/auto_awesome:",
+    width="content",
+):
     with st.spinner(t("Genererar fråga...")):
         try:
             q = _generate_question(kapitelkluster, difficulty, question_type)
@@ -721,14 +636,14 @@ if score["total"] > 0:
         go.Indicator(
             mode="gauge+number",
             value=pct,
-            title={"text": "Resultat (%)"},
+            title={"text": t("Resultat (%)")},
             gauge={
                 "axis": {"range": [0, 100]},
                 "bar": {"color": COLORS["primary"]},
                 "steps": [
-                    {"range": [0, 40], "color": "#FECACA"},
-                    {"range": [40, 70], "color": "#FDE68A"},
-                    {"range": [70, 100], "color": "#A7F3D0"},
+                    {"range": [0, 40], "color": TOKENS["negative_subtle"]},
+                    {"range": [40, 70], "color": TOKENS["caution_subtle"]},
+                    {"range": [70, 100], "color": TOKENS["positive_subtle"]},
                 ],
                 "threshold": {
                     "line": {"color": COLORS["danger"], "width": 2},
@@ -768,18 +683,22 @@ if _any_progress:
         else:
             _delta = t("Inga frågor ännu")
             _direction = "flat"
-        _variant = {
-            "masterskap": "success",
-            "saker": "success",
-            "ovning": "warning",
-        }.get(_m["code"], "default")
+        _status_tone = {
+            "masterskap": "positive",
+            "saker": "positive",
+            "grund": "neutral",
+            "igang": "caution",
+            "ovning": "caution",
+        }.get(_m["code"], "neutral")
         _prog_cards.append(
             kpi_card(
                 t(_CLUSTER_LABELS.get(_cluster, _cluster)),
-                t(_m["label"]),
+                str(_stats["total"]),
+                unit=t("frågor"),
                 delta=_delta,
                 delta_direction=_direction,
-                variant=_variant,
+                status=t(_m["label"]),
+                status_tone=_status_tone,
             )
         )
     render_kpi_row(_prog_cards)

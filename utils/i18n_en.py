@@ -1148,4 +1148,7 @@ EN: dict[str, str] = {
     "Tillverkningskostnad per styck (kr)": "Manufacturing cost per unit (SEK)",
     "Administrationsomkostnad AO per styck (kr)": "Administrative overhead AO per unit (SEK)",
     "Försäljningsomkostnad FO per styck (kr)": "Selling overhead FO per unit (SEK)",
+    # Kunskapstest (T14)
+    "Resultat (%)": "Result (%)",
+    "frågor": "questions",
 }

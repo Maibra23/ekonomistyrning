@@ -807,6 +807,91 @@ section[data-testid="stSidebar"] div[data-testid="stPageLink"] a {
     .eks-statement { min-width: 480px; }
 }
 
+/* === Kunskapstest (quiz card) === */
+.eks-quiz-card {
+    background: %(canvas)s;
+    border: 1px solid %(border)s;
+    border-radius: 6px;
+    padding: 24px;
+    margin: 16px 0;
+    box-shadow: 0 1px 2px rgba(16,24,40,0.04);
+}
+.eks-quiz-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+.eks-quiz-badge {
+    font-family: %(font_ui)s;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: %(primary)s;
+    background: %(primary_subtle)s;
+    border: 1px solid %(primary)s33;
+    padding: 4px 12px;
+    border-radius: 999px;
+    text-transform: uppercase;
+}
+.eks-quiz-badge.diff-latt  { color: %(positive)s; background: %(positive_subtle)s; border-color: %(positive)s33; }
+.eks-quiz-badge.diff-medel { color: %(caution)s;  background: %(caution_subtle)s;  border-color: %(caution)s33; }
+.eks-quiz-badge.diff-svar  { color: %(negative)s; background: %(negative_subtle)s; border-color: %(negative)s33; }
+.eks-quiz-scenario {
+    font-family: %(font_ui)s;
+    font-size: 13px;
+    color: %(text_secondary)s;
+    background: %(surface_muted)s;
+    border-left: 3px solid %(primary)s;
+    padding: 12px 16px;
+    border-radius: 0 4px 4px 0;
+    margin-bottom: 16px;
+    line-height: 1.55;
+}
+.eks-quiz-question {
+    font-family: %(font_ui)s;
+    font-size: 17px;
+    font-weight: 600;
+    color: %(text_primary)s;
+    line-height: 1.45;
+    margin-bottom: 16px;
+}
+.eks-quiz-given {
+    background: %(surface_input)s;
+    border-radius: 4px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+}
+.eks-quiz-given-title {
+    font-family: %(font_ui)s;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: %(text_tertiary)s;
+    margin-bottom: 8px;
+}
+.eks-quiz-given ul {
+    margin: 0;
+    padding-left: 18px;
+    font-family: %(font_ui)s;
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+    color: %(text_primary)s;
+}
+.eks-quiz-given li { margin: 2px 0; }
+.eks-quiz-chip {
+    display: inline-block;
+    font-family: %(font_ui)s;
+    font-variant-numeric: tabular-nums;
+    font-size: 11px;
+    color: %(text_tertiary)s;
+    background: %(surface_input)s;
+    border: 1px solid %(border)s;
+    padding: 2px 8px;
+    border-radius: 999px;
+}
+
 /* === Accessibility === */
 .eks-tip:focus-visible,
 div[data-testid="stPageLink"] a:focus-visible,
