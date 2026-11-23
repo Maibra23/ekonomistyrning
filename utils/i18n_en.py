@@ -731,6 +731,10 @@ EN: dict[str, str] = {
     "Insatsens enhet, t.ex. kg eller timmar": "The input's unit, e.g. kg or hours",
     "Lägg till minst ett kostnadsslag i tabellen för att beräkna avvikelser.": "Add at least one cost type to the table to calculate variances.",
     "Total avvikelse": "Total variance",
+    # Status words from utils.formatting.variance_status()
+    "Ofördelaktig": "Unfavourable",
+    "Fördelaktig": "Favourable",
+    "Ingen avvikelse": "No variance",
     "Volymavvikelse": "Volume variance",
     "Prisavvikelse": "Price variance",
     "Effektivitetsavvikelse": "Efficiency variance",

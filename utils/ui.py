@@ -11,6 +11,7 @@ as %%.
 from __future__ import annotations
 
 import html
+import re
 
 import streamlit as st
 
@@ -349,11 +350,15 @@ div[data-testid="stMainBlockContainer"] {
     border-radius: 4px;
     padding: 18px 20px;
     position: relative;
-    border-left: 3px solid %(primary)s;
+    border-left: 3px solid %(border)s;
 }
-.eks-kpi.variant-success { border-left-color: %(positive)s; }
-.eks-kpi.variant-danger  { border-left-color: %(negative)s; }
-.eks-kpi.variant-warning { border-left-color: %(caution)s; }
+.eks-kpi--hero { padding: 20px; }
+.eks-kpi--sm   { padding: 14px 16px; }
+/* The left border carries colour only when a tone is set; the status
+   pill (or the delta arrow) carries the same meaning in text. */
+.eks-kpi.tone-positive { border-left-color: %(positive)s; }
+.eks-kpi.tone-negative { border-left-color: %(negative)s; }
+.eks-kpi.tone-caution  { border-left-color: %(caution)s; }
 .eks-kpi-label {
     font-family: %(font_ui)s;
     font-size: 11.5px;
@@ -374,20 +379,44 @@ div[data-testid="stMainBlockContainer"] {
     overflow: hidden;
     text-overflow: ellipsis;
 }
+.eks-kpi--hero .eks-kpi-value { font-size: 28px; }
+.eks-kpi--sm .eks-kpi-value   { font-size: 18px; font-weight: 600; }
 @container (min-width: 220px) {
-    .eks-kpi-value { font-size: clamp(20px, 11cqi, 28px); }
+    .eks-kpi--hero .eks-kpi-value { font-size: clamp(20px, 11cqi, 28px); }
 }
 /* Narrow cards (four KPIs in a results column) scale down further. */
 @container (max-width: 219.98px) {
     .eks-kpi-value { font-size: clamp(13px, 12cqi, 22px); }
+    .eks-kpi--hero .eks-kpi-value { font-size: clamp(16px, 13cqi, 28px); }
+    .eks-kpi--sm .eks-kpi-value { font-size: clamp(12px, 10cqi, 18px); }
 }
+/* The unit holds its own leading NBSP and sits inside the nowrap value,
+   so it can never wrap away from the number. */
 .eks-kpi-unit {
-    font-family: %(font_ui)s;
-    font-size: 13px;
-    font-weight: 400;
+    font-size: max(0.6em, 10px);
+    font-weight: 500;
     color: %(text_secondary)s;
-    margin-left: 4px;
 }
+.eks-kpi-status { margin-top: 8px; }
+
+/* --- Status pill: glyph + word, never colour alone --- */
+.eks-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-family: %(font_ui)s;
+    font-size: 11.5px;
+    font-weight: 600;
+    line-height: 1.4;
+    white-space: nowrap;
+    background: %(surface_input)s;
+    color: %(text_secondary)s;
+}
+.eks-pill--positive { background: %(positive_subtle)s; color: %(positive)s; }
+.eks-pill--negative { background: %(negative_subtle)s; color: %(negative)s; }
+.eks-pill--caution  { background: %(caution_subtle)s; color: %(caution)s; }
 .eks-kpi-delta {
     font-family: %(font_ui)s;
     font-size: 12px;
@@ -733,6 +762,57 @@ def page_title(eyebrow: str, title: str, subtitle: str = "") -> str:
     )
 
 
+# variant (legacy) -> status tone. "default" has no tone: neutral border.
+_VARIANT_TONES: dict[str, str] = {
+    "success": "positive",
+    "danger": "negative",
+    "warning": "caution",
+}
+_TONES: tuple[str, ...] = ("positive", "negative", "caution", "neutral")
+_PILL_GLYPHS: dict[str, str] = {
+    "positive": "✓",
+    "negative": "✕",
+    "caution": "!",
+    "neutral": "•",
+}
+_KPI_SIZES: tuple[str, ...] = ("hero", "md", "sm")
+
+# A trailing unit on a pre-formatted value ("1 966,20 kr", "12,5 %",
+# "3,2 år", "40 000 kr/år"). The separator before the unit (NBSP or space)
+# belongs to the unit group, so number + unit concatenate back to the
+# original string.
+_UNIT_RE = re.compile(
+    r"^(?P<num>.*?\S)(?P<unit>[ \u00a0](?:kr|%|år|st|ggr)(?:/år|/yr)?|/år|/yr)$"
+)
+
+
+def _split_unit(value: str) -> tuple[str, str]:
+    """Split a formatted value into (number, unit). unit is '' if none."""
+    match = _UNIT_RE.match(value)
+    if not match:
+        return value, ""
+    unit = match.group("unit")
+    if unit[0] == " ":
+        unit = "\u00a0" + unit[1:]
+    return match.group("num"), unit
+
+
+def status_pill(text: str, tone: str = "neutral", glyph: str | None = None) -> str:
+    """Status pill: glyph + word on a tinted background (never colour alone).
+
+    Args:
+        text: Status word, e.g. "Lönsam" or "Ofördelaktig". Escaped.
+        tone: 'positive' | 'negative' | 'caution' | 'neutral'.
+        glyph: Optional glyph override, e.g. '▲'/'▼' for F/O variances.
+    """
+    tone = tone if tone in _TONES else "neutral"
+    mark = html.escape(glyph if glyph is not None else _PILL_GLYPHS[tone])
+    return (
+        f'<span class="eks-pill eks-pill--{tone}">'
+        f'<span aria-hidden="true">{mark}</span>{html.escape(text)}</span>'
+    )
+
+
 def kpi_card(
     label: str,
     value: str,
@@ -740,22 +820,48 @@ def kpi_card(
     delta: str | None = None,
     delta_direction: str = "flat",
     variant: str = "default",
+    *,
+    status: str | None = None,
+    status_tone: str | None = None,
+    size: str = "md",
+    help: str | None = None,
 ) -> str:
-    """KPI metric card with colored left border.
+    """KPI metric card.
 
     Args:
-        label: Short uppercase label shown above the value.
-        value: Primary metric value (pre-formatted string).
-        unit: Optional unit shown next to the value in smaller text.
+        label: Short uppercase label shown above the value. Escaped.
+        value: Primary metric value (pre-formatted string). A trailing unit
+            ("kr", "%", "år", "st", "ggr", "/år") is split into its own span
+            so it is styled smaller but never wraps away from the number.
+        unit: Optional explicit unit shown next to the value.
         delta: Optional change string (e.g. '+12 kr').
         delta_direction: 'up' | 'down' | 'flat'
-        variant: 'default' | 'success' | 'danger' | 'warning'
+        variant: Legacy tone: 'default' | 'success' | 'danger' | 'warning'.
+        status: Optional status word, rendered as a pill under the value.
+        status_tone: 'positive' | 'negative' | 'caution' | 'neutral'.
+            Defaults to the tone mapped from variant.
+        size: 'hero' | 'md' | 'sm'.
+        help: Optional explanation added to the card's title tooltip.
     """
-    variant_class = f" variant-{variant}" if variant != "default" else ""
+    tone = status_tone if status_tone in _TONES else _VARIANT_TONES.get(variant, "neutral")
+    size = size if size in _KPI_SIZES else "md"
+    classes = f"eks-kpi eks-kpi--{size} tone-{tone}"
+    if variant != "default":
+        classes += f" variant-{variant}"
+
+    if unit:
+        num, unit_text = value, "\u00a0" + unit
+    else:
+        num, unit_text = _split_unit(value)
+    unit_html = f'<span class="eks-kpi-unit">{unit_text}</span>' if unit_text else ""
+
     # Full value as a tooltip, for the rare case that a long value is
-    # clipped with an ellipsis on a narrow card.
-    title = html.escape(f"{label}: {value}{' ' + unit if unit else ''}", quote=True)
-    unit_html = f'<span class="eks-kpi-unit">{unit}</span>' if unit else ""
+    # clipped with an ellipsis on a narrow card; help text follows it.
+    title_text = f"{label}: {value}{' ' + unit if unit else ''}"
+    if help:
+        title_text += f"\n{help}"
+    title = html.escape(title_text, quote=True)
+
     # Direction arrow so color is never the only signal carrier (WCAG 1.4.1).
     delta_arrow = {"up": "▲ ", "down": "▼ "}.get(delta_direction, "")
     delta_html = (
@@ -764,18 +870,30 @@ def kpi_card(
         if delta
         else ""
     )
+    status_html = (
+        f'<div class="eks-kpi-status">{status_pill(status, tone)}</div>' if status else ""
+    )
     return (
-        f'<div class="eks-kpi{variant_class}" title="{title}">'
-        f'<div class="eks-kpi-label">{label}</div>'
-        f'<div class="eks-kpi-value">{value}{unit_html}</div>'
+        f'<div class="{classes}" title="{title}">'
+        f'<div class="eks-kpi-label">{html.escape(label)}</div>'
+        f'<div class="eks-kpi-value"><span class="eks-kpi-num">{num}</span>{unit_html}</div>'
         f"{delta_html}"
+        f"{status_html}"
         f"</div>"
     )
 
 
-def render_kpi_row(cards: list[str]) -> None:
-    """Render a list of kpi_card() HTML strings in equal-width columns."""
-    cols = st.columns(len(cards))
+def render_kpi_row(cards: list[str], sizes: list[float] | None = None) -> None:
+    """Render kpi_card() HTML strings side by side.
+
+    Args:
+        cards: Card HTML strings.
+        sizes: Optional relative column widths (e.g. [2, 1, 1] lets a hero
+            card take two units). Equal widths when omitted.
+    """
+    if sizes is not None and len(sizes) != len(cards):
+        raise ValueError("sizes must have one entry per card")
+    cols = st.columns(sizes if sizes is not None else len(cards))
     for col, card_html in zip(cols, cards, strict=True):
         col.html(card_html)
 
