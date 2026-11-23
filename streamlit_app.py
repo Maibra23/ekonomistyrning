@@ -94,31 +94,31 @@ def render_landing() -> None:
         )
     )
     modules = [
-        ("Beräkna", "Kalkylering", "Kap. 4, 6–8", "pages/1_Kalkyl.py",
-         "Självkostnad med prissättning, bidragskalkyl med "
-         "känslighet och ABC jämfört med traditionell fördelning."),
-        ("Bedöm", "Investering", "Kap. 10", "pages/2_Investering.py",
-         "NPV, IRR, payback och annuitet med restvärde och "
-         "rörelsekapital, NPV-profil, känslighet och Monte Carlo."),
-        ("Planera", "Budget", "Kap. 13–15", "pages/3_Budget.py",
-         "Resultat-, likviditets- och balansbudget som går ihop, "
-         "nyckeltal och likviditetsbudget per månad."),
-        ("Följ upp", "Standardkostnadsanalys", "Kap. 17",
+        (t("Beräkna"), t("Kalkylering"), t("Kap. 4, 6–8"), "pages/1_Kalkyl.py",
+         t("Självkostnad med prissättning, bidragskalkyl med "
+         "känslighet och ABC jämfört med traditionell fördelning.")),
+        (t("Bedöm"), t("Investering"), t("Kap. 10"), "pages/2_Investering.py",
+         t("NPV, IRR, payback och annuitet med restvärde och "
+         "rörelsekapital, NPV-profil, känslighet och Monte Carlo.")),
+        (t("Planera"), t("Budget"), t("Kap. 13–15"), "pages/3_Budget.py",
+         t("Resultat-, likviditets- och balansbudget som går ihop, "
+         "nyckeltal och likviditetsbudget per månad.")),
+        (t("Följ upp"), t("Standardkostnadsanalys"), t("Kap. 17"),
          "pages/4_Standardkostnadsanalys.py",
-         "Volym-, pris- och effektivitetsavvikelser per kostnadsslag "
-         "samt budget- och volymavvikelse för fasta omkostnader."),
-        ("Pröva", "Kunskapstest", "Kap. 4–17", "pages/5_Kunskapstest.py",
-         "Obegränsat med frågor vars svar räknas fram av "
-         "kalkylatorerna, med lösning steg för steg."),
+         t("Volym-, pris- och effektivitetsavvikelser per kostnadsslag "
+         "samt budget- och volymavvikelse för fasta omkostnader.")),
+        (t("Pröva"), t("Kunskapstest"), t("Kap. 4–17"), "pages/5_Kunskapstest.py",
+         t("Obegränsat med frågor vars svar räknas fram av "
+         "kalkylatorerna, med lösning steg för steg.")),
     ]
     # Each module card is itself the navigation: role, title, chapter badge,
     # description and a link, replacing the old map plus separate link row.
     card_cols = st.columns(len(modules), gap="medium")
     for col, (role, title, tag, path, desc) in zip(card_cols, modules, strict=True):
         with col, st.container(border=True):
-            st.html(module_card_head(t(role), t(title)))
-            st.badge(t(tag))
-            st.html(module_card_desc(t(desc)))
+            st.html(module_card_head(role, title))
+            st.badge(tag)
+            st.html(module_card_desc(desc))
             st.page_link(path, label=t("Öppna →"))
 
     # --- How each module works ------------------------------------------
