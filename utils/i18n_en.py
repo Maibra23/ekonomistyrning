@@ -697,6 +697,7 @@ EN: dict[str, str] = {
     "Belopp": "Amount",
     "Ingaende": "Opening",
     "Utgaende": "Closing",
+    "Finansiell rapport": "Financial statement",
     "Ingående (kr)": "Opening (SEK)",
     "Utgående (kr)": "Closing (SEK)",
     "Inbetalningar från kunder": "Receipts from customers",

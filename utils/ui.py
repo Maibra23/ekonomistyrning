@@ -705,6 +705,71 @@ div[data-testid="stMainBlockContainer"] {
     margin-top: 8px;
 }
 
+/* --- Statement table (utils.tables.statement_table) --- */
+.eks-statement-wrap {
+    width: 100%%;
+    overflow-x: auto;
+    margin: 0 0 16px;
+}
+.eks-statement {
+    width: 100%%;
+    border-collapse: collapse;
+    font-family: %(font_ui)s;
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+    color: %(text_primary)s;
+}
+.eks-statement caption {
+    caption-side: top;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 600;
+    color: %(text_secondary)s;
+    padding: 0 0 8px;
+}
+.eks-statement th,
+.eks-statement td {
+    padding: 8px 12px;
+    text-align: left;
+    font-weight: 400;
+    border-bottom: 1px solid %(border)s;
+}
+.eks-statement thead th {
+    background: %(surface_muted)s;
+    font-size: 12px;
+    font-weight: 600;
+    color: %(text_secondary)s;
+    border-bottom: 1px solid %(border_strong)s;
+}
+.eks-statement .eks-num {
+    text-align: right;
+    white-space: nowrap;
+}
+.eks-statement tbody th {
+    padding-left: calc(12px + var(--eks-indent, 0) * 16px);
+}
+.eks-statement-subtotal th,
+.eks-statement-subtotal td {
+    font-weight: 600;
+    border-top: 1px solid %(border_strong)s;
+}
+.eks-statement-total th,
+.eks-statement-total td {
+    font-weight: 700;
+    border-top: 3px double %(text_primary)s;
+}
+.eks-statement-section th {
+    padding-top: 16px;
+    font-size: 11.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: %(text_tertiary)s;
+}
+@media (max-width: 639.98px) {
+    .eks-statement { min-width: 480px; }
+}
+
 /* === Accessibility === */
 .eks-tip:focus-visible,
 div[data-testid="stPageLink"] a:focus-visible,
