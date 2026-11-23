@@ -5,7 +5,8 @@ strings rendered with st.html(). Call inject_css() and render_sidebar()
 immediately after st.set_page_config() on every page.
 
 CSS classes use the 'eks-' prefix. GLOBAL_CSS uses % string interpolation
-against COLORS, so literal % in CSS must be written as %%.
+against TOKENS (plus the font stacks), so literal % in CSS must be written
+as %%.
 """
 from __future__ import annotations
 
@@ -73,8 +74,8 @@ RADIUS = 6
 FONT_UI = "Inter, system-ui, sans-serif"
 FONT_MONO = '"IBM Plex Mono", ui-monospace, monospace'
 
-# Compatibility mapping for GLOBAL_CSS and existing callers. Keys are the
-# legacy names; values come from TOKENS.
+# Compatibility mapping for existing callers. Keys are the legacy names;
+# values come from TOKENS.
 COLORS: dict[str, str] = {
     "primary": TOKENS["primary"],
     "primary_mid": TOKENS["primary_hover"],
@@ -91,67 +92,6 @@ COLORS: dict[str, str] = {
     "border": TOKENS["border"],
     "grid": TOKENS["grid"],
     "neutral": TOKENS["text_secondary"],
-}
-
-CHART_PALETTE: list[str] = CHART_CATEGORICAL
-
-# ---------------------------------------------------------------------------
-# Swedish labels
-# ---------------------------------------------------------------------------
-
-LABELS: dict[str, str] = {
-    # Navigation
-    "nav_hem": "Hem",
-    "nav_kalkyl": "Kalkylering",
-    "nav_investering": "Investering",
-    "nav_budget": "Budget",
-    "nav_standardkostnad": "Standardkostnadsanalys",
-    "nav_quiz": "Kunskapstest",
-    # Kalkyl
-    "kalkyl_metod": "Kalkyleringsmetod",
-    "kalkyl_scenario": "Välj scenario",
-    "kalkyl_sjalvkostnad": "Självkostnadskalkyl (pålägg)",
-    "kalkyl_bidrag": "Bidragskalkyl",
-    "kalkyl_abc": "ABC-kalkyl",
-    "kalkyl_berakna": "Beräkna",
-    "kalkyl_result_sjalvkostnad": "Självkostnad/styck",
-    "kalkyl_result_tb": "Täckningsbidrag/styck",
-    "kalkyl_result_breakeven": "Nollpunktvolym",
-    "kalkyl_result_total": "Total kostnad",
-    # Investering
-    "inv_npv": "Nuvärde (NPV)",
-    "inv_irr": "Internränta (IRR)",
-    "inv_payback": "Paybacktid",
-    "inv_annuitet": "Annuitet",
-    "inv_investera": "Investera",
-    "inv_avsta": "Avstå",
-    # Budget
-    "budget_resultat": "Resultatbudget",
-    "budget_likviditet": "Likviditetsbudget",
-    "budget_balans": "Balansbudget",
-    # Variance
-    "varians_total": "Total avvikelse",
-    "varians_volym": "Volymavvikelse",
-    "varians_pris": "Prisavvikelse",
-    "varians_effektivitet": "Effektivitetsavvikelse",
-    "varians_fast_oh": "Fast OH-avvikelse",
-    # Quiz
-    "quiz_generera": "Generera fråga",
-    "quiz_kontrollera": "Kontrollera svar",
-    "quiz_ny": "Ny liknande fråga",
-    "quiz_svarare": "Svårare version",
-    # Common
-    "exportera": "Exportera till Excel",
-    "llm_forklaring": "Förklaring",
-    "llm_steg": "Steg-för-steg-guide",
-    "llm_fraga": "Ställ en fråga...",
-    "llm_offline": "Visar grundförklaring (offline-läge)",
-    "llm_cap_warn": (
-        "Sessionens gräns för förklaringar är uppnådd. "
-        "Beräkningar och diagram fungerar som vanligt."
-    ),
-    "scenario_egna": "Egna värden",
-    "scenario_ai": "Generera nytt exempelföretag",
 }
 
 # ---------------------------------------------------------------------------
@@ -188,90 +128,46 @@ BUDGET_VS_RAKNING_HELP: str = (
 # Global CSS
 # ---------------------------------------------------------------------------
 
+# Values interpolated into GLOBAL_CSS: every token plus the font stacks.
+_CSS_VARS: dict[str, str] = {**TOKENS, "font_ui": FONT_UI, "font_mono": FONT_MONO}
+
+# Selectors target the data-testid attributes of Streamlit 1.67;
+# tests/test_design_tokens.py keeps them on an explicit allow-list.
 GLOBAL_CSS: str = (
     """
-/* Self-hosted fonts (latin subsets in static/fonts/, served via
-   Streamlit static serving). No render-blocking Google Fonts request
-   and no third-party IP disclosure (GDPR). */
-/* latin */
-@font-face {
-  font-family: 'IBM Plex Mono';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url(/app/static/fonts/IBMPlexMono-400.woff2) format('woff2');
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-/* latin */
-@font-face {
-  font-family: 'IBM Plex Mono';
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url(/app/static/fonts/IBMPlexMono-500.woff2) format('woff2');
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-/* latin */
-@font-face {
-  font-family: 'Inter';
-  font-style: normal;
-  font-weight: 300;
-  font-display: swap;
-  src: url(/app/static/fonts/Inter-300.woff2) format('woff2');
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-/* latin */
-@font-face {
-  font-family: 'Inter';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url(/app/static/fonts/Inter-400.woff2) format('woff2');
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-/* latin */
-@font-face {
-  font-family: 'Inter';
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url(/app/static/fonts/Inter-600.woff2) format('woff2');
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-/* latin */
-@font-face {
-  font-family: 'Inter';
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url(/app/static/fonts/Inter-700.woff2) format('woff2');
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
+/* === Fonts ===
+   Inter and IBM Plex Mono are self-hosted (static/fonts/) and registered
+   for the whole document by theme.fontFaces in .streamlit/config.toml, so
+   the custom eks- HTML below uses them without its own @font-face rules. */
 
-/* --- Streamlit chrome removal --- */
+/* === Chrome === */
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
 header[data-testid="stHeader"] {display: none;}
 div[data-testid="stDecoration"] {display: none;}
 div[data-testid="stToolbar"] {display: none;}
+/* Guard: the custom sidebar replaces Streamlit's automatic page nav. */
 div[data-testid="stSidebarNav"] {display: none !important;}
 section[data-testid="stSidebar"] > div > div > div > ul {display: none !important;}
 section[data-testid="stSidebar"] nav {display: none !important;}
 
-/* --- Main content area --- */
-.main .block-container {
-    padding: 32px 40px !important;
-    max-width: 1480px !important;
+/* === Layout ===
+   Streamlit adds the header height to theme.paddingTop. The header is
+   hidden on desktop, so the top padding is set to 32px there; on mobile the
+   header is visible and the theme value applies. */
+div[data-testid="stMainBlockContainer"] {
+    max-width: 1400px;
+    padding-left: 40px;
+    padding-right: 40px;
+}
+@media (min-width: 768px) {
+    div[data-testid="stMainBlockContainer"] {
+        padding-top: 32px;
+    }
 }
 
-/* --- Sidebar base --- */
-section[data-testid="stSidebar"] {
-    background-color: %(sidebar_bg)s !important;
-}
-section[data-testid="stSidebar"],
-section[data-testid="stSidebar"] * {
-    color: rgba(255,255,255,0.65) !important;
-}
+/* === Sidebar ===
+   Colours come from [theme.sidebar] in config.toml. */
 /* Lock sidebar open on desktop only: hide every Streamlit collapse handle
    so the student cannot accidentally hide the navigation. On narrow
    screens (< 768px) the lock is released so the sidebar can be closed and
@@ -284,9 +180,9 @@ section[data-testid="stSidebar"] * {
         visibility: visible !important;
         display: block !important;
     }
+    div[data-testid="stSidebarCollapseButton"],
     button[data-testid="stSidebarCollapseButton"],
     button[data-testid="stSidebarCollapsedControl"],
-    div[data-testid="stSidebarCollapseButton"],
     div[data-testid="collapsedControl"],
     button[kind="header"] {
         display: none !important;
@@ -301,68 +197,103 @@ section[data-testid="stSidebar"] * {
     header[data-testid="stHeader"] {
         display: block !important;
     }
-    .main .block-container {
-        padding: 20px 16px !important;
+    div[data-testid="stMainBlockContainer"] {
+        padding-left: 16px;
+        padding-right: 16px;
     }
 }
-/* Streamlit pushes the main area aside while the sidebar is open. When the
-   collapse button is hidden the layout occasionally resets the offset on
-   narrow screens; force the main column to respect the locked width. */
-section.main > div.block-container {
-    margin-left: 0 !important;
+.eks-sidebar-brand {
+    padding: 20px 16px 16px 16px;
+    border-bottom: 1px solid %(border)s;
+    margin-bottom: 16px;
 }
-
-/* --- Streamlit widget overrides --- */
-div[data-testid="stDataFrame"] th {
-    font-family: Inter, sans-serif !important;
-    font-size: 10.5px !important;
-    font-weight: 600 !important;
-    text-transform: uppercase !important;
-    letter-spacing: 0.5px !important;
+.eks-brand-bar {
+    width: 32px;
+    height: 3px;
+    background: %(primary)s;
+    margin-bottom: 12px;
 }
-div[data-testid="stDataFrame"] td {
-    font-family: "IBM Plex Mono", monospace !important;
-    font-size: 12px !important;
+.eks-brand-mark {
+    font-family: %(font_mono)s;
+    font-size: 11px;
+    font-weight: 500;
+    color: %(primary)s;
+    letter-spacing: 2px;
+    display: block;
 }
-section[data-testid="stSidebar"] label {
-    color: rgba(255,255,255,0.5) !important;
-    font-size: 10.5px !important;
-    font-weight: 600 !important;
+.eks-brand-title {
+    font-family: %(font_ui)s;
+    font-size: 15px;
+    font-weight: 700;
+    color: %(text_primary)s;
+    margin-top: 4px;
+    display: block;
 }
-/* The model selectbox sits on a white widget background; the global
-   near-white sidebar text rule would otherwise hide its value. Keep the
-   selected value and dropdown text dark and readable. */
-section[data-testid="stSidebar"] div[data-baseweb="select"] * {
-    color: %(text_primary)s !important;
-}
-button[data-testid="stDownloadButton"] {
-    font-family: Inter, sans-serif;
+.eks-brand-sub {
+    font-family: %(font_ui)s;
     font-size: 12px;
-    border-radius: 4px;
+    color: %(text_secondary)s;
+    display: block;
 }
-div[data-testid="stSlider"] label {
-    font-size: 10.5px;
+.eks-sidebar-section-label {
+    font-family: %(font_ui)s;
+    font-size: 11.5px;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.06em;
+    color: %(text_secondary)s;
+    padding: 12px 16px 6px 16px;
+    display: block;
+}
+.eks-company {
+    padding: 8px 16px 4px 16px;
+    font-family: %(font_ui)s;
+}
+.eks-company-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: %(text_primary)s;
+}
+.eks-company-meta {
+    font-size: 12px;
+    color: %(text_tertiary)s;
+    margin-top: 2px;
+}
+.eks-company-desc {
+    font-size: 12px;
+    line-height: 1.4;
+    color: %(text_secondary)s;
+    margin-top: 6px;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.eks-meter {
+    padding: 0 16px 4px 16px;
+    font-family: %(font_ui)s;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
     color: %(text_secondary)s;
 }
 
+/* === Components === */
+
 /* --- Hero block --- */
 .eks-hero {
-    background: linear-gradient(135deg, %(primary)s 0%%, %(primary_mid)s 100%%);
-    border-left: 4px solid %(primary_light)s;
+    background: linear-gradient(135deg, %(primary)s 0%%, %(primary_hover)s 100%%);
+    border-left: 4px solid %(focus_ring)s;
     border-radius: 4px;
     padding: 36px 40px;
     margin-bottom: 24px;
 }
 .eks-eyebrow {
-    font-family: Inter, sans-serif;
-    font-size: 11px;
+    font-family: %(font_ui)s;
+    font-size: 11.5px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 1.5px;
-    color: %(primary_light)s;
+    color: %(focus_ring)s;
     margin-bottom: 8px;
 }
 .eks-hero .eks-eyebrow {
@@ -370,16 +301,16 @@ div[data-testid="stSlider"] label {
     letter-spacing: 2px;
 }
 .eks-hero h1 {
-    font-family: Inter, sans-serif;
+    font-family: %(font_ui)s;
     font-size: clamp(22px, 2.8vw, 34px);
     font-weight: 700;
     color: #FFFFFF;
     margin: 8px 0 12px 0;
 }
 .eks-lead {
-    font-family: Inter, sans-serif;
+    font-family: %(font_ui)s;
     font-size: 15px;
-    font-weight: 300;
+    font-weight: 400;
     color: rgba(255,255,255,0.85);
     max-width: 720px;
     line-height: 1.6;
@@ -390,112 +321,83 @@ div[data-testid="stSlider"] label {
     margin-bottom: 24px;
 }
 .eks-page-title .eks-eyebrow {
-    color: %(primary_light)s;
+    color: %(focus_ring)s;
     margin-bottom: 4px;
 }
 .eks-page-title h1 {
-    font-family: Inter, sans-serif;
+    font-family: %(font_ui)s;
     font-size: 26px;
     font-weight: 700;
     color: %(text_primary)s;
     margin: 0 0 4px 0;
 }
 .eks-subtitle {
-    font-family: Inter, sans-serif;
+    font-family: %(font_ui)s;
     font-size: 14px;
     color: %(text_secondary)s;
 }
 
-/* --- KPI card --- */
+/* --- KPI card ---
+   Values never wrap inside a number: the card is a size container and the
+   value scales with its width; anything still too long is clipped with an
+   ellipsis and shown in full in the card's title tooltip. */
 .eks-kpi {
-    background: %(card_bg)s;
+    container-type: inline-size;
+    min-width: 0;
+    background: %(canvas)s;
     border: 1px solid %(border)s;
     border-radius: 4px;
     padding: 18px 20px;
     position: relative;
     border-left: 3px solid %(primary)s;
 }
-.eks-kpi.variant-success { border-left-color: %(success)s; }
-.eks-kpi.variant-danger  { border-left-color: %(danger)s; }
-.eks-kpi.variant-warning { border-left-color: %(warning)s; }
+.eks-kpi.variant-success { border-left-color: %(positive)s; }
+.eks-kpi.variant-danger  { border-left-color: %(negative)s; }
+.eks-kpi.variant-warning { border-left-color: %(caution)s; }
 .eks-kpi-label {
-    font-family: Inter, sans-serif;
-    font-size: 10.5px;
+    font-family: %(font_ui)s;
+    font-size: 11.5px;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.06em;
     color: %(text_secondary)s;
     margin-bottom: 6px;
 }
 .eks-kpi-value {
-    font-family: "IBM Plex Mono", monospace;
-    /* Scale down on narrow cards so long values (e.g. 9 186 359 kr) never
-       overflow the card while staying large on wide layouts. */
-    font-size: clamp(19px, 2.1vw, 30px);
+    font-family: %(font_ui)s;
+    font-size: 22px;
     font-weight: 700;
     color: %(text_primary)s;
-    line-height: 1.15;
+    line-height: 1.2;
     font-variant-numeric: tabular-nums;
-    overflow-wrap: anywhere;
-    word-break: break-word;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+@container (min-width: 220px) {
+    .eks-kpi-value { font-size: clamp(20px, 11cqi, 28px); }
+}
+/* Narrow cards (four KPIs in a results column) scale down further. */
+@container (max-width: 219.98px) {
+    .eks-kpi-value { font-size: clamp(13px, 12cqi, 22px); }
 }
 .eks-kpi-unit {
-    font-family: Inter, sans-serif;
+    font-family: %(font_ui)s;
     font-size: 13px;
     font-weight: 400;
     color: %(text_secondary)s;
     margin-left: 4px;
 }
 .eks-kpi-delta {
-    font-family: "IBM Plex Mono", monospace;
+    font-family: %(font_ui)s;
     font-size: 12px;
     font-weight: 500;
+    font-variant-numeric: tabular-nums;
     margin-top: 6px;
 }
-.eks-kpi-delta.delta-up   { color: %(success)s; }
-.eks-kpi-delta.delta-down { color: %(danger)s; }
+.eks-kpi-delta.delta-up   { color: %(positive)s; }
+.eks-kpi-delta.delta-down { color: %(negative)s; }
 .eks-kpi-delta.delta-flat { color: %(text_tertiary)s; }
-
-/* --- Standard card --- */
-.eks-card {
-    background: %(card_bg)s;
-    border: 1px solid %(border)s;
-    border-radius: 4px;
-    padding: 22px 24px;
-    margin-bottom: 24px;
-}
-
-/* --- Card header --- */
-.eks-card-header {
-    border-bottom: 1px solid %(border)s;
-    padding-bottom: 12px;
-    margin-bottom: 16px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-.eks-card-header h3 {
-    font-family: Inter, sans-serif;
-    font-size: 15px;
-    font-weight: 700;
-    color: %(text_primary)s;
-    margin: 0;
-}
-.eks-tag {
-    font-family: "IBM Plex Mono", monospace;
-    font-size: 10px;
-    font-weight: 500;
-    color: %(text_tertiary)s;
-    background: %(bg)s;
-    padding: 2px 8px;
-    border-radius: 3px;
-}
-.eks-card-subtitle {
-    font-family: Inter, sans-serif;
-    font-size: 12px;
-    color: %(text_secondary)s;
-    margin-top: 2px;
-}
 
 /* --- Stat strip --- */
 .eks-stat-strip {
@@ -505,29 +407,31 @@ div[data-testid="stSlider"] label {
 }
 .eks-stat-cell {
     flex: 1;
+    min-width: 0;
     text-align: center;
     padding: 16px 12px;
-    background: %(card_bg)s;
+    background: %(canvas)s;
     border: 1px solid %(border)s;
     border-right: none;
 }
 .eks-stat-cell:first-child { border-radius: 4px 0 0 4px; }
 .eks-stat-cell:last-child  { border-right: 1px solid %(border)s; border-radius: 0 4px 4px 0; }
 .eks-stat-value {
-    font-family: "IBM Plex Mono", monospace;
+    font-family: %(font_mono)s;
     font-size: clamp(16px, 1.7vw, 22px);
     font-weight: 500;
     color: %(text_primary)s;
     display: block;
-    overflow-wrap: anywhere;
-    word-break: break-word;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 .eks-stat-label {
-    font-family: Inter, sans-serif;
-    font-size: 10px;
+    font-family: %(font_ui)s;
+    font-size: 11.5px;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: 0.06em;
     color: %(text_tertiary)s;
     margin-top: 4px;
     display: block;
@@ -543,7 +447,7 @@ div[data-testid="stSlider"] label {
     flex-wrap: wrap;
 }
 .eks-pipeline-step {
-    background: %(card_bg)s;
+    background: %(canvas)s;
     border: 1px solid %(border)s;
     border-radius: 4px;
     min-width: 140px;
@@ -551,21 +455,21 @@ div[data-testid="stSlider"] label {
     text-align: center;
 }
 .eks-step-num {
-    font-family: "IBM Plex Mono", monospace;
-    font-size: 10px;
-    color: %(primary_light)s;
+    font-family: %(font_mono)s;
+    font-size: 11px;
+    color: %(focus_ring)s;
     display: block;
     margin-bottom: 4px;
 }
 .eks-step-label {
-    font-family: Inter, sans-serif;
+    font-family: %(font_ui)s;
     font-size: 13px;
     font-weight: 600;
     color: %(text_primary)s;
 }
 .eks-pipeline-arrow {
     font-size: 18px;
-    color: %(primary_light)s;
+    color: %(focus_ring)s;
     padding: 0 8px;
 }
 
@@ -574,7 +478,7 @@ div[data-testid="stSlider"] label {
     margin: 20px 0 8px 0;
 }
 .eks-section-heading h2 {
-    font-family: Inter, sans-serif;
+    font-family: %(font_ui)s;
     font-size: 20px;
     font-weight: 700;
     color: %(text_primary)s;
@@ -591,7 +495,7 @@ div[data-testid="stSlider"] label {
 .eks-map-node {
     flex: 1 1 0;
     min-width: 0;
-    background: %(card_bg)s;
+    background: %(canvas)s;
     border: 1px solid %(border)s;
     border-top: 3px solid %(primary)s;
     border-radius: 4px;
@@ -600,17 +504,17 @@ div[data-testid="stSlider"] label {
     flex-direction: column;
 }
 .eks-map-role {
-    font-family: "IBM Plex Mono", monospace;
-    font-size: 9.5px;
+    font-family: %(font_mono)s;
+    font-size: 10px;
     font-weight: 500;
     letter-spacing: 1.5px;
     text-transform: uppercase;
-    color: %(primary_light)s;
+    color: %(focus_ring)s;
     display: block;
     margin-bottom: 8px;
 }
 .eks-map-node h4 {
-    font-family: Inter, sans-serif;
+    font-family: %(font_ui)s;
     /* Scale slightly with the card so long names like
        "Standardkostnadsanalys" never overflow a narrow column. */
     font-size: clamp(13px, 1vw, 14px);
@@ -622,17 +526,17 @@ div[data-testid="stSlider"] label {
     hyphens: auto;
 }
 .eks-map-tag {
-    font-family: "IBM Plex Mono", monospace;
-    font-size: 9.5px;
+    font-family: %(font_mono)s;
+    font-size: 10px;
     color: %(text_tertiary)s;
-    background: %(bg)s;
+    background: %(surface_input)s;
     padding: 2px 7px;
     border-radius: 3px;
     align-self: flex-start;
     margin-bottom: 10px;
 }
 .eks-map-node p {
-    font-family: Inter, sans-serif;
+    font-family: %(font_ui)s;
     font-size: 12px;
     line-height: 1.5;
     color: %(text_secondary)s;
@@ -644,35 +548,9 @@ div[data-testid="stSlider"] label {
     display: flex;
     align-items: center;
     justify-content: center;
-    color: %(primary_light)s;
+    color: %(focus_ring)s;
     font-size: 17px;
     padding: 0 7px;
-    flex: 0 0 auto;
-}
-.eks-map-thread {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: linear-gradient(90deg, rgba(30,64,175,0.07), rgba(59,130,246,0.02));
-    border: 1px dashed %(primary_light)s;
-    border-radius: 4px;
-    padding: 12px 18px;
-    margin-bottom: 24px;
-    font-family: Inter, sans-serif;
-    font-size: 13px;
-    color: %(text_secondary)s;
-    line-height: 1.5;
-}
-.eks-map-thread strong { color: %(text_primary)s; font-weight: 600; }
-.eks-map-thread .eks-map-thread-mark {
-    font-family: "IBM Plex Mono", monospace;
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 1px;
-    color: %(primary_light)s;
-    border: 1px solid %(primary_light)s;
-    border-radius: 3px;
-    padding: 2px 7px;
     flex: 0 0 auto;
 }
 /* Stack the map vertically on narrow screens; arrows point downward. */
@@ -688,18 +566,18 @@ div[data-testid="stSlider"] label {
     align-items: center;
     gap: 8px;
     margin: 0 0 20px 0;
-    font-family: Inter, sans-serif;
+    font-family: %(font_ui)s;
     font-size: 12.5px;
     font-weight: 600;
     color: %(text_secondary)s;
     cursor: help;
 }
 .eks-tip-badge {
-    font-family: "IBM Plex Mono", monospace;
+    font-family: %(font_mono)s;
     font-size: 11px;
     font-weight: 700;
     color: %(primary)s;
-    background: %(bg)s;
+    background: %(surface_input)s;
     border: 1px solid %(border)s;
     border-radius: 999px;
     width: 18px;
@@ -725,7 +603,7 @@ div[data-testid="stSlider"] label {
     line-height: 1.6;
     padding: 12px 15px;
     border-radius: 6px;
-    box-shadow: 0 8px 28px rgba(17,24,39,0.22);
+    box-shadow: 0 8px 24px rgba(16,24,40,0.12);
     transition: opacity 0.15s ease;
     pointer-events: none;
 }
@@ -737,11 +615,11 @@ div[data-testid="stSlider"] label {
 
 /* --- Summary callout --- */
 .eks-summary {
-    font-family: Inter, sans-serif;
+    font-family: %(font_ui)s;
     font-size: 14px;
     color: %(text_secondary)s;
-    background: %(bg)s;
-    border-left: 3px solid %(primary_light)s;
+    background: %(surface_input)s;
+    border-left: 3px solid %(focus_ring)s;
     padding: 14px 20px;
     margin-bottom: 24px;
     border-radius: 0 4px 4px 0;
@@ -756,122 +634,56 @@ div[data-testid="stSlider"] label {
     border-top: 1px solid %(border)s;
 }
 .eks-footer-label {
-    font-family: Inter, sans-serif;
-    font-size: 11px;
+    font-family: %(font_ui)s;
+    font-size: 11.5px;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.06em;
     color: %(text_tertiary)s;
 }
 .eks-footer-version {
-    font-family: "IBM Plex Mono", monospace;
-    font-size: 10px;
+    font-family: %(font_mono)s;
+    font-size: 11px;
     color: %(text_tertiary)s;
-    background: %(bg)s;
+    background: %(surface_input)s;
     padding: 2px 8px;
     border-radius: 3px;
     margin-left: 8px;
 }
 
-/* --- Sidebar brand & nav --- */
-.eks-sidebar-brand {
-    padding: 20px 16px 16px 16px;
-    border-bottom: 1px solid rgba(255,255,255,0.08);
-    margin-bottom: 16px;
-}
-.eks-brand-bar {
-    width: 32px;
-    height: 3px;
-    background: %(primary_light)s;
-    margin-bottom: 12px;
-}
-.eks-brand-mark {
-    font-family: "IBM Plex Mono", monospace;
-    font-size: 11px;
-    font-weight: 500;
-    color: %(primary_light)s !important;
-    letter-spacing: 2px;
-    display: block;
-}
-.eks-brand-title {
-    font-family: Inter, sans-serif;
-    font-size: 15px;
-    font-weight: 700;
-    color: #FFFFFF !important;
-    margin-top: 4px;
-    display: block;
-}
-.eks-brand-sub {
-    font-family: Inter, sans-serif;
-    font-size: 11px;
-    color: rgba(255,255,255,0.5) !important;
-    display: block;
-}
-.eks-sidebar-section-label {
-    font-family: Inter, sans-serif;
-    font-size: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    color: rgba(255,255,255,0.55) !important;
-    padding: 12px 16px 6px 16px;
-    display: block;
-}
-.eks-sidebar-footer {
-    padding: 16px;
-    border-top: 1px solid rgba(255,255,255,0.08);
-    margin-top: 16px;
-    font-family: Inter, sans-serif;
-    font-size: 10px;
-    color: rgba(255,255,255,0.55) !important;
-}
-
-/* --- LLM elements --- */
-.eks-llm-badge {
-    font-family: Inter, sans-serif;
-    font-size: 11px;
-    font-weight: 600;
-    background: %(bg)s;
-    border: 1px solid %(border)s;
-    padding: 3px 10px;
-    border-radius: 12px;
-    display: inline-block;
-}
-.eks-llm-section {
-    background: %(bg)s;
-    border-left: 3px solid %(primary_light)s;
-    padding: 16px 20px;
-    border-radius: 0 4px 4px 0;
-    font-family: Inter, sans-serif;
-    font-size: 14px;
-    line-height: 1.7;
-    color: %(text_primary)s;
-    margin-bottom: 12px;
-}
-.eks-llm-section h4 {
-    font-family: Inter, sans-serif;
-    font-size: 13px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: %(text_secondary)s;
-    margin: 0 0 8px 0;
-}
+/* --- Explanation status messages --- */
 .eks-offline-badge {
-    font-family: Inter, sans-serif;
-    font-size: 11px;
+    font-family: %(font_ui)s;
+    font-size: 12px;
     font-weight: 600;
-    color: %(warning)s;
-    background: rgba(217,119,6,0.08);
-    border: 1px solid rgba(217,119,6,0.3);
+    color: %(caution)s;
+    background: %(caution_subtle)s;
+    border: 1px solid %(caution)s;
     padding: 4px 12px;
     border-radius: 4px;
     display: inline-block;
     margin-bottom: 8px;
 }
-/* --- Accessibility --- */
-.eks-tip:focus-visible {
-    outline: 2px solid %(primary_light)s;
+.eks-grounding-warn {
+    font-family: %(font_ui)s;
+    font-size: 12px;
+    color: %(negative)s;
+    background: %(negative_subtle)s;
+    border: 1px solid %(negative)s;
+    padding: 4px 12px;
+    border-radius: 4px;
+    display: inline-block;
+    margin-top: 8px;
+}
+
+/* === Accessibility === */
+.eks-tip:focus-visible,
+div[data-testid="stPageLink"] a:focus-visible,
+[class^="eks-"][tabindex]:focus-visible,
+[class*=" eks-"][tabindex]:focus-visible,
+a[class^="eks-"]:focus-visible,
+button[class^="eks-"]:focus-visible {
+    outline: 2px solid %(focus_ring)s;
     outline-offset: 2px;
     border-radius: 3px;
 }
@@ -879,20 +691,8 @@ div[data-testid="stSlider"] label {
     .eks-tip-text { transition: none; }
     * { scroll-behavior: auto !important; }
 }
-
-.eks-grounding-warn {
-    font-family: Inter, sans-serif;
-    font-size: 11px;
-    color: %(danger)s;
-    background: rgba(220,38,38,0.06);
-    border: 1px solid rgba(220,38,38,0.2);
-    padding: 4px 12px;
-    border-radius: 4px;
-    display: inline-block;
-    margin-top: 8px;
-}
 """
-    % COLORS
+    % _CSS_VARS
 )
 
 # ---------------------------------------------------------------------------
@@ -952,6 +752,9 @@ def kpi_card(
         variant: 'default' | 'success' | 'danger' | 'warning'
     """
     variant_class = f" variant-{variant}" if variant != "default" else ""
+    # Full value as a tooltip, for the rare case that a long value is
+    # clipped with an ellipsis on a narrow card.
+    title = html.escape(f"{label}: {value}{' ' + unit if unit else ''}", quote=True)
     unit_html = f'<span class="eks-kpi-unit">{unit}</span>' if unit else ""
     # Direction arrow so color is never the only signal carrier (WCAG 1.4.1).
     delta_arrow = {"up": "▲ ", "down": "▼ "}.get(delta_direction, "")
@@ -962,7 +765,7 @@ def kpi_card(
         else ""
     )
     return (
-        f'<div class="eks-kpi{variant_class}">'
+        f'<div class="eks-kpi{variant_class}" title="{title}">'
         f'<div class="eks-kpi-label">{label}</div>'
         f'<div class="eks-kpi-value">{value}{unit_html}</div>'
         f"{delta_html}"
@@ -975,23 +778,6 @@ def render_kpi_row(cards: list[str]) -> None:
     cols = st.columns(len(cards))
     for col, card_html in zip(cols, cards, strict=True):
         col.html(card_html)
-
-
-def card_header(title: str, subtitle: str = "", tag: str = "") -> str:
-    """Card header with bottom divider for use inside st.container(border=True)."""
-    tag_html = f'<span class="eks-tag">{tag}</span>' if tag else ""
-    sub_html = (
-        f'<div class="eks-card-subtitle">{subtitle}</div>' if subtitle else ""
-    )
-    return (
-        f'<div class="eks-card-header">'
-        f"<div>"
-        f"<h3>{title}</h3>"
-        f"{sub_html}"
-        f"</div>"
-        f"{tag_html}"
-        f"</div>"
-    )
 
 
 def stat_strip(cells: list[tuple[str, str]]) -> str:
@@ -1062,21 +848,6 @@ def module_map(nodes: list[dict[str, str]]) -> str:
     return f'<div class="eks-map">{"".join(parts)}</div>'
 
 
-def thread_band(mark: str, text: str) -> str:
-    """Render a full-width band that ties the modules together visually.
-
-    Used under the module map to highlight what every module shares (for
-    example the common LLM tutor). ``text`` may contain inline HTML such as
-    ``<strong>``.
-    """
-    return (
-        f'<div class="eks-map-thread">'
-        f'<span class="eks-map-thread-mark">{mark}</span>'
-        f"<span>{text}</span>"
-        f"</div>"
-    )
-
-
 def summary_box(text: str) -> str:
     """Highlighted contextual summary box with blue left border."""
     return f'<div class="eks-summary">{text}</div>'
@@ -1100,28 +871,13 @@ def info_tooltip(label: str, text: str) -> str:
     )
 
 
-def footer_note(version: str = "1.0", updated: str = "") -> str:
+def footer_note(version: str = APP_VERSION, updated: str = "") -> str:
     """Page footer with version badge and optional updated date."""
     label = t("Uppdaterad {0}", updated) if updated else "Ekonomistyrning Sandbox"
     return (
         f'<div class="eks-footer">'
         f'<span class="eks-footer-label">{label}</span>'
         f'<span class="eks-footer-version">v{version}</span>'
-        f"</div>"
-    )
-
-
-def offline_badge() -> str:
-    """Warning badge shown when the explanation service is unavailable."""
-    return f'<div class="eks-offline-badge">{t(LABELS["llm_offline"])}</div>'
-
-
-def grounding_warning(cited_value: float, calc_value: float) -> str:
-    """Warning when a cited number deviates from calculator output."""
-    return (
-        f'<div class="eks-grounding-warn">'
-        f"OBS: Förklaringen angav {cited_value:,.0f} men kalkylatorn ger "
-        f"{calc_value:,.0f}. Lita på kalkylatorns värde."
         f"</div>"
     )
 
@@ -1153,13 +909,8 @@ def scenario_banner_html(
     descriptions are truncated for a tidy sidebar; the full text remains
     available on each page's per-module info banner.
     """
-    # The sidebar forces rgba(255,255,255,0.65) !important on all children,
-    # so the hierarchy must be expressed in white-scale inline styles with
-    # !important (inline !important wins over stylesheet !important) —
-    # otherwise the old gray palette is flattened to uniform half-white.
     meta_html = (
-        f'<div style="font-size:10px;color:rgba(255,255,255,0.6) !important;'
-        f'margin-top:2px;">'
+        '<div class="eks-company-meta">'
         f"{' • '.join(html.escape(bit) for bit in meta_bits)}</div>"
         if meta_bits
         else ""
@@ -1169,15 +920,10 @@ def scenario_banner_html(
         snippet = (
             description if len(description) <= 140 else description[:137] + "..."
         )
-        desc_html = (
-            f'<div style="font-size:11px;color:rgba(255,255,255,0.8) !important;'
-            f'margin-top:6px;line-height:1.35;">{html.escape(snippet)}</div>'
-        )
+        desc_html = f'<div class="eks-company-desc">{html.escape(snippet)}</div>'
     return (
-        '<div style="padding:8px 16px 4px 16px;">'
-        '<div style="font-size:12px;font-weight:600;'
-        'color:rgba(255,255,255,0.95) !important;">'
-        f"{html.escape(name)}</div>"
+        '<div class="eks-company">'
+        f'<div class="eks-company-name">{html.escape(name)}</div>'
         f"{meta_html}{desc_html}"
         "</div>"
     )
@@ -1276,8 +1022,7 @@ def _render_llm_budget_meter() -> None:
     remaining = get_session_calls_remaining()
     st.html(
         f'<span class="eks-sidebar-section-label">{t("FÖRKLARINGAR")}</span>'
-        '<div style="padding:0 16px 4px 16px;font-family:\'IBM Plex Mono\','
-        'monospace;font-size:11px;">'
+        '<div class="eks-meter">'
         + t("Kvar denna session: {0}/{1}", remaining, SESSION_CALL_CAP)
         + "</div>"
     )

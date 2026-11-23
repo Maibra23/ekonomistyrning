@@ -104,3 +104,33 @@ def test_streamlit_theme_font_faces_point_at_bundled_files():
     for face in faces:
         assert face["url"].startswith("app/static/fonts/")
         assert (root / face["url"].removeprefix("app/")).is_file()
+
+
+# Every data-testid that GLOBAL_CSS targets, verified against Streamlit 1.67.
+# Entries marked as fallbacks match nothing in 1.67 but are kept as harmless
+# guards for other versions. A new selector must be checked in the running
+# app and added here deliberately.
+KNOWN_TESTIDS: frozenset[str] = frozenset(
+    {
+        "stHeader",
+        "stDecoration",  # fallback
+        "stToolbar",
+        "stSidebarNav",
+        "stSidebar",
+        "stSidebarCollapseButton",
+        "stSidebarCollapsedControl",  # fallback
+        "collapsedControl",  # fallback
+        "stMainBlockContainer",
+        "stPageLink",
+    }
+)
+
+
+def test_css_selectors_allowlist():
+    import re
+
+    from utils.ui import GLOBAL_CSS
+
+    used = set(re.findall(r'data-testid="([^"]+)"', GLOBAL_CSS))
+    assert used, "GLOBAL_CSS should target Streamlit elements"
+    assert used <= KNOWN_TESTIDS, f"unverified selectors: {sorted(used - KNOWN_TESTIDS)}"
