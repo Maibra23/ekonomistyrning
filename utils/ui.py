@@ -30,36 +30,70 @@ APP_UPDATED = "2026-06-11"
 # Design tokens
 # ---------------------------------------------------------------------------
 
-COLORS: dict[str, str] = {
+# Single source of truth for colours. Every other colour constant in the app
+# (ui.COLORS, charts.COLORS, charts.PALETTE) is derived from these values.
+# Text tokens hold at least 4.5:1 against white (WCAG AA), and text_secondary
+# also against surface_muted; tests/test_design_tokens.py enforces this.
+TOKENS: dict[str, str] = {
     "primary": "#1E40AF",
-    "primary_mid": "#1D4ED8",
-    "primary_light": "#3B82F6",
-    "sidebar_bg": "#1E3A8A",
-    "success": "#059669",
-    "danger": "#DC2626",
-    "warning": "#D97706",
-    "bg": "#F3F4F6",
-    "card_bg": "#FFFFFF",
-    "text_primary": "#111827",
-    "text_secondary": "#6B7280",
-    # Used for small uppercase labels; must hold ~4.5:1 against white for
-    # WCAG AA at the 9.5-10.5px sizes the design system uses.
-    "text_tertiary": "#6B7280",
-    "border": "#E5E7EB",
-    "grid": "#F3F4F6",
-    "neutral": "#6B7280",
+    "primary_hover": "#1E3A8A",
+    "primary_subtle": "#EEF2FF",
+    "canvas": "#FFFFFF",
+    "surface_muted": "#F7F8FA",
+    "surface_input": "#F2F4F7",
+    "border": "#E4E7EC",
+    "border_strong": "#D0D5DD",
+    "text_primary": "#101828",
+    "text_secondary": "#475467",
+    "text_tertiary": "#667085",
+    "positive": "#067647",
+    "positive_subtle": "#ECFDF3",
+    "negative": "#B42318",
+    "negative_subtle": "#FEF3F2",
+    "caution": "#B54708",
+    "caution_subtle": "#FFFAEB",
+    "focus_ring": "#2E5BFF",
+    "reference": "#98A2B3",
+    "grid": "#F2F4F7",
 }
 
-CHART_PALETTE: list[str] = [
-    "#1E40AF",
-    "#059669",
-    "#D97706",
-    "#DC2626",
-    "#7C3AED",
-    "#0891B2",
-    "#065F46",
-    "#1D4ED8",
+# Categorical chart series with no financial meaning. Deliberately contains
+# no green or red, so those stay reserved for favourable/unfavourable values.
+CHART_CATEGORICAL: list[str] = [
+    "#1E40AF",  # navy
+    "#DC6803",  # orange
+    "#6941C6",  # violet
+    "#0086C9",  # sky
+    "#475467",  # slate
+    "#C11574",  # magenta
 ]
+
+SPACE: tuple[int, ...] = (4, 8, 12, 16, 24, 32, 48)
+RADIUS = 6
+FONT_UI = "Inter, system-ui, sans-serif"
+FONT_MONO = '"IBM Plex Mono", ui-monospace, monospace'
+
+# Compatibility mapping for GLOBAL_CSS and existing callers. Keys are the
+# legacy names; values come from TOKENS.
+COLORS: dict[str, str] = {
+    "primary": TOKENS["primary"],
+    "primary_mid": TOKENS["primary_hover"],
+    "primary_light": TOKENS["focus_ring"],
+    "sidebar_bg": TOKENS["primary_hover"],
+    "success": TOKENS["positive"],
+    "danger": TOKENS["negative"],
+    "warning": TOKENS["caution"],
+    "bg": TOKENS["surface_input"],
+    "card_bg": TOKENS["canvas"],
+    "text_primary": TOKENS["text_primary"],
+    "text_secondary": TOKENS["text_secondary"],
+    "text_tertiary": TOKENS["text_tertiary"],
+    "border": TOKENS["border"],
+    "grid": TOKENS["grid"],
+    "neutral": TOKENS["text_secondary"],
+}
+
+CHART_PALETTE: list[str] = CHART_CATEGORICAL
 
 # ---------------------------------------------------------------------------
 # Swedish labels

@@ -7,25 +7,25 @@ from __future__ import annotations
 
 import plotly.graph_objects as go
 
+from utils.ui import CHART_CATEGORICAL, TOKENS
+
+# Lighter blue for waterfall total bars; no matching token yet.
+_WATERFALL_TOTAL = "#3B82F6"
+
+# Compatibility mapping used by the pages; values come from utils.ui.TOKENS.
 COLORS = {
-    "primary": "#1E40AF",
-    "primary_light": "#3B82F6",
-    "success": "#059669",
-    "danger": "#DC2626",
-    "warning": "#D97706",
-    "neutral": "#6B7280",
-    "neutral_light": "#E5E7EB",
-    "background": "#FFFFFF",
+    "primary": TOKENS["primary"],
+    "primary_light": _WATERFALL_TOTAL,
+    "success": TOKENS["positive"],
+    "danger": TOKENS["negative"],
+    "warning": TOKENS["caution"],
+    "neutral": TOKENS["text_secondary"],
+    "neutral_light": TOKENS["border"],
+    "background": TOKENS["canvas"],
 }
 
-PALETTE = [
-    COLORS["primary"],
-    COLORS["success"],
-    COLORS["warning"],
-    COLORS["danger"],
-    COLORS["neutral"],
-    COLORS["primary_light"],
-]
+# Categorical series colours (no green or red; those carry financial meaning).
+PALETTE = list(CHART_CATEGORICAL)
 
 
 def apply_layout(fig: go.Figure, title: str | None = None, height: int = 420) -> go.Figure:
@@ -36,7 +36,7 @@ def apply_layout(fig: go.Figure, title: str | None = None, height: int = 420) ->
     fig.update_layout(
         title=title,
         template="simple_white",
-        font={"family": "system-ui, sans serif", "size": 13, "color": "#111827"},
+        font={"family": "system-ui, sans serif", "size": 13, "color": TOKENS["text_primary"]},
         margin={"l": 60, "r": 30, "t": 60 if title else 30, "b": 60},
         height=height,
         hoverlabel={"bgcolor": "white", "bordercolor": COLORS["primary"], "font_size": 13},
