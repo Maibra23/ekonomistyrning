@@ -1050,6 +1050,7 @@ def kpi_card(
     status_tone: str | None = None,
     size: str = "md",
     help: str | None = None,
+    status_glyph: str | None = None,
 ) -> str:
     """KPI metric card.
 
@@ -1067,6 +1068,7 @@ def kpi_card(
             Defaults to the tone mapped from variant.
         size: 'hero' | 'md' | 'sm'.
         help: Optional explanation added to the card's title tooltip.
+        status_glyph: Optional glyph for the status pill (e.g. '▲' / '▼').
     """
     tone = status_tone if status_tone in _TONES else _VARIANT_TONES.get(variant, "neutral")
     size = size if size in _KPI_SIZES else "md"
@@ -1096,7 +1098,7 @@ def kpi_card(
         else ""
     )
     status_html = (
-        f'<div class="eks-kpi-status">{status_pill(status, tone)}</div>' if status else ""
+        f'<div class="eks-kpi-status">{status_pill(status, tone, status_glyph)}</div>' if status else ""
     )
     return (
         f'<div class="{classes}" title="{title}">'
