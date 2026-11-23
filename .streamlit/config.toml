@@ -1,9 +1,60 @@
+# Theme values mirror utils/ui.py TOKENS and CHART_CATEGORICAL;
+# tests/test_design_tokens.py checks that they stay in sync.
 [theme]
+base = "light"
 primaryColor = "#1E40AF"
 backgroundColor = "#FFFFFF"
-secondaryBackgroundColor = "#F3F4F6"
-textColor = "#111827"
-font = "sans serif"
+secondaryBackgroundColor = "#F2F4F7"
+textColor = "#101828"
+borderColor = "#E4E7EC"
+showWidgetBorder = true
+baseRadius = "6px"
+buttonRadius = "6px"
+font = "Inter"
+headingFont = "Inter"
+codeFont = "IBM Plex Mono"
+baseFontSize = 15
+linkColor = "#1E40AF"
+dataframeHeaderBackgroundColor = "#F7F8FA"
+chartCategoricalColors = ["#1E40AF", "#DC6803", "#6941C6", "#0086C9", "#475467", "#C11574"]
+paddingTop = "2rem"
+
+# Self-hosted fonts, served from static/ (server.enableStaticServing).
+[[theme.fontFaces]]
+family = "Inter"
+url = "app/static/fonts/Inter-400.woff2"
+weight = "400"
+style = "normal"
+
+[[theme.fontFaces]]
+family = "Inter"
+url = "app/static/fonts/Inter-600.woff2"
+weight = "600"
+style = "normal"
+
+[[theme.fontFaces]]
+family = "Inter"
+url = "app/static/fonts/Inter-700.woff2"
+weight = "700"
+style = "normal"
+
+[[theme.fontFaces]]
+family = "IBM Plex Mono"
+url = "app/static/fonts/IBMPlexMono-400.woff2"
+weight = "400"
+style = "normal"
+
+[[theme.fontFaces]]
+family = "IBM Plex Mono"
+url = "app/static/fonts/IBMPlexMono-500.woff2"
+weight = "500"
+style = "normal"
+
+[theme.sidebar]
+backgroundColor = "#F7F8FA"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#344054"
+borderColor = "#E4E7EC"
 
 [server]
 headless = true

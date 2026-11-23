@@ -34,8 +34,8 @@ An interactive practice environment for Swedish management accounting students. 
 ## Teknisk stack
 
 - **Python** 3.11+
-- **Streamlit** 1.50+ (UI-ramverk)
-- **Plotly** 5.18+ (interaktiva diagram)
+- **Streamlit** 1.67+ (UI-ramverk)
+- **Plotly** 6+ (interaktiva diagram)
 - **Qwen3-8B** via Hugging Face Inference Providers (förklaringar; Qwen3-14B kan väljas i sidomenyn)
 - **huggingface-hub** 0.24+ (API-klient)
 - numpy, pandas, scipy, numpy-financial (beräkningar)

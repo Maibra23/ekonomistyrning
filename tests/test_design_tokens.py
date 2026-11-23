@@ -72,3 +72,35 @@ def test_charts_colors_derive_from_tokens():
     assert charts.COLORS["danger"] == TOKENS["negative"]
     assert charts.COLORS["warning"] == TOKENS["caution"]
     assert charts.PALETTE == CHART_CATEGORICAL
+
+
+def _load_streamlit_config() -> dict:
+    import tomllib
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parent.parent / ".streamlit" / "config.toml"
+    with path.open("rb") as fh:
+        return tomllib.load(fh)
+
+
+def test_streamlit_theme_matches_tokens():
+    theme = _load_streamlit_config()["theme"]
+    assert theme["primaryColor"].upper() == TOKENS["primary"].upper()
+    assert theme["backgroundColor"].upper() == TOKENS["canvas"].upper()
+    assert theme["textColor"].upper() == TOKENS["text_primary"].upper()
+    assert theme["borderColor"].upper() == TOKENS["border"].upper()
+    assert theme["secondaryBackgroundColor"].upper() == TOKENS["surface_input"].upper()
+    assert [c.upper() for c in theme["chartCategoricalColors"]] == [
+        c.upper() for c in CHART_CATEGORICAL
+    ]
+
+
+def test_streamlit_theme_font_faces_point_at_bundled_files():
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    faces = _load_streamlit_config()["theme"]["fontFaces"]
+    assert {f["family"] for f in faces} == {"Inter", "IBM Plex Mono"}
+    for face in faces:
+        assert face["url"].startswith("app/static/fonts/")
+        assert (root / face["url"].removeprefix("app/")).is_file()
