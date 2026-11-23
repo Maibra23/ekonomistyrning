@@ -14,7 +14,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from utils.charts import COLORS, PALETTE, apply_layout
+from utils.charts import COLORS, PALETTE, apply_layout, show_chart
 from utils.explain import interpret_variances, steps_fixed_overhead, steps_variance
 from utils.export import export_to_excel, table_range
 from utils.formatting import format_sek
@@ -311,7 +311,7 @@ with tab1:
             textfont=dict(size=11),
         ))
         apply_layout(fig_waterfall, title=t("Avvikelseanalys, alla rörliga kostnader (vattenfall)"), height=420)
-        st.plotly_chart(fig_waterfall, use_container_width=True)
+        show_chart(fig_waterfall)
 
         # Per item: which cost type drives which variance
         summary_df = variance_summary(items)
@@ -329,7 +329,7 @@ with tab1:
         fig_items.add_hline(y=0, line_dash="dot", line_color=COLORS["neutral"], line_width=1)
         fig_items.update_layout(barmode="group")
         apply_layout(fig_items, title=t("Avvikelser per kostnadsslag (positivt = ofördelaktigt)"), height=400)
-        st.plotly_chart(fig_items, use_container_width=True)
+        show_chart(fig_items)
 
         st.dataframe(
             t_frame(pd.DataFrame({
@@ -569,7 +569,7 @@ with tab2:
             textfont=dict(size=11),
         ))
         apply_layout(fig_fast, title=t("Fasta omkostnader: budget, utfall och fördelat"), height=380)
-        st.plotly_chart(fig_fast, use_container_width=True)
+        show_chart(fig_fast)
 
         with st.expander(t("Visa uträkningen")):
             st.markdown(
@@ -745,7 +745,7 @@ with tab3:
         ))
         fig_summary.add_hline(y=0, line_dash="dot", line_color=COLORS["neutral"], line_width=1)
         apply_layout(fig_summary, title=t("Sammanställning av alla avvikelser"), height=420)
-        st.plotly_chart(fig_summary, use_container_width=True)
+        show_chart(fig_summary)
 
         if summary_rows:
             dominant = max(summary_rows, key=lambda r: abs(r["Belopp (kr)"]))

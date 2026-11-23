@@ -14,7 +14,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from utils.charts import COLORS, apply_layout
+from utils.charts import COLORS, apply_layout, show_chart
 from utils.explain import (
     interpret_inflation_tax,
     interpret_monte_carlo,
@@ -542,7 +542,7 @@ with tab1:
             ),
         )
         apply_layout(fig1, title=t("Kassaflöden och kumulativt nuvärde"), height=380)
-        st.plotly_chart(fig1, use_container_width=True)
+        show_chart(fig1)
 
         disc_pb_txt = (
             t("Diskonterad återbetalningstid: {0}", format_years(payback_disc_val))
@@ -578,7 +578,7 @@ with tab1:
         apply_layout(fig_prof, title=t("NPV-profil: nuvärde vid olika kalkylräntor"), height=340)
         fig_prof.update_xaxes(title_text=t("Kalkylränta (%)"))
         fig_prof.update_yaxes(title_text=t("NPV (kr)"))
-        st.plotly_chart(fig_prof, use_container_width=True)
+        show_chart(fig_prof)
         st.caption(
             t("Där kurvan skär noll ligger internräntan. Så länge kalkylräntan är "
             "lägre än IRR är NPV positivt.")
@@ -825,7 +825,7 @@ with tab2:
             ))
 
             apply_layout(fig2, title=t("NPV-känslighet: {0}", t(param_label)), height=420)
-            st.plotly_chart(fig2, use_container_width=True)
+            show_chart(fig2)
 
             # Locate critical variation via linear interpolation across the sign change
             pos_mask = sa_df["npv"] > 0
@@ -911,7 +911,7 @@ with tab2:
             title=t("NPV-intervall vid ±{0} % per parameter", tornado_var),
             height=320,
         )
-        st.plotly_chart(fig_tor, use_container_width=True)
+        show_chart(fig_tor)
 
     # LLM explanation and Q&A for Tab 2
     sa_inputs = {
@@ -1128,7 +1128,7 @@ with tab3:
                 textposition="outside",
             ))
             apply_layout(fig3, title=t("NPV före och efter skatt (vattenfall)"), height=380)
-            st.plotly_chart(fig3, use_container_width=True)
+            show_chart(fig3)
 
             st.caption(
                 t(
@@ -1435,7 +1435,7 @@ with tab4:
 
             apply_layout(fig4, title=t("NPV-fördelning (Monte Carlo-histogram)"), height=420)
             fig4.update_layout(margin={"t": 80})
-            st.plotly_chart(fig4, use_container_width=True)
+            show_chart(fig4)
 
             # Box plot
             fig5 = go.Figure()
@@ -1447,7 +1447,7 @@ with tab4:
                 boxpoints=False,
             ))
             apply_layout(fig5, title=t("NPV-spridning (lådagram)"), height=300)
-            st.plotly_chart(fig5, use_container_width=True)
+            show_chart(fig5)
 
             # Swedish decision text
             if prob_pct >= 70:
@@ -1790,7 +1790,7 @@ with tab5:
     apply_layout(fig_cmp, title=t("NPV-profiler för alternativen"), height=380)
     fig_cmp.update_xaxes(title_text=t("Kalkylränta (%)"))
     fig_cmp.update_yaxes(title_text=t("NPV (kr)"))
-    st.plotly_chart(fig_cmp, use_container_width=True)
+    show_chart(fig_cmp)
     if fisher is not None and 0 < fisher < _cmp_rates[-1]:
         _leader = cmp_df.sort_values("npv", ascending=False).iloc[0]["name"]
         st.caption(

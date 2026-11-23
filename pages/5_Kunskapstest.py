@@ -20,7 +20,7 @@ from pathlib import Path
 import plotly.graph_objects as go
 import streamlit as st
 
-from utils.charts import COLORS, apply_layout
+from utils.charts import COLORS, apply_layout, show_chart
 from utils.humanizer import humanize
 from utils.i18n import get_lang, t
 from utils.llm import (
@@ -739,7 +739,7 @@ if score["total"] > 0:
         )
     )
     apply_layout(fig_gauge, height=280)
-    st.plotly_chart(fig_gauge, use_container_width=True)
+    show_chart(fig_gauge)
 else:
     st.info(t("Inga frågor besvarade ännu. Tryck 'Generera fråga' för att börja."))
 

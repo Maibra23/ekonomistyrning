@@ -26,7 +26,7 @@ from utils.budget import (
     opening_balance_totals,
     validate_budget_balance,
 )
-from utils.charts import COLORS, apply_layout
+from utils.charts import COLORS, apply_layout, show_chart
 from utils.explain import interpret_budget
 from utils.export import export_to_excel, table_range
 from utils.formatting import format_number, format_percent, format_sek
@@ -481,7 +481,7 @@ with st.expander(t("Steg 1: Resultatbudget"), expanded=True):
         ))
         apply_layout(fig_resultat, title=t("Resultatbudget (vattenfall)"), height=440)
         fig_resultat.update_layout(xaxis_tickangle=-30)
-        st.plotly_chart(fig_resultat, use_container_width=True)
+        show_chart(fig_resultat)
 
 # ===========================================================================
 # STEG 2 -- LIKVIDITETSBUDGET
@@ -668,7 +668,7 @@ with st.expander(t("Steg 2: Likviditetsbudget"), expanded=True):
         fig_likviditet.add_hline(y=0, line_dash="dot", line_color=COLORS["neutral"], line_width=1)
         apply_layout(fig_likviditet, title=t("Kassaflödeskomponenter"), height=400)
         fig_likviditet.update_layout(xaxis_tickangle=-25)
-        st.plotly_chart(fig_likviditet, use_container_width=True)
+        show_chart(fig_likviditet)
 
 # ===========================================================================
 # STEG 3 -- BALANSBUDGET
@@ -921,7 +921,7 @@ with st.expander(t("Steg 3: Balansbudget"), expanded=True):
         # autorange="reversed" lists Anläggningstillgångar at the top so the
         # posts read top-to-bottom; automargin reserves room for long names.
         fig_balans.update_yaxes(automargin=True, autorange="reversed")
-        st.plotly_chart(fig_balans, use_container_width=True)
+        show_chart(fig_balans)
 
 # ===========================================================================
 # NYCKELTAL
@@ -1146,7 +1146,7 @@ with st.expander(t("Steg 4: Likviditetsbudget per månad"), expanded=False):
         ))
         fig_manad.add_hline(y=0, line_dash="dot", line_color=COLORS["neutral"], line_width=1)
         apply_layout(fig_manad, title=t("Kassaflöde och saldo per månad"), height=380)
-        st.plotly_chart(fig_manad, use_container_width=True)
+        show_chart(fig_manad)
 
         st.dataframe(
             t_frame(manad_df.map(lambda v: format_number(float(v), 0))),

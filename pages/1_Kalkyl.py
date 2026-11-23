@@ -12,7 +12,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from utils.charts import COLORS, PALETTE, apply_layout, color_by_sign
+from utils.charts import COLORS, PALETTE, apply_layout, color_by_sign, show_chart
 from utils.explain import (
     interpret_abc,
     interpret_bidrag,
@@ -422,7 +422,7 @@ with tab_sj:
         textposition="outside",
     ))
     apply_layout(fig_wf, title=t("Kostnadsuppbyggnad per styck (kr)"), height=380)
-    st.plotly_chart(fig_wf, use_container_width=True)
+    show_chart(fig_wf)
 
     sj_df = pd.DataFrame({
         "Kostnadspost": [
@@ -633,7 +633,7 @@ with tab_bid:
         ),
     ])
     apply_layout(fig_bid, title=t("Intäkter och kostnader vid aktuell volym (kr)"), height=360)
-    st.plotly_chart(fig_bid, use_container_width=True)
+    show_chart(fig_bid)
 
     # Breakeven line chart
     if tb > 0 and bid["breakeven_units"] is not None:
@@ -666,30 +666,19 @@ with tab_bid:
             },
             hovertemplate="Nollpunkt<br>%{x:,.0f} st<br>%{y:,.0f} kr<extra></extra>",
         ))
-        apply_layout(fig_be, title=t("Nollpunktsdiagram (kr vs antal enheter)"), height=380)
+        # In a break-even chart both lines rise to the right, so the
+        # upper-left corner is empty; the legend sits inside it.
+        apply_layout(
+            fig_be,
+            title=t("Nollpunktsdiagram (kr vs antal enheter)"),
+            height=380,
+            legend="inside",
+        )
         # Label both axes and let Plotly expand the margins so the tick labels
         # and titles are never clipped.
         fig_be.update_xaxes(title_text=t("Antal enheter (st)"), automargin=True)
         fig_be.update_yaxes(title_text=t("Kronor (kr)"), automargin=True)
-        # apply_layout places a horizontal legend below the plot (y=-0.25),
-        # which collides with the x-axis title "Antal enheter (st)". In a
-        # break-even chart both lines rise to the right, so the upper-left
-        # corner is empty — move the legend inside there instead, freeing the
-        # bottom margin for the axis title.
-        fig_be.update_layout(
-            legend={
-                "orientation": "v",
-                "yanchor": "top",
-                "y": 0.98,
-                "xanchor": "left",
-                "x": 0.02,
-                "bgcolor": "rgba(255, 255, 255, 0.75)",
-                "bordercolor": COLORS["neutral_light"],
-                "borderwidth": 1,
-            },
-            margin={"l": 70, "r": 30, "t": 60, "b": 60},
-        )
-        st.plotly_chart(fig_be, use_container_width=True)
+        show_chart(fig_be)
 
     # What-if: one factor at a time, ±10 %, no new inputs needed.
     st.markdown(t("**Känslighet: resultat vid ±10 %**"))
@@ -1002,7 +991,7 @@ with tab_abc:
                     ))
             fig_abc.update_layout(barmode="stack")
             apply_layout(fig_abc, title=t("Kostnadsfördelning per produkt/tjänst (kr)"), height=380)
-            st.plotly_chart(fig_abc, use_container_width=True)
+            show_chart(fig_abc)
 
             # ABC against a traditional single overhead rate: the point of
             # ABC is to reveal which products the traditional method
@@ -1030,7 +1019,7 @@ with tab_abc:
             ])
             fig_cmp.update_layout(barmode="group")
             apply_layout(fig_cmp, title=t("Kostnad per styck: ABC vs traditionell (kr)"), height=340)
-            st.plotly_chart(fig_cmp, use_container_width=True)
+            show_chart(fig_cmp)
             _cmp_rows = [
                 {
                     "name": name,
