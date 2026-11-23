@@ -46,7 +46,6 @@ from utils.prompts import (
 )
 from utils.state_save import (
     clear_state,
-    link_records,
     load_state,
     restore_number,
     save_state,
