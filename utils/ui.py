@@ -385,6 +385,18 @@ section[data-testid="stSidebar"] div[data-testid="stPageLink"] a {
     letter-spacing: 0.06em;
     color: %(text_secondary)s;
     margin-bottom: 6px;
+    /* A single long word (TILLVERKNINGSKOSTNAD) hyphenates instead of
+       touching the card edge in narrow columns. */
+    overflow-wrap: break-word;
+    hyphens: auto;
+}
+.eks-chart-title {
+    font-family: %(font_ui)s;
+    font-size: 15px;
+    font-weight: 600;
+    color: %(text_primary)s;
+    margin: 4px 0 -8px;
+    line-height: 1.35;
 }
 .eks-kpi-value {
     font-family: %(font_ui)s;

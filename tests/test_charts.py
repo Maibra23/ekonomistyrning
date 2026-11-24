@@ -96,3 +96,22 @@ def test_semantic_palette_and_colors_compat():
     assert charts.CHART_SEMANTIC["reference"] == TOKENS["reference"]
     assert charts.COLORS["primary_light"] in CHART_CATEGORICAL
     assert {"primary", "success"} <= set(charts.COLORS)
+
+
+def test_show_chart_moves_title_out_of_the_figure():
+    fake_st = MagicMock()
+    fig = charts.apply_layout(_bar_fig(), title="Kassaflöde <år>")
+    with patch.dict("sys.modules", {"streamlit": fake_st}):
+        charts.show_chart(fig)
+    html_arg = fake_st.html.call_args[0][0]
+    assert "eks-chart-title" in html_arg
+    assert "Kassaflöde &lt;år&gt;" in html_arg
+    assert not fig.layout.title.text
+    assert fig.layout.margin.t == 36
+
+
+def test_show_chart_without_title_draws_no_heading():
+    fake_st = MagicMock()
+    with patch.dict("sys.modules", {"streamlit": fake_st}):
+        charts.show_chart(charts.apply_layout(_bar_fig()))
+    fake_st.html.assert_not_called()

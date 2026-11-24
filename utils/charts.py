@@ -141,9 +141,22 @@ def apply_layout(
 
 
 def show_chart(fig: go.Figure, *, key: str | None = None) -> None:
-    """Render a Plotly figure full-width with the shared toolbar config."""
+    """Render a Plotly figure full-width with the shared toolbar config.
+
+    The figure title is drawn as HTML above the chart instead of inside it:
+    Plotly never wraps titles or legends, so in a narrow chart a two-row
+    legend rose into the title and long titles were cut. As HTML the title
+    wraps, and the legend gets the top margin to itself (Plotly expands the
+    margin for a legend outside the plot area).
+    """
+    import html
+
     import streamlit as st  # local import keeps the module usable without Streamlit
 
+    title = fig.layout.title.text
+    if title:
+        st.html(f'<div class="eks-chart-title">{html.escape(str(title))}</div>')
+        fig.update_layout(title_text=None, margin_t=36)
     st.plotly_chart(fig, width="stretch", config=dict(CHART_CONFIG), key=key)
 
 
