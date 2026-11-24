@@ -15,7 +15,7 @@ st = pytest.importorskip("streamlit")
 from streamlit.testing.v1 import AppTest  # noqa: E402
 
 PAGES = [
-    "streamlit_app.py",
+    "pages/0_Hem.py",
     "pages/1_Kalkyl.py",
     "pages/2_Investering.py",
     "pages/3_Budget.py",
