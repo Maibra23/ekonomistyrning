@@ -763,7 +763,6 @@ EN: dict[str, str] = {
     "Std-förbr. (enh/st)": "Std usage (units/pc)",
     "Verkl. pris (kr/enh)": "Act. price (SEK/unit)",
     "Verkl. förbr. (enh/st)": "Act. usage (units/pc)",
-    "Summa": "Total",
     "Volymavvikelse": "Volume variance",
     "Prisavvikelse": "Price variance",
     "Effektivitetsavvikelse": "Efficiency variance",
