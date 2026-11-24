@@ -20,6 +20,7 @@ from utils.i18n_en import EN
 ROOT = Path(__file__).resolve().parent.parent
 SOURCES = [
     ROOT / "streamlit_app.py",
+    ROOT / "pages" / "0_Hem.py",
     *sorted((ROOT / "pages").glob("*.py")),
     *sorted((ROOT / "utils").glob("*.py")),
 ]

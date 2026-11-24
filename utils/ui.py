@@ -1431,7 +1431,7 @@ def base_values_html(items: list[tuple[str, str]]) -> str:
 _NAV_GROUPS: list[tuple[str, list[tuple[str, str, str, str]]]] = [
     (
         "ÖVERSIKT",
-        [("hem", "Hem", "streamlit_app.py", ":material/home:")],
+        [("hem", "Hem", "pages/0_Hem.py", ":material/home:")],
     ),
     (
         "MODULER",

@@ -87,6 +87,9 @@ EN: dict[str, str] = {
     "Andersson kap. 4–17": "Andersson ch. 4–17",
     "ÖVERSIKT": "OVERVIEW",
     "MODULER": "MODULES",
+    "Översikt": "Overview",
+    "Moduler": "Modules",
+    "Övning": "Practice",
     "ÖVNING": "PRACTICE",
     "Beräkningar och diagram fungerar normalt även utan förklaringar.": "Calculations and charts work normally even without explanations.",
     "Sessionens gräns för förklaringar är uppnådd. Beräkningar, diagram och export fungerar som vanligt. Gränsen nollställs när du börjar en ny session.":
