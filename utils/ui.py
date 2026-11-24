@@ -25,8 +25,8 @@ from utils.i18n import get_lang, sync_lang_param, t
 # the hero, sidebar and footer can never drift out of sync.
 # ---------------------------------------------------------------------------
 
-APP_VERSION = "0.2.0"
-APP_UPDATED = "2026-06-11"
+APP_VERSION = "0.3.0"
+APP_UPDATED = "2026-11-24"
 
 
 # ---------------------------------------------------------------------------
@@ -411,7 +411,7 @@ section[data-testid="stSidebar"] div[data-testid="stPageLink"] a {
 /* The unit holds its own leading NBSP and sits inside the nowrap value,
    so it can never wrap away from the number. */
 .eks-kpi-unit {
-    font-size: max(0.6em, 10px);
+    font-size: max(0.6em, 11.5px);
     font-weight: 500;
     color: %(text_secondary)s;
 }
@@ -659,7 +659,7 @@ ol.eks-stepper > li.eks-stepper-item {
 /* --- Landing: module cards and numbered steps --- */
 .eks-card-role {
     font-family: %(font_ui)s;
-    font-size: 11px;
+    font-size: 11.5px;
     font-weight: 600;
     letter-spacing: 1.5px;
     text-transform: uppercase;
@@ -669,13 +669,13 @@ ol.eks-stepper > li.eks-stepper-item {
 }
 .eks-card-title {
     font-family: %(font_ui)s;
-    font-size: clamp(12px, 0.95vw, 14px);
+    font-size: 14px;
     font-weight: 700;
     color: %(text_primary)s;
     margin: 0 0 6px 0;
     line-height: 1.25;
-    overflow-wrap: anywhere;
-    hyphens: auto;
+    overflow-wrap: break-word;
+    hyphens: manual;
 }
 .eks-card-desc {
     font-family: %(font_ui)s;
@@ -683,9 +683,11 @@ ol.eks-stepper > li.eks-stepper-item {
     line-height: 1.5;
     color: %(text_secondary)s;
     margin: 8px 0 0 0;
-    overflow-wrap: anywhere;
-    hyphens: auto;
+    overflow-wrap: break-word;
 }
+/* Module cards: a wrapping row of equal-height cards, at least 170 px wide. */
+.st-key-eks_module_cards { align-items: stretch !important; }
+.st-key-eks_module_cards > div { flex: 1 1 170px !important; min-width: 0; }
 .eks-steps {
     font-family: %(font_ui)s;
     font-size: 15px;
@@ -711,7 +713,7 @@ ol.eks-stepper > li.eks-stepper-item {
 }
 .eks-tip-badge {
     font-family: %(font_mono)s;
-    font-size: 11px;
+    font-size: 11.5px;
     font-weight: 700;
     color: %(primary)s;
     background: %(surface_input)s;
@@ -780,7 +782,7 @@ ol.eks-stepper > li.eks-stepper-item {
 }
 .eks-footer-version {
     font-family: %(font_mono)s;
-    font-size: 11px;
+    font-size: 11.5px;
     color: %(text_tertiary)s;
     background: %(surface_input)s;
     padding: 2px 8px;
@@ -857,7 +859,8 @@ ol.eks-stepper > li.eks-stepper-item {
 }
 .eks-statement th,
 .eks-statement td {
-    padding: 8px 12px;
+    padding: 6px 12px;
+    line-height: 1.4;
     text-align: left;
     font-weight: 400;
     border-bottom: 1px solid %(border)s;
@@ -894,8 +897,13 @@ ol.eks-stepper > li.eks-stepper-item {
     letter-spacing: 0.06em;
     color: %(text_tertiary)s;
 }
+/* Budget step 1 cost fields: two per row, one per row when narrow. */
+.st-key-eks_bud_costs > div { flex: 1 1 130px !important; min-width: 0; }
 @media (max-width: 639.98px) {
     .eks-statement { min-width: 480px; }
+    /* Page header: stack the title and the share action on phones, as the
+       former column split did, instead of squeezing the title. */
+    .st-key-eks_page_header { flex-direction: column; }
 }
 
 /* === Kunskapstest (quiz card) === */
@@ -1028,18 +1036,6 @@ def hero(eyebrow: str, title: str, lead: str) -> str:
     )
 
 
-def page_title(eyebrow: str, title: str, subtitle: str = "") -> str:
-    """Page title block for inner module pages."""
-    sub_html = f'<div class="eks-subtitle">{subtitle}</div>' if subtitle else ""
-    return (
-        f'<div class="eks-page-title">'
-        f'<div class="eks-eyebrow">{eyebrow}</div>'
-        f"<h1>{title}</h1>"
-        f"{sub_html}"
-        f"</div>"
-    )
-
-
 def page_header(
     eyebrow: str,
     title: str,
@@ -1048,9 +1044,9 @@ def page_header(
 ) -> DeltaGenerator:
     """Render the module page header and return its right-hand action slot.
 
-    The title block (eyebrow, optional chapter, ``h1``, subtitle) goes in a
-    wide left column; the returned container is a narrow right column for
-    page-level actions. Pages fill it with the share popover at the end of
+    The title block (eyebrow, optional chapter, ``h1``, subtitle) stretches
+    on the left; the returned container is a content-width slot on the right
+    for page-level actions. Pages fill it with the share popover at the end of
     the script, after every ``save_state`` call has written the query
     string::
 
@@ -1066,7 +1062,14 @@ def page_header(
             ' <span aria-hidden="true">·</span> '
             f"{html.escape(chapter)}"
         )
-    left, right = st.columns([5, 1], vertical_alignment="top")
+    # A horizontal row whose action slot takes only its content width, so the
+    # share button keeps its label on one line at every viewport (a fixed
+    # 5:1 column split squeezed it onto three lines at 1024 px).
+    row = st.container(
+        horizontal=True, vertical_alignment="top", gap="medium", key="eks_page_header"
+    )
+    left = row.container(width="stretch")
+    right = row.container(width="content")
     with left:
         st.html(
             '<div class="eks-page-title">'
@@ -1075,7 +1078,7 @@ def page_header(
             + (f'<div class="eks-subtitle">{html.escape(subtitle)}</div>' if subtitle else "")
             + "</div>"
         )
-    return right.container(horizontal_alignment="right")
+    return right
 
 
 # variant (legacy) -> status tone. "default" has no tone: neutral border.
@@ -1282,7 +1285,7 @@ def status_stepper(items: list[dict[str, str]]) -> str:
 def section_heading(eyebrow: str, title: str) -> str:
     """Render a lightweight in-page section heading (eyebrow + title).
 
-    Smaller than ``page_title``; used to introduce sections on the landing
+    Smaller than the ``page_header`` title; used to introduce sections on the landing
     page so they match the design system instead of raw Markdown headers.
     """
     return (

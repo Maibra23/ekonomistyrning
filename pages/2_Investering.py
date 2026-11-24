@@ -409,9 +409,12 @@ with tab1:
                 num_rows="fixed",
                 key="cf_editor_tab1",
                 column_config={
-                    "År": st.column_config.NumberColumn(t("År"), disabled=True, width="small"),
+                    # A narrow fixed year column leaves the cash-flow values
+                    # room in the one-third input column (1024 px viewports).
+                    "År": st.column_config.NumberColumn(t("År"), disabled=True, width=48),
                     "Kassaflöde (kr)": st.column_config.NumberColumn(
                         t("Kassaflöde (kr)"),
+                        width=100,
                         format="%.0f",
                         help=t("Nettokassaflöde (inbetalningsöverskott) för respektive år"),
                     ),
@@ -1381,7 +1384,7 @@ with tab4:
             hide_index=True,
             num_rows="fixed",
             column_config={
-                "År": st.column_config.NumberColumn(t("År"), disabled=True, width="small"),
+                "År": st.column_config.NumberColumn(t("År"), disabled=True, width=48),
                 "Medel (kr)": st.column_config.NumberColumn(t("Medel (kr)"), format="%.0f"),
                 "Std (kr)": st.column_config.NumberColumn(t("Std (kr)"), format="%.0f"),
             },

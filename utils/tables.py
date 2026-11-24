@@ -99,6 +99,8 @@ def _with_total_row(
 
 def _formatter(fn: Callable[..., str], **kwargs: Any) -> Callable[[Any], str]:
     def fmt(value: Any) -> str:
+        if isinstance(value, str):  # blank total-row cell, already display text
+            return value
         return fn(float(value), **kwargs)
 
     return fmt
@@ -165,6 +167,15 @@ def fin_dataframe(
     for col in years:
         formats[names[col]] = _formatter(format_years)
 
+    if total_row is not None:
+        # The grid draws a missing raw value as "None" whatever the Styler
+        # display value says, so blank cells of the total row (per-unit and
+        # text columns) hold an empty string instead.
+        for pos in range(shown.shape[1]):
+            if pd.isna(shown.iat[-1, pos]):
+                col = shown.columns[pos]
+                shown[col] = shown[col].astype(object)
+                shown.iat[-1, pos] = ""
     styler = shown.style.format(formats, na_rep="")
     if total_row is not None:
         styler = styler.set_properties(

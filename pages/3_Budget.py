@@ -68,6 +68,7 @@ from utils.ui import (
     inject_css,
     kpi_card,
     page_header,
+    render_kpi_grid,
     render_kpi_row,
     render_sidebar,
     status_stepper,
@@ -117,11 +118,6 @@ _DEFAULT_FINANSIERING = 300_000.0
 _DEFAULT_SEASON = "Jämn"
 _DEFAULT_INV_MANAD = 3
 _DEFAULT_FIN_MANAD = 3
-
-# KPI rows in the narrow results columns: the step's answer (a hero card)
-# gets more room than the two supporting cards.
-_RESULT_KPI_SIZES = [1.4, 1.0, 1.0]
-
 
 def _load_defaults() -> None:
     """Load deterministic exempelföretag defaults into session state."""
@@ -328,8 +324,11 @@ with st.expander(t("Steg 1: Resultatbudget"), expanded=True):
             st.session_state["bud_forsaljning"] = forsaljning
 
             st.markdown(t("**Kostnader**"))
-            # Two-column grid keeps the submit button above the fold.
-            cost_left, cost_right = st.columns(2)
+            # Two-column grid keeps the submit button above the fold. A
+            # wrapping row (not st.columns) drops to one column when the
+            # input column is too narrow for two fields (1024 px viewports).
+            cost_row = st.container(horizontal=True, gap="small", key="eks_bud_costs")
+            cost_left, cost_right = cost_row.container(), cost_row.container()
             with cost_left:
                 rorliga = st.number_input(
                     t("Rörliga kostnader (kr)"),
@@ -432,9 +431,9 @@ with st.expander(t("Steg 1: Resultatbudget"), expanded=True):
             resultat_df["Post"] == "Rörelseresultat", "Belopp"
         ].values[0]
 
-        # KPI row: the step's answer first and widest, so no value clips
-        # in the narrow results column.
-        render_kpi_row([
+        # KPI grid: the step's answer first; cards wrap to a new line
+        # instead of clipping their values in the narrow results column.
+        render_kpi_grid([
             kpi_card(
                 t("Årets resultat"),
                 format_sek(arets_resultat),
@@ -453,7 +452,7 @@ with st.expander(t("Steg 1: Resultatbudget"), expanded=True):
                 variant="success" if rorelseresultat >= 0 else "danger",
                 size="sm",
             ),
-        ], sizes=_RESULT_KPI_SIZES)
+        ])
 
         # Statement layout; the sortable table stays one click away.
         st.markdown(t("**Resultatbudget**"))
@@ -626,7 +625,7 @@ with st.expander(t("Steg 2: Likviditetsbudget"), expanded=True):
             likviditet_df["Post"] == "Delta rörelsekapital", "Belopp"
         ].values[0]
 
-        render_kpi_row([
+        render_kpi_grid([
             kpi_card(
                 t("Likvida medel UB"),
                 format_sek(likvida_ub),
@@ -646,7 +645,7 @@ with st.expander(t("Steg 2: Likviditetsbudget"), expanded=True):
                 format_sek(delta_rk),
                 size="sm",
             ),
-        ], sizes=_RESULT_KPI_SIZES)
+        ])
 
         # Warning for negative closing cash
         if likvida_ub < 0:
@@ -901,7 +900,7 @@ with st.expander(t("Steg 3: Balansbudget"), expanded=True):
             balans_df["Post"] == "Summa skulder och eget kapital", "Utgaende"
         ].values[0]
 
-        render_kpi_row([
+        render_kpi_grid([
             kpi_card(
                 t("Balans"),
                 "OK" if is_balanced else f"Diff: {format_sek(difference)}",
@@ -921,7 +920,7 @@ with st.expander(t("Steg 3: Balansbudget"), expanded=True):
                 variant="success" if is_balanced else "danger",
                 size="sm",
             ),
-        ], sizes=_RESULT_KPI_SIZES)
+        ])
 
         # Plotly grouped bar: opening vs closing for balance sheet items
         item_posts = [
@@ -1188,7 +1187,7 @@ with st.expander(t("Steg 4: Likviditetsbudget per månad"), expanded=False):
         _lowest = float(_ub_row.min())
         _negative_months = [m for m in MONTHS if float(_ub_row[m]) < 0]
 
-        render_kpi_row([
+        render_kpi_grid([
             kpi_card(
                 t("Lägsta saldo"),
                 format_sek(_lowest),
@@ -1209,7 +1208,7 @@ with st.expander(t("Steg 4: Likviditetsbudget per månad"), expanded=False):
                 variant="success" if not _negative_months else "danger",
                 size="sm",
             ),
-        ], sizes=_RESULT_KPI_SIZES)
+        ])
         if _negative_months:
             st.error(
                 t(

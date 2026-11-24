@@ -113,9 +113,15 @@ def render_landing() -> None:
     ]
     # Each module card is itself the navigation: role, title, chapter badge,
     # description and a link, replacing the old map plus separate link row.
-    card_cols = st.columns(len(modules), gap="medium")
-    for col, (role, title, tag, path, desc) in zip(card_cols, modules, strict=True):
-        with col, st.container(border=True):
+    # A wrapping row rather than st.columns: five cards in a row on wide
+    # screens, fewer per row when they would get too narrow (1024 px), so
+    # words never break mid-syllable. Cards in a row share one height. The
+    # soft hyphen lets the long Swedish module name break at its compound
+    # joint (no effect in English).
+    card_row = st.container(horizontal=True, gap="medium", key="eks_module_cards")
+    for role, title, tag, path, desc in modules:
+        title = title.replace("Standardkostnads", "Standardkostnads­")
+        with card_row.container(border=True):
             st.html(module_card_head(role, title))
             st.badge(tag)
             st.html(module_card_desc(desc))

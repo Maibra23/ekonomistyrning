@@ -409,8 +409,6 @@ EN: dict[str, str] = {
         "The internal rate of return is where the curve crosses zero. As long as the discount rate is below the IRR, NPV is positive.",
     "Analysera hur NPV förändras när en enskild parameter varieras, allt annat lika. Identifiera kritisk variation och investeringens robusthet.":
         "Analyse how NPV changes when a single parameter varies, all else equal. Identify the critical variation and how robust the investment is.",
-    "Basparametrar från **Grundläggande metoder**: grundinvestering {0} • kalkylränta {1} • livslängd {2} år{3}. Ändra dem i den första fliken för att uppdatera känslighetsanalysen.":
-        "Base parameters from **Basic methods**: initial investment {0} • discount rate {1} • life {2} years{3}. Change them in the first tab to update the sensitivity analysis.",
     " (inklusive restvärde och rörelsekapital)": " (including residual value and working capital)",
     "Parameter att variera": "Parameter to vary",
     "Välj vilken parameter som skall varieras med alla andra fasta": "Choose which parameter to vary with all others fixed",

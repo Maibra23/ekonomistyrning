@@ -251,3 +251,37 @@ def test_fin_dataframe_keeps_numbers_and_formats_display(tmp_path):
     assert list(shown["Post"]) == ["A", "B", "Summa"]
     assert "font-weight: 600" in arrow.styler.styles
     assert '"alignment": "right"' in at.dataframe[0].proto.columns
+
+
+def test_fin_dataframe_total_row_blanks_are_not_missing_values(tmp_path):
+    # The grid draws a missing raw value as "None" regardless of the Styler
+    # display value, so skipped total-row cells must hold an empty string.
+    from streamlit import dataframe_util
+    from streamlit.testing.v1 import AppTest
+
+    script = tmp_path / "app.py"
+    script.write_text(
+        textwrap.dedent(
+            """
+            import pandas as pd
+            from utils.tables import fin_dataframe
+
+            df = pd.DataFrame({"Post": ["A", "B"], "Total": [10.0, 20.0],
+                               "Per styck": [1.5, 2.5], "Not": ["x", "y"]})
+            fin_dataframe(df, money=["Total", "Per styck"], text=["Post", "Not"],
+                          money_decimals={"Per styck": 2}, total_row="Summa",
+                          total_skip=("Per styck",))
+            """
+        ),
+        encoding="utf-8",
+    )
+    at = AppTest.from_file(str(script)).run()
+    assert not at.exception
+    arrow = at.dataframe[0].proto.arrow_data
+    data = dataframe_util.convert_arrow_bytes_to_pandas_df(arrow.data)
+    assert data["Per styck"].iloc[-1] == ""
+    assert data["Not"].iloc[-1] == ""
+    assert data["Total"].dtype == float
+    shown = dataframe_util.convert_arrow_bytes_to_pandas_df(arrow.styler.display_values)
+    assert list(shown["Per styck"]) == [f"1,50{NBSP}kr", f"2,50{NBSP}kr", ""]
+    assert list(shown["Total"])[-1] == f"30{NBSP}kr"
