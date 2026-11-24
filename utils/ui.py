@@ -585,6 +585,65 @@ section[data-testid="stSidebar"] div[data-testid="stPageLink"] a {
     padding: 0 8px;
 }
 
+/* --- Status stepper (Budget): labels with a computed status, not buttons --- */
+/* "div ol" outranks Streamlit's own ".container ol" list indent. */
+div ol.eks-stepper {
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 8px;
+    margin: 8px 0 20px 0;
+    padding: 0;
+}
+/* Element + class beats the generic list styles of the page. */
+ol.eks-stepper > li.eks-stepper-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    min-width: 0;
+    margin: 0;
+    padding: 12px 14px;
+    background: %(canvas)s;
+    border: 1px solid %(border)s;
+    border-top: 3px solid %(border)s;
+    border-radius: 4px;
+}
+.eks-stepper-item.tone-positive { border-top-color: %(positive)s; }
+.eks-stepper-item.tone-negative { border-top-color: %(negative)s; }
+.eks-stepper-item.tone-caution  { border-top-color: %(caution)s; }
+.eks-stepper-num {
+    flex: 0 0 auto;
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-family: %(font_ui)s;
+    font-size: 12px;
+    font-weight: 700;
+    color: %(primary)s;
+    background: %(primary_subtle)s;
+}
+.eks-stepper-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.eks-stepper-title {
+    font-family: %(font_ui)s;
+    font-size: 13px;
+    font-weight: 600;
+    color: %(text_primary)s;
+}
+.eks-stepper-status {
+    font-family: %(font_ui)s;
+    font-size: 12.5px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    color: %(text_secondary)s;
+}
+.eks-stepper-item.tone-positive .eks-stepper-status { color: %(positive)s; }
+.eks-stepper-item.tone-negative .eks-stepper-status { color: %(negative)s; }
+.eks-stepper-item.tone-caution  .eks-stepper-status { color: %(caution)s; }
+.eks-stepper-glyph { margin-right: 4px; }
+
 /* --- In-page section heading --- */
 .eks-section-heading {
     margin: 20px 0 8px 0;
@@ -1182,6 +1241,42 @@ def pipeline_steps(steps: list[str]) -> str:
         if i < len(steps) - 1:
             parts.append('<span class="eks-pipeline-arrow">&#8594;</span>')
     return f'<div class="eks-pipeline">{"".join(parts)}</div>'
+
+
+# --- Budget components ---
+
+
+def status_stepper(items: list[dict[str, str]]) -> str:
+    """Numbered status overview: one item per step with glyph and status text.
+
+    Purely presentational (the items are labels, not navigation).
+
+    Args:
+        items: One dict per step with keys ``title`` (step name), ``status``
+            (short status text) and ``tone`` ('positive' | 'negative' |
+            'caution' | 'neutral'). Title and status are escaped; pass them
+            already translated.
+    """
+    parts: list[str] = []
+    for i, item in enumerate(items, start=1):
+        tone = item.get("tone", "neutral")
+        tone = tone if tone in _TONES else "neutral"
+        title = item.get("title", "")
+        status = item.get("status", "")
+        aria = html.escape(t("Steg {0}: {1}, {2}", i, title, status), quote=True)
+        parts.append(
+            f'<li class="eks-stepper-item tone-{tone}" aria-label="{aria}">'
+            f'<span class="eks-stepper-num" aria-hidden="true">{i}</span>'
+            f'<span class="eks-stepper-body">'
+            f'<span class="eks-stepper-title">{html.escape(title)}</span>'
+            f'<span class="eks-stepper-status">'
+            f'<span class="eks-stepper-glyph" aria-hidden="true">'
+            f"{html.escape(_PILL_GLYPHS[tone])}</span>"
+            f"{html.escape(status)}</span>"
+            f"</span></li>"
+        )
+    label = html.escape(t("Budgetens status"), quote=True)
+    return f'<ol class="eks-stepper" aria-label="{label}">{"".join(parts)}</ol>'
 
 
 def section_heading(eyebrow: str, title: str) -> str:
