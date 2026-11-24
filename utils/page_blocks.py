@@ -28,15 +28,19 @@ Page anatomy (see also ``utils.ui.page_header`` and
 from __future__ import annotations
 
 import html
+import json
 import threading
+from collections.abc import Iterable, Mapping, Sequence
 from contextlib import nullcontext
 from urllib.parse import urlencode
 
+import pandas as pd
 import streamlit as st
 from streamlit.delta_generator import DeltaGenerator
 
+from utils.export import export_to_excel
 from utils.humanizer import humanize
-from utils.i18n import t
+from utils.i18n import get_lang, t
 from utils.llm import (
     LLMSessionCapError,
     LLMUnavailableError,
@@ -393,3 +397,34 @@ def base_values_bar(
                 button_label, key=button_key, icon=":material/sync:"
             )
     return clicked
+
+
+@st.cache_data(max_entries=64, show_spinner=False)
+def _build_excel(
+    sheets: dict[str, pd.DataFrame],
+    header_lines_json: str,
+    charts_json: str,
+    lang: str,
+) -> bytes:
+    """Cached workbook build; ``lang`` is part of the cache key."""
+    header_lines = json.loads(header_lines_json)
+    charts = json.loads(charts_json)
+    return export_to_excel(sheets, header_lines=header_lines, charts=charts)
+
+
+def cached_excel(
+    sheets: Mapping[str, pd.DataFrame],
+    header_lines: Sequence[str] | Mapping[str, Iterable[str]] | None = None,
+    charts: Mapping[str, Sequence[Mapping[str, str]]] | None = None,
+) -> bytes:
+    """Cached drop-in for ``export_to_excel``.
+
+    The workbook is rebuilt only when the DataFrames, header lines, chart
+    specs or interface language change, so a plain rerun is cheap.
+    """
+    return _build_excel(
+        dict(sheets),
+        json.dumps(header_lines, default=list, ensure_ascii=False),
+        json.dumps(charts, default=list, ensure_ascii=False),
+        get_lang(),
+    )

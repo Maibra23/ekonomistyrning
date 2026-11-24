@@ -22,7 +22,7 @@ from utils.explain import (
     steps_bidrag,
     steps_sjalvkostnad,
 )
-from utils.export import export_to_excel, table_range
+from utils.export import table_range
 from utils.formatting import format_number, format_percent, format_sek
 from utils.i18n import t
 from utils.kalkyl import (
@@ -35,6 +35,7 @@ from utils.kalkyl import (
     self_cost_palagg,
 )
 from utils.page_blocks import (
+    cached_excel,
     finish_scenario,
     render_qa_chat,
     render_scenario_controls,
@@ -541,7 +542,7 @@ with tab_sj:
             }
         ]
     }
-    xlsx_sj = export_to_excel(
+    xlsx_sj = cached_excel(
         sj_export_sheets,
         header_lines={"Sjalvkostnad": sj_header_lines} if sj_header_lines else None,
         charts=sj_charts,
@@ -821,7 +822,7 @@ with tab_bid:
             "y_axis_title": "Belopp (kr)",
         }],
     }
-    xlsx_bid = export_to_excel(
+    xlsx_bid = cached_excel(
         {
             "Bidragskalkyl": bid_df,
             "Resultatoversikt": bid_overview,
@@ -1187,7 +1188,7 @@ with tab_abc:
                     }
                 ],
             }
-            xlsx_abc = export_to_excel(
+            xlsx_abc = cached_excel(
                 {"ABC-kalkyl": abc_export_df, "ABC vs traditionell": abc_cmp_export},
                 header_lines=abc_header_lines or None,
                 charts=abc_charts,

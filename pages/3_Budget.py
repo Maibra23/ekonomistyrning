@@ -28,10 +28,11 @@ from utils.budget import (
 )
 from utils.charts import COLORS, apply_layout, show_chart
 from utils.explain import interpret_budget
-from utils.export import export_to_excel, table_range
+from utils.export import table_range
 from utils.formatting import display_minus, format_number, format_percent, format_sek
 from utils.i18n import t, t_frame
 from utils.page_blocks import (
+    cached_excel,
     finish_scenario,
     render_qa_chat,
     render_scenario_controls,
@@ -1418,7 +1419,7 @@ budget_charts = {
 toolbar_download(
     bud_export_slot,
     t("Exportera budgetarna till Excel"),
-    data=export_to_excel(
+    data=cached_excel(
         {
             "Resultatbudget": resultat_df,
             "Likviditetsbudget": likviditet_df,

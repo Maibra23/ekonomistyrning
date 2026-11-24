@@ -21,7 +21,7 @@ from utils.explain import (
     interpret_npv,
     interpret_sensitivity,
 )
-from utils.export import export_to_excel, table_range
+from utils.export import table_range
 from utils.formatting import format_number, format_percent, format_sek, format_years
 from utils.i18n import t, t_frame
 from utils.investering import (
@@ -43,6 +43,7 @@ from utils.investering import (
 )
 from utils.page_blocks import (
     base_values_bar,
+    cached_excel,
     finish_scenario,
     render_qa_chat,
     render_scenario_controls,
@@ -720,7 +721,7 @@ with tab1:
     toolbar_download(
         inv_basic_export_slot,
         t("Exportera till Excel"),
-        data=export_to_excel(
+        data=cached_excel(
             {"Resultat": export_rows, "Kassaflöden": export_cf, "NPV-profil": export_profile},
             header_lines=inv_export_header or None,
             charts=inv_charts,
@@ -1552,7 +1553,7 @@ with tab4:
             toolbar_download(
                 inv_mc_export_slot,
                 t("Exportera simuleringen till Excel"),
-                data=export_to_excel(
+                data=cached_excel(
                     {"Sammanfattning": mc_summary_df, "Percentiler": mc_pct_df},
                     header_lines=_mc_header or None,
                     charts={"Percentiler": [{
@@ -1893,7 +1894,7 @@ with tab5:
     toolbar_download(
         inv_cmp_export_slot,
         t("Exportera jämförelsen till Excel"),
-        data=export_to_excel(
+        data=cached_excel(
             {"Jämförelse": _cmp_export},
             header_lines=_cmp_header or None,
             charts={"Jämförelse": [{

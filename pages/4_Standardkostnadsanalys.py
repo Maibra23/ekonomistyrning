@@ -16,10 +16,11 @@ import streamlit as st
 
 from utils.charts import CHART_CATEGORICAL, COLORS, apply_layout, show_chart
 from utils.explain import interpret_variances, steps_fixed_overhead, steps_variance
-from utils.export import export_to_excel, table_range
+from utils.export import table_range
 from utils.formatting import format_sek, format_signed_sek, variance_status
 from utils.i18n import t
 from utils.page_blocks import (
+    cached_excel,
     finish_scenario,
     render_qa_chat,
     render_scenario_controls,
@@ -453,7 +454,7 @@ with tab1:
         toolbar_download(
             sk_rorlig_export_slot,
             t("Exportera till Excel"),
-            data=export_to_excel(
+            data=cached_excel(
                 {"Rorliga avvikelser": _rorlig_export_df},
                 header_lines=_sk_header or None,
                 charts={"Rorliga avvikelser": [{
@@ -626,7 +627,7 @@ with tab2:
         toolbar_download(
             sk_fast_export_slot,
             t("Exportera till Excel"),
-            data=export_to_excel(
+            data=cached_excel(
                 {"Fasta omkostnader": _fast_export_df},
                 header_lines=_sk_header_fast or None,
                 charts={"Fasta omkostnader": [{
@@ -800,7 +801,7 @@ with tab3:
         toolbar_download(
             sk_sum_export_slot,
             t("Exportera till Excel"),
-            data=export_to_excel(
+            data=cached_excel(
                 {"Sammanställning": export_df},
                 header_lines=_sum_header or None,
                 charts={"Sammanställning": [{
