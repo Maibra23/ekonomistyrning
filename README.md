@@ -34,8 +34,8 @@ An interactive practice environment for Swedish management accounting students. 
 ## Teknisk stack
 
 - **Python** 3.11+
-- **Streamlit** 1.50+ (UI-ramverk)
-- **Plotly** 5.18+ (interaktiva diagram)
+- **Streamlit** 1.67+ (UI-ramverk; temat i `.streamlit/config.toml` med självhostade typsnitt kräver minst denna version, golvet sätts i `requirements.txt`)
+- **Plotly** 6+ (interaktiva diagram)
 - **Qwen3-8B** via Hugging Face Inference Providers (förklaringar; Qwen3-14B kan väljas i sidomenyn)
 - **huggingface-hub** 0.24+ (API-klient)
 - numpy, pandas, scipy, numpy-financial (beräkningar)
@@ -111,7 +111,7 @@ ekonomistyrning/
 │   └── 5_Kunskapstest.py
 ├── utils/
 │   ├── formatting.py             # Svensk talformatering
-│   ├── charts.py                 # Plotly-palett och layout
+│   ├── charts.py                 # Diagramlayout (apply_layout, show_chart)
 │   ├── export.py                 # Excel-export med diagram
 │   ├── kalkyl.py                 # Självkostnad, bidrag, ABC, prissättning
 │   ├── investering.py            # NPV, IRR, payback, NPV-profil, Monte Carlo
@@ -120,16 +120,20 @@ ekonomistyrning/
 │   ├── explain.py                # Uträkningar och tolkningar utan LLM
 │   ├── quiz_generator.py         # Kontrollräknade quizfrågor
 │   ├── scenarios.py              # Genererade exempelföretag
-│   ├── page_blocks.py            # Gemensamma sidblock (scenario, chatt, delning)
+│   ├── page_blocks.py            # Gemensamma sidblock (scenario, verktygsrad, chatt, delning)
+│   ├── tables.py                 # Finansiella tabeller och rapportuppställningar
 │   ├── i18n.py, i18n_en.py       # Språkväljare och engelska texter
 │   ├── llm.py                    # LLM-klient (HF Inference Providers)
 │   ├── prompts.py                # Promptbibliotek och fallback-mallar
 │   ├── humanizer.py              # Postprocessor för LLM-svar
 │   ├── tutor.py                  # Förklaringsblock och steg-för-steg-guide
 │   ├── state_save.py             # Autospar och delbara länkar
-│   └── ui.py                     # Designsystem och sidomeny
+│   └── ui.py                     # Designtokens, CSS, komponenter och sidomeny
 ├── data/
 │   └── quiz_fallback.json        # Inbyggd frågebank
+├── scripts/
+│   └── ui_snapshots.py           # Skärmbilder av alla sidor (utvecklingsverktyg)
+├── static/fonts/                 # Inter och IBM Plex Mono (självhostade)
 ├── tests/                        # pytest, inklusive AppTest-körning av alla sidor
 ├── docs/
 │   ├── PRD.md                    # Produktkrav
@@ -137,9 +141,10 @@ ekonomistyrning/
 │   ├── LIMITATIONS.md            # Kända begränsningar
 │   ├── ROADMAP.md                # Framåtblickande plan
 │   ├── PAGE_WALKTHROUGH.md       # Genomgång sida för sida
-│   └── IMPROVEMENTS.md           # Utvärdering och genomförda förbättringar
+│   ├── IMPROVEMENTS.md           # Utvärdering och genomförda förbättringar
+│   └── UX_QA_REPORT.md           # QA-rapport för UX-moderniseringen
 ├── .streamlit/
-│   ├── config.toml               # Tema
+│   ├── config.toml               # Tema (färger, typsnitt, radie)
 │   └── secrets.toml.example      # Mall för hemligheter
 ├── requirements.txt
 └── README.md
@@ -209,6 +214,21 @@ Med täckningsrapport (coverage):
 ```bash
 pytest tests/ --cov=utils --cov-report=term-missing
 ```
+
+Skärmbilder för visuell kontroll (utvecklingsverktyg; Playwright ingår inte
+i `requirements.txt`). Starta appen utan förklaringstjänst och kör skriptet i
+ett annat skal:
+
+```bash
+pip install playwright        # en gång; Edge används om det finns, annars: python -m playwright install chromium
+HF_TOKEN= streamlit run streamlit_app.py --server.port 8599 --server.headless true
+python scripts/ui_snapshots.py --label mitt-namn
+```
+
+Skriptet sparar bilder av alla sex sidor i 1440 och 390 px under
+`.ui_snapshots/<label>/` och skriver mått per sida (antal KPI-kort, diagram,
+tabeller och eventuella fel). Det avslutas med felkod om någon sida visar ett
+undantag.
 
 Manuellt LLM-röktest (kräver giltig HF-token):
 

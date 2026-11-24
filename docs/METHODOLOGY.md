@@ -589,148 +589,93 @@ LLM tutor förstärker självständigt tänkande snarare än att ersätta det. A
 
 ## 8. UI-designsystemet
 
-This section documents the technical architecture of the user interface, the CSS component library, color conventions, and how every page assembles itself from these building blocks. The design system is implemented in `utils/ui.py` and consumed by `streamlit_app.py` and all five module pages.
+This section documents the user interface as it is implemented: design tokens, the theme-first approach, the component catalogue, the CSS selector allow-list, and the chart and table rules. The code lives in `utils/ui.py` (tokens, CSS, components, sidebar), `utils/page_blocks.py` (page anatomy), `utils/tutor.py` (explanation panel), `utils/tables.py` (financial tables), `utils/charts.py` (chart layout) and `utils/formatting.py` (Swedish number formats).
 
-### 8.1 Arkitektur: CSS injection och komponentbibliotek
+### 8.1 Tokens: one source of truth
 
-**Core principle:** Every color, font, Swedish label, and CSS class is defined exactly once in `utils/ui.py`. Pages never hardcode colors or label text. This means the entire visual identity can be changed in one file.
+`TOKENS` in `utils/ui.py` is the only place colours are defined. Everything else derives from it:
 
-**Page setup sequence (identical on every page):**
-
-```python
-st.set_page_config(...)                            # Must be first Streamlit call
-from utils.ui import inject_css, render_sidebar, ...   # noqa: E402
-inject_css()                                       # Injects all CSS into page head
-render_sidebar("module_key")                       # Draws sidebar, marks active link
-```
-
-`inject_css()` calls `st.html(f"<style>{GLOBAL_CSS}</style>")`. Streamlit appends this to the page's `<head>`, making all `.eks-*` classes available from that point forward. The `eks-` prefix namespaces every custom class to prevent collisions with Streamlit internals.
-
-### 8.2 CSS-interpolation mot COLORS
-
-`GLOBAL_CSS` is a single Python string that uses `%` string interpolation against the `COLORS` dict (15 tokens):
-
-```python
-GLOBAL_CSS = "..." % COLORS
-```
-
-Every color in the CSS is referenced as `%(token_name)s` — for example `%(primary)s` resolves to `#1E40AF`. Any literal `%` in the CSS (such as `opacity: 85%`) must be escaped as `%%`. This means one edit to `COLORS["primary"]` propagates to every page, chart, and component with no further changes needed.
-
-### 8.3 Designtokens och finansiell semantik
-
-Color tokens are not arbitrary. Each has a specific semantic role tied to financial outcomes:
-
-| Token | Hex | Finansiell semantik |
+| Group | Tokens | Use |
 |---|---|---|
-| `primary` | `#1E40AF` | Brand blue — neutral, no financial judgment |
-| `primary_light` | `#3B82F6` | Accent — pipeline arrows, step numbers, LLM section border |
-| `sidebar_bg` | `#1E3A8A` | Deep blue — navigation container |
-| `success` | `#059669` | Positive outcome: NPV > 0, favorable variance, TB > 0 |
-| `danger` | `#DC2626` | Negative outcome: NPV < 0, unfavorable variance, loss |
-| `warning` | `#D97706` | Boundary zone: breakeven, neutral variance, LLM offline |
+| Brand | `primary` `#1E40AF`, `primary_hover`, `primary_subtle` | Primary buttons, links, active navigation, chart series 1 |
+| Surfaces | `canvas` (white), `surface_muted`, `surface_input`, `border`, `border_strong` | Page, cards, inputs, table headers, rules |
+| Text | `text_primary`, `text_secondary`, `text_tertiary` | Body, secondary text, captions |
+| Status | `positive`, `negative`, `caution` and their `_subtle` backgrounds | Favourable, unfavourable and borderline outcomes |
+| Other | `focus_ring`, `reference`, `grid` | Keyboard focus, zero and benchmark lines, chart grid |
 
-The `kpi_card()` component exposes this via the `variant` parameter:
+`CHART_CATEGORICAL` holds six series colours with no financial meaning; it deliberately contains no green or red, which stay reserved for outcomes. `SPACE` (4 to 48 px), `RADIUS` (6 px), `FONT_UI` (Inter) and `FONT_MONO` (IBM Plex Mono) complete the set. The `COLORS` dicts in `utils/ui.py` and `utils/charts.py` are compatibility mappings onto `TOKENS`.
 
-```python
-kpi_card("NPV", "142 000", "kr", variant="success")   # green left border
-kpi_card("NPV", "-38 000", "kr", variant="danger")    # red left border
-kpi_card("Payback", "5,0", "år", variant="warning")   # amber left border
-```
+Every text token holds at least 4.5:1 contrast against white (WCAG AA), and `text_secondary` also against `surface_muted`. `tests/test_design_tokens.py` enforces the contrast ratios and checks that `.streamlit/config.toml` stays in sync with `TOKENS` and `CHART_CATEGORICAL`.
 
-Students see color immediately signal whether a financial result is favorable. This mirrors how controllers use traffic-light reporting and creates a consistent pedagogical signal across all five modules.
+### 8.2 Theme first, CSS second
+
+Native Streamlit widgets are styled through the theme in `.streamlit/config.toml` (`[theme]`: primary, background, text and border colours, 6 px radius, Inter and IBM Plex Mono as self-hosted font faces served from `static/fonts/`, base font size 15 px, chart categorical colours). This needs Streamlit 1.67 or later (the floor in `requirements.txt`).
+
+CSS is used only for what the theme cannot express. `inject_css()` renders `GLOBAL_CSS` once per page; the string is interpolated with `%(token)s` placeholders from `TOKENS` and the font stacks (a literal `%` is written `%%`). Custom classes all carry the `eks-` prefix.
+
+**Selector allow-list.** `GLOBAL_CSS` targets Streamlit's own DOM only through a short, verified list of `data-testid` values (header, toolbar, sidebar and its collapse controls, the main block container and `stPageLink`). `tests/test_design_tokens.py::test_css_selectors_allowlist` fails if a new `data-testid` appears; add one only after checking it in the running app. Layout hooks on keyed containers use `.st-key-<key>` classes (`eks_nav_*`, `eks_page_header`, `eks_module_cards`, `eks_bud_costs`). Generated `st-emotion-cache-*` classes are never targeted.
+
+### 8.3 Status semantics
+
+Colour never carries meaning alone. Every status is a coloured element plus text and a glyph:
+
+- `status_pill(text, tone)` renders `✓` (positive), `✕` (negative), `!` (caution) or `•` (neutral) before the text.
+- `kpi_card(..., status=..., status_tone=...)` places a pill under the value and a matching left border on the card; the older `variant="success" | "danger" | "warning"` maps onto the same tones.
+- Variances use `variance_status()` in `utils/formatting.py` ("Fördelaktig", "Ofördelaktig" or "Ingen avvikelse" plus a tone); the pills show them with a ▼ or ▲ glyph (`status_pill(..., glyph=...)`).
 
 ### 8.4 Komponentkatalog
 
-All component functions return HTML strings rendered via `st.html()`. The sole exception is `render_kpi_row()`, which calls `st.columns()` internally.
+All functions below exist in the code. HTML helpers return a string for `st.html()` and escape any user- or LLM-derived text.
 
-| Funktion | CSS-klass | Användning |
+| Function | Module | Use |
 |---|---|---|
-| `hero(eyebrow, title, lead)` | `.eks-hero` | Landing page only — blue gradient block |
-| `page_title(eyebrow, title, subtitle)` | `.eks-page-title` | Every module page header |
-| `kpi_card(label, value, ...)` | `.eks-kpi` | Primary result metric, color-coded by variant |
-| `render_kpi_row(cards)` | — | Lays out N kpi_cards in equal columns |
-| `card_header(title, subtitle, tag)` | `.eks-card-header` | Inside `st.container(border=True)` |
-| `stat_strip(cells)` | `.eks-stat-strip` | Flush horizontal strip of N stat cells |
-| `pipeline_steps(steps)` | `.eks-pipeline` | Numbered steps with arrows between them |
-| `nav_card(title, description)` | `.eks-nav-card` | Module navigation tiles on landing page |
-| `summary_box(text)` | `.eks-summary` | Blue-left-border callout and context panel |
-| `footer_note(version)` | `.eks-footer` | Book reference and version badge on every page |
-| `llm_badge(online)` | `.eks-llm-badge` | Green/red dot — LLM connectivity status |
-| `offline_badge()` | `.eks-offline-badge` | Amber pill — shown when LLM is unavailable |
-| `grounding_warning(llm, calc)` | `.eks-grounding-warn` | Red warning when LLM cites wrong number |
+| `inject_css()` | `ui` | Once per page, after `set_page_config` |
+| `render_sidebar(active_page)` | `ui` | Grouped navigation, current-company card, language switch, model selector and call budget |
+| `page_header(eyebrow, title, subtitle, chapter)` | `ui` | Module header with the page's single `h1`; returns the right-hand slot for the share popover |
+| `hero(eyebrow, title, lead)` | `ui` | Landing page header |
+| `section_heading`, `module_card_head`, `module_card_desc`, `numbered_steps`, `stat_strip` | `ui` | Landing page sections, module cards and workflow steps |
+| `kpi_card(label, value, unit, size, status, delta, help, ...)` | `ui` | Result metric in sizes `hero`, `md`, `sm`; value and unit never wrap |
+| `render_kpi_row(cards, sizes)` and `render_kpi_grid(cards)` | `ui` | Cards in columns, or in a wrapping grid (at least 180 px per card) for narrow result columns |
+| `status_pill(text, tone)` | `ui` | Status text with glyph |
+| `status_stepper(items)` | `ui` | Budget step overview (number, title and status per step) |
+| `probability_meter(prob_pct)` | `ui` | Monte Carlo probability of a positive NPV |
+| `pipeline_steps`, `summary_box`, `info_tooltip`, `base_values_html`, `scenario_banner_html` | `ui` | Process steps, callouts, inline help, base-value bar, company card |
+| `footer_note(version, updated)` | `ui` | Exactly one footer per page, with the app version |
+| `render_scenario_controls`, `render_scenario_info`, `finish_scenario` | `page_blocks` | Difficulty select, "Generera ett exempelföretag" and the company card |
+| `results_toolbar()`, `toolbar_download()`, `toolbar_reset()` | `page_blocks` | Right-aligned export (secondary) and reset (tertiary) actions above results |
+| `base_values_bar(...)` | `page_blocks` | "Basvärden från Grundläggande metoder" bar with the pull button |
+| `render_share_link(slot)` | `page_blocks` | "Dela dina siffror" popover in the page header |
+| `render_qa_chat(...)` | `page_blocks` | Question chat, or the offline caption when the service is unavailable |
+| `tutor_panel(heading)`, `render_tutor_explanation(...)`, `render_step_guide(...)` | `tutor` | Bordered explanation panel; explanation with the offline badge and the grounding warning when they apply; worked example |
+| `fin_dataframe(df, money=..., pct=..., total_row=...)` | `tables` | Sortable numeric table with Swedish display formatting |
+| `statement_table(rows)` with `resultat_rows`, `likviditet_rows`, `balans_rows` | `tables` | Budget statements laid out like printed financial statements |
+| `apply_layout(fig, title, height, legend)` and `show_chart(fig)` | `charts` | Chart layout and rendering |
 
-### 8.5 Sidopanel (render_sidebar)
+### 8.5 Sidopanel och sidhuvud
 
-`render_sidebar(active_page)` is called once per page immediately after `inject_css()`. It draws:
+`render_sidebar(active_page)` draws a light sidebar: brand block, three link groups (ÖVERSIKT: Hem; MODULER: Kalkylering, Investering, Budget, Standardkostnadsanalys; ÖVNING: Kunskapstest) built with `st.page_link` and Material icons, with the current page marked through the `.st-key-eks_nav_active` container. Below the links come "Aktuellt företag" (when a company is set), the language switch and, when the explanation service is configured, the model selector and the session call budget. Streamlit's automatic page list is hidden. On desktop the sidebar is locked open; below 768 px it starts collapsed and opens from the header control.
 
-1. **Brand block** — 32x3px blue bar, `EKS` mark, "Ekonomistyrning", "Andersson kap. 4–17"
-2. **MODULER** section — six nav links via `st.page_link()`; active link gets mid-blue background
-3. **INFORMATION** section — "Om appen" link
-4. **Footer** — model name (Qwen3-8B by default via Hugging Face) and live counter `N / 50`
+Each module page starts with `page_header(...)`: eyebrow with chapter, one `h1`, subtitle, and the share popover on the right (it moves under the title on phones). A result area starts with the toolbar (export, reset); tutor content sits in one bordered panel at the end of the section; the page ends with one footer.
 
-Streamlit's auto-generated sidebar nav is disabled via CSS (`div[data-testid="stSidebarNav"] {display: none !important;}`). The sidebar background is `#1E3A8A` and all sidebar text is forced to `rgba(255,255,255,0.65)` via a global CSS rule. The call counter reads from `st.session_state["llm_call_count"]` and updates in real time.
+### 8.6 Formulär och tal
 
-### 8.6 LLM-gränssnittselement
+- Inputs are grouped in bordered forms whose submit button ("Uppdatera värden") sits at the bottom.
+- Numbers use `utils/formatting.py`: comma decimals and a non-breaking space as thousands separator (`142 000,50 kr`). KPI values keep `format_sek` output (hyphen-minus); statements and newer displays use the typographic minus `−` (`display_minus`).
+- Inter for all text; IBM Plex Mono for the version badge. Tables use tabular figures so columns align.
+- No text in the app is smaller than 11.5 px.
 
-Four elements surface LLM state to the user at all times:
+### 8.7 Diagramregler
 
-**`llm_badge(online)`** — shown on the landing page. Green dot when `is_llm_available()` is True, red dot otherwise.
+- Build the figure, call `apply_layout(fig, title=..., height=..., legend="top" | "inside" | "none")`, then `show_chart(fig)`.
+- `apply_layout` sets the `simple_white` template, Inter, a left-aligned title, a horizontal legend above the plot (default), Swedish separators, token colours for axes and grid, and only one grid when a secondary y-axis exists.
+- `show_chart` renders full width with `CHART_CONFIG` (Plotly toolbar without logo, lasso, select and autoscale; PNG download at 2x).
+- Series use `PALETTE` (equal to `CHART_CATEGORICAL`). Green and red (`CHART_SEMANTIC`, `color_by_sign`) are only for favourable and unfavourable values; zero and benchmark lines use `reference`.
 
-**`offline_badge()`** — shown inline on any module where an LLM call failed or was skipped. Amber color signals degraded mode (fallback template active) without alarming the user.
+### 8.8 Tabellregler
 
-**`.eks-llm-section`** — the explanation block rendered inside `st.expander("Förklaring", expanded=True)` after a successful LLM call. Blue left border, 1.7 line-height, and four `<h4>` sub-headings for the Antagande / Beräkning / Tolkning / Källor structure defined in section 6.3 above.
-
-**`grounding_warning(llm_value, calc_value)`** — shown below an explanation when the numeric verifier in `utils/llm.py` detects a deviation greater than 1% between the LLM's cited value and the calculator output. Names both values explicitly and instructs the user to trust the calculator. This is the UI surface of Mechanism 2 in the grounding strategy (section 6.6).
-
-### 8.7 Interaktionsflöde per modul
-
-```
-Användaren öppnar en modulisda
-    ↓
-inject_css()          → alla .eks-* klasser aktiveras i sidans <head>
-render_sidebar()      → navigationspanel med aktiv länk markerad
-    ↓
-page_title()          → modulhuvud med eyebrow och titel
-    ↓
-Användaren fyller i formulär och klickar Beräkna
-    ↓
-Calculator (utils/kalkyl.py etc.) → returnerar resultatdict
-    ↓
-render_kpi_row([kpi_card(...)])   → primära nyckeltal med färgkodning
-st.plotly_chart(fig, ...)         → diagram med get_chart_layout()-tema
-    ↓
-LLM pipeline:
-  utils/prompts.py   → bygger systempromt + användarpromt med kalkylresultat
-  utils/llm.py       → anropar HF Inference Providers, streamer tokens
-  utils/humanizer.py → Layer 2 regex-rensning (AI-tells, streck, formatering)
-  st.expander()      → renderar .eks-llm-section med fyra sektioner
-    ↓
-Eventuell grounding_warning() om numerisk avvikelse > 1 %
-    ↓
-Q&A: st.chat_input() → samma LLM-pipeline → st.chat_message()
-    ↓
-st.download_button() → utils/export.py → Excel-fil inklusive LLM-text
-    ↓
-footer_note()         → bokräferens och versionsemblem
-```
-
-### 8.8 Typografi och talformatering
-
-- **Inter** — all prose, headings, labels, navigation
-- **IBM Plex Mono** — all computed numbers (KPI values, stat strip, axis ticks, version badges)
-
-Monospace for numbers makes decimal columns align visually and signals "computed value, not prose" — echoing the spreadsheet conventions students already use. Formatting follows Swedish locale via `utils/formatting.py`: comma as decimal separator, non-breaking space as thousands separator. Example: `142 000,50 kr`.
-
-### 8.9 Diagramtema (utils/charts.py)
-
-`get_chart_layout()` returns a Plotly layout dict that applies design tokens to all charts:
-
-- White plot area (`#FFFFFF`), dotted grid in page-background gray (`#F3F4F6`)
-- Inter for chart titles, IBM Plex Mono for axis ticks
-- Deep blue hover tooltip (`#1E3A8A`) matching the sidebar
-- `config={"displayModeBar": False}` removes the Plotly toolbar
-
-Chart series use `CHART_PALETTE` from `utils/ui.py` so color ordering is consistent across modules. Waterfall charts and horizontal variance bars apply `success`/`danger` colors directly — green for positive, red for negative — creating a unified color language across every module.
+- Result tables use `fin_dataframe`: the data stays numeric (sorting works by value) and a pandas Styler supplies the Swedish display strings. Money, percent and number columns are right-aligned, text columns left-aligned. `total_row="Summa"` appends a bold total of the money and number columns; `total_skip` leaves per-unit columns blank in that row.
+- Budget statements use `statement_table`: indentation, subtotal and total rules, right-aligned tabular numbers and minus signs. The original sortable `st.dataframe` stays available under "Visa som tabell".
+- Editable grids (`st.data_editor`) keep raw numbers; narrow year columns get a fixed width so values are not cut off.
 
 ---
 
@@ -787,3 +732,4 @@ Chart series use `CHART_PALETTE` from `utils/ui.py` so color ordering is consist
 | 2.1 | 2026-05-05 | Uppdaterad sektion 7.3 med LLM-genererade scenarier på begäran |
 | 2.2 | 2026-05-05 | Ny sektion 8 om UI-designsystemet (utils/ui.py, CSS-arkitektur, färgtokens, komponentkatalog, interaktionsflöde); omdöpta sektioner 8–11 till 9–12 |
 | 2.3 | 2026-10-19 | Qwen3-8B som standardmodell; prissättning, ABC mot traditionell fördelning, restvärde och rörelsekapital, NPV-profil och annuitetsrangordning, länkad balansbudget, nyckeltal, månadsbudget, flera kostnadsslag, fasta omkostnaders volymavvikelse, offline-förklaringar (6.13) och kalkylatorbaserade quizfrågor |
+| 2.4 | 2026-11-24 | Sektion 8 omskriven efter UX-moderniseringen: tokens, tema först, komponentkatalog med faktiska funktioner, CSS-selektorlista, diagram- och tabellregler |

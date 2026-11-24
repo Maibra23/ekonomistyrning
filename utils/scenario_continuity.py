@@ -35,7 +35,7 @@ def render_adopt_button(module: str, key: str) -> dict | None:
             t("Hämtar in det aktuella företaget från den modul där det "
             "genererades och tar fram siffror som passar den här modulen.")
         ),
-        use_container_width=True,
+        width="stretch",
     )
     if not clicked:
         return None

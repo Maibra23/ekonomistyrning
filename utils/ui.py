@@ -5,13 +5,16 @@ strings rendered with st.html(). Call inject_css() and render_sidebar()
 immediately after st.set_page_config() on every page.
 
 CSS classes use the 'eks-' prefix. GLOBAL_CSS uses % string interpolation
-against COLORS, so literal % in CSS must be written as %%.
+against TOKENS (plus the font stacks), so literal % in CSS must be written
+as %%.
 """
 from __future__ import annotations
 
 import html
+import re
 
 import streamlit as st
+from streamlit.delta_generator import DeltaGenerator
 
 from utils.i18n import get_lang, sync_lang_param, t
 
@@ -22,102 +25,75 @@ from utils.i18n import get_lang, sync_lang_param, t
 # the hero, sidebar and footer can never drift out of sync.
 # ---------------------------------------------------------------------------
 
-APP_VERSION = "0.2.0"
-APP_UPDATED = "2026-06-11"
+APP_VERSION = "0.3.0"
+APP_UPDATED = "2026-11-24"
 
 
 # ---------------------------------------------------------------------------
 # Design tokens
 # ---------------------------------------------------------------------------
 
-COLORS: dict[str, str] = {
+# Single source of truth for colours. Every other colour constant in the app
+# (ui.COLORS, charts.COLORS, charts.PALETTE) is derived from these values.
+# Text tokens hold at least 4.5:1 against white (WCAG AA), and text_secondary
+# also against surface_muted; tests/test_design_tokens.py enforces this.
+TOKENS: dict[str, str] = {
     "primary": "#1E40AF",
-    "primary_mid": "#1D4ED8",
-    "primary_light": "#3B82F6",
-    "sidebar_bg": "#1E3A8A",
-    "success": "#059669",
-    "danger": "#DC2626",
-    "warning": "#D97706",
-    "bg": "#F3F4F6",
-    "card_bg": "#FFFFFF",
-    "text_primary": "#111827",
-    "text_secondary": "#6B7280",
-    # Used for small uppercase labels; must hold ~4.5:1 against white for
-    # WCAG AA at the 9.5-10.5px sizes the design system uses.
-    "text_tertiary": "#6B7280",
-    "border": "#E5E7EB",
-    "grid": "#F3F4F6",
-    "neutral": "#6B7280",
+    "primary_hover": "#1E3A8A",
+    "primary_subtle": "#EEF2FF",
+    "canvas": "#FFFFFF",
+    "surface_muted": "#F7F8FA",
+    "surface_input": "#F2F4F7",
+    "border": "#E4E7EC",
+    "border_strong": "#D0D5DD",
+    "text_primary": "#101828",
+    "text_secondary": "#475467",
+    "text_tertiary": "#667085",
+    "positive": "#067647",
+    "positive_subtle": "#ECFDF3",
+    "negative": "#B42318",
+    "negative_subtle": "#FEF3F2",
+    "caution": "#B54708",
+    "caution_subtle": "#FFFAEB",
+    "focus_ring": "#2E5BFF",
+    "reference": "#98A2B3",
+    "grid": "#F2F4F7",
 }
 
-CHART_PALETTE: list[str] = [
-    "#1E40AF",
-    "#059669",
-    "#D97706",
-    "#DC2626",
-    "#7C3AED",
-    "#0891B2",
-    "#065F46",
-    "#1D4ED8",
+# Categorical chart series with no financial meaning. Deliberately contains
+# no green or red, so those stay reserved for favourable/unfavourable values.
+CHART_CATEGORICAL: list[str] = [
+    "#1E40AF",  # navy
+    "#DC6803",  # orange
+    "#6941C6",  # violet
+    "#0086C9",  # sky
+    "#475467",  # slate
+    "#C11574",  # magenta
 ]
 
-# ---------------------------------------------------------------------------
-# Swedish labels
-# ---------------------------------------------------------------------------
+SPACE: tuple[int, ...] = (4, 8, 12, 16, 24, 32, 48)
+RADIUS = 6
+FONT_UI = "Inter, system-ui, sans-serif"
+FONT_MONO = '"IBM Plex Mono", ui-monospace, monospace'
 
-LABELS: dict[str, str] = {
-    # Navigation
-    "nav_hem": "Hem",
-    "nav_kalkyl": "Kalkylering",
-    "nav_investering": "Investering",
-    "nav_budget": "Budget",
-    "nav_standardkostnad": "Standardkostnadsanalys",
-    "nav_quiz": "Kunskapstest",
-    # Kalkyl
-    "kalkyl_metod": "Kalkyleringsmetod",
-    "kalkyl_scenario": "Välj scenario",
-    "kalkyl_sjalvkostnad": "Självkostnadskalkyl (pålägg)",
-    "kalkyl_bidrag": "Bidragskalkyl",
-    "kalkyl_abc": "ABC-kalkyl",
-    "kalkyl_berakna": "Beräkna",
-    "kalkyl_result_sjalvkostnad": "Självkostnad/styck",
-    "kalkyl_result_tb": "Täckningsbidrag/styck",
-    "kalkyl_result_breakeven": "Nollpunktvolym",
-    "kalkyl_result_total": "Total kostnad",
-    # Investering
-    "inv_npv": "Nuvärde (NPV)",
-    "inv_irr": "Internränta (IRR)",
-    "inv_payback": "Paybacktid",
-    "inv_annuitet": "Annuitet",
-    "inv_investera": "Investera",
-    "inv_avsta": "Avstå",
-    # Budget
-    "budget_resultat": "Resultatbudget",
-    "budget_likviditet": "Likviditetsbudget",
-    "budget_balans": "Balansbudget",
-    # Variance
-    "varians_total": "Total avvikelse",
-    "varians_volym": "Volymavvikelse",
-    "varians_pris": "Prisavvikelse",
-    "varians_effektivitet": "Effektivitetsavvikelse",
-    "varians_fast_oh": "Fast OH-avvikelse",
-    # Quiz
-    "quiz_generera": "Generera fråga",
-    "quiz_kontrollera": "Kontrollera svar",
-    "quiz_ny": "Ny liknande fråga",
-    "quiz_svarare": "Svårare version",
-    # Common
-    "exportera": "Exportera till Excel",
-    "llm_forklaring": "Förklaring",
-    "llm_steg": "Steg-för-steg-guide",
-    "llm_fraga": "Ställ en fråga...",
-    "llm_offline": "Visar grundförklaring (offline-läge)",
-    "llm_cap_warn": (
-        "Sessionens gräns för förklaringar är uppnådd. "
-        "Beräkningar och diagram fungerar som vanligt."
-    ),
-    "scenario_egna": "Egna värden",
-    "scenario_ai": "Generera nytt exempelföretag",
+# Compatibility mapping for existing callers. Keys are the legacy names;
+# values come from TOKENS.
+COLORS: dict[str, str] = {
+    "primary": TOKENS["primary"],
+    "primary_mid": TOKENS["primary_hover"],
+    "primary_light": TOKENS["focus_ring"],
+    "sidebar_bg": TOKENS["primary_hover"],
+    "success": TOKENS["positive"],
+    "danger": TOKENS["negative"],
+    "warning": TOKENS["caution"],
+    "bg": TOKENS["surface_input"],
+    "card_bg": TOKENS["canvas"],
+    "text_primary": TOKENS["text_primary"],
+    "text_secondary": TOKENS["text_secondary"],
+    "text_tertiary": TOKENS["text_tertiary"],
+    "border": TOKENS["border"],
+    "grid": TOKENS["grid"],
+    "neutral": TOKENS["text_secondary"],
 }
 
 # ---------------------------------------------------------------------------
@@ -154,90 +130,46 @@ BUDGET_VS_RAKNING_HELP: str = (
 # Global CSS
 # ---------------------------------------------------------------------------
 
+# Values interpolated into GLOBAL_CSS: every token plus the font stacks.
+_CSS_VARS: dict[str, str] = {**TOKENS, "font_ui": FONT_UI, "font_mono": FONT_MONO}
+
+# Selectors target the data-testid attributes of Streamlit 1.67;
+# tests/test_design_tokens.py keeps them on an explicit allow-list.
 GLOBAL_CSS: str = (
     """
-/* Self-hosted fonts (latin subsets in static/fonts/, served via
-   Streamlit static serving). No render-blocking Google Fonts request
-   and no third-party IP disclosure (GDPR). */
-/* latin */
-@font-face {
-  font-family: 'IBM Plex Mono';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url(/app/static/fonts/IBMPlexMono-400.woff2) format('woff2');
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-/* latin */
-@font-face {
-  font-family: 'IBM Plex Mono';
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url(/app/static/fonts/IBMPlexMono-500.woff2) format('woff2');
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-/* latin */
-@font-face {
-  font-family: 'Inter';
-  font-style: normal;
-  font-weight: 300;
-  font-display: swap;
-  src: url(/app/static/fonts/Inter-300.woff2) format('woff2');
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-/* latin */
-@font-face {
-  font-family: 'Inter';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url(/app/static/fonts/Inter-400.woff2) format('woff2');
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-/* latin */
-@font-face {
-  font-family: 'Inter';
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url(/app/static/fonts/Inter-600.woff2) format('woff2');
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-/* latin */
-@font-face {
-  font-family: 'Inter';
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url(/app/static/fonts/Inter-700.woff2) format('woff2');
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
+/* === Fonts ===
+   Inter and IBM Plex Mono are self-hosted (static/fonts/) and registered
+   for the whole document by theme.fontFaces in .streamlit/config.toml, so
+   the custom eks- HTML below uses them without its own @font-face rules. */
 
-/* --- Streamlit chrome removal --- */
+/* === Chrome === */
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
 header[data-testid="stHeader"] {display: none;}
 div[data-testid="stDecoration"] {display: none;}
 div[data-testid="stToolbar"] {display: none;}
+/* Guard: the custom sidebar replaces Streamlit's automatic page nav. */
 div[data-testid="stSidebarNav"] {display: none !important;}
 section[data-testid="stSidebar"] > div > div > div > ul {display: none !important;}
 section[data-testid="stSidebar"] nav {display: none !important;}
 
-/* --- Main content area --- */
-.main .block-container {
-    padding: 32px 40px !important;
-    max-width: 1480px !important;
+/* === Layout ===
+   Streamlit adds the header height to theme.paddingTop. The header is
+   hidden on desktop, so the top padding is set to 32px there; on mobile the
+   header is visible and the theme value applies. */
+div[data-testid="stMainBlockContainer"] {
+    max-width: 1400px;
+    padding-left: 40px;
+    padding-right: 40px;
+}
+@media (min-width: 768px) {
+    div[data-testid="stMainBlockContainer"] {
+        padding-top: 32px;
+    }
 }
 
-/* --- Sidebar base --- */
-section[data-testid="stSidebar"] {
-    background-color: %(sidebar_bg)s !important;
-}
-section[data-testid="stSidebar"],
-section[data-testid="stSidebar"] * {
-    color: rgba(255,255,255,0.65) !important;
-}
+/* === Sidebar ===
+   Colours come from [theme.sidebar] in config.toml. */
 /* Lock sidebar open on desktop only: hide every Streamlit collapse handle
    so the student cannot accidentally hide the navigation. On narrow
    screens (< 768px) the lock is released so the sidebar can be closed and
@@ -250,9 +182,9 @@ section[data-testid="stSidebar"] * {
         visibility: visible !important;
         display: block !important;
     }
+    div[data-testid="stSidebarCollapseButton"],
     button[data-testid="stSidebarCollapseButton"],
     button[data-testid="stSidebarCollapsedControl"],
-    div[data-testid="stSidebarCollapseButton"],
     div[data-testid="collapsedControl"],
     button[kind="header"] {
         display: none !important;
@@ -267,86 +199,138 @@ section[data-testid="stSidebar"] * {
     header[data-testid="stHeader"] {
         display: block !important;
     }
-    .main .block-container {
-        padding: 20px 16px !important;
+    /* The expand button lives inside the toolbar; show the toolbar but
+       keep its other actions hidden. */
+    div[data-testid="stToolbar"] {
+        display: flex !important;
+    }
+    div[data-testid="stToolbarActions"],
+    div[data-testid="stAppDeployButton"] {
+        display: none !important;
+    }
+    div[data-testid="stMainBlockContainer"] {
+        padding-left: 16px;
+        padding-right: 16px;
     }
 }
-/* Streamlit pushes the main area aside while the sidebar is open. When the
-   collapse button is hidden the layout occasionally resets the offset on
-   narrow screens; force the main column to respect the locked width. */
-section.main > div.block-container {
-    margin-left: 0 !important;
+.eks-sidebar-brand {
+    padding: 12px 8px 12px 8px;
+    border-bottom: 1px solid %(border)s;
 }
-
-/* --- Streamlit widget overrides --- */
-div[data-testid="stDataFrame"] th {
-    font-family: Inter, sans-serif !important;
-    font-size: 10.5px !important;
-    font-weight: 600 !important;
-    text-transform: uppercase !important;
-    letter-spacing: 0.5px !important;
+.eks-brand-bar {
+    width: 24px;
+    height: 3px;
+    background: %(primary)s;
+    margin-bottom: 8px;
 }
-div[data-testid="stDataFrame"] td {
-    font-family: "IBM Plex Mono", monospace !important;
-    font-size: 12px !important;
+.eks-brand-title {
+    font-family: %(font_ui)s;
+    font-size: 15px;
+    font-weight: 700;
+    color: %(text_primary)s;
+    display: block;
 }
-section[data-testid="stSidebar"] label {
-    color: rgba(255,255,255,0.5) !important;
-    font-size: 10.5px !important;
-    font-weight: 600 !important;
-}
-/* The model selectbox sits on a white widget background; the global
-   near-white sidebar text rule would otherwise hide its value. Keep the
-   selected value and dropdown text dark and readable. */
-section[data-testid="stSidebar"] div[data-baseweb="select"] * {
-    color: %(text_primary)s !important;
-}
-button[data-testid="stDownloadButton"] {
-    font-family: Inter, sans-serif;
+.eks-brand-sub {
+    font-family: %(font_ui)s;
     font-size: 12px;
-    border-radius: 4px;
+    color: %(text_secondary)s;
+    display: block;
 }
-div[data-testid="stSlider"] label {
-    font-size: 10.5px;
+.eks-sidebar-section-label {
+    font-family: %(font_ui)s;
+    font-size: 11.5px;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.06em;
+    color: %(text_tertiary)s;
+    padding: 8px 8px 0 8px;
+    display: block;
+}
+.eks-sidebar-divider {
+    border-top: 1px solid %(border)s;
+    margin: 4px 0;
+}
+/* Grouped navigation. Each group is a keyed container (.st-key-eks_nav_*);
+   the current page sits inside .st-key-eks_nav_active. */
+section[data-testid="stSidebar"] div[data-testid="stPageLink"] a {
+    min-height: 36px;
+    margin: 0;
+}
+.st-key-eks_nav_active div[data-testid="stPageLink"] a,
+.st-key-eks_nav_active div[data-testid="stPageLink"] a:hover {
+    background-color: %(primary_subtle)s;
+}
+.st-key-eks_nav_active div[data-testid="stPageLink"] a * {
+    color: %(primary)s;
+}
+.eks-company {
+    padding: 8px 16px 4px 16px;
+    font-family: %(font_ui)s;
+}
+.eks-company-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: %(text_primary)s;
+}
+.eks-company-meta {
+    font-size: 12px;
+    color: %(text_tertiary)s;
+    margin-top: 2px;
+}
+.eks-company-desc {
+    font-size: 12px;
+    line-height: 1.4;
+    color: %(text_secondary)s;
+    margin-top: 6px;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.eks-meter {
+    padding: 0 16px 4px 16px;
+    font-family: %(font_ui)s;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
     color: %(text_secondary)s;
 }
 
+/* === Components === */
+
 /* --- Hero block --- */
 .eks-hero {
-    background: linear-gradient(135deg, %(primary)s 0%%, %(primary_mid)s 100%%);
-    border-left: 4px solid %(primary_light)s;
+    background: %(canvas)s;
+    border: 1px solid %(border)s;
+    border-top: 4px solid %(primary)s;
     border-radius: 4px;
-    padding: 36px 40px;
-    margin-bottom: 24px;
+    padding: 32px 36px;
+    margin-bottom: 16px;
 }
 .eks-eyebrow {
-    font-family: Inter, sans-serif;
-    font-size: 11px;
+    font-family: %(font_ui)s;
+    font-size: 11.5px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 1.5px;
-    color: %(primary_light)s;
+    color: %(focus_ring)s;
     margin-bottom: 8px;
 }
 .eks-hero .eks-eyebrow {
-    color: rgba(255,255,255,0.7);
+    color: %(focus_ring)s;
     letter-spacing: 2px;
 }
 .eks-hero h1 {
-    font-family: Inter, sans-serif;
-    font-size: clamp(22px, 2.8vw, 34px);
+    font-family: %(font_ui)s;
+    font-size: clamp(24px, 2.6vw, 32px);
     font-weight: 700;
-    color: #FFFFFF;
+    color: %(text_primary)s;
     margin: 8px 0 12px 0;
 }
 .eks-lead {
-    font-family: Inter, sans-serif;
-    font-size: 15px;
-    font-weight: 300;
-    color: rgba(255,255,255,0.85);
+    font-family: %(font_ui)s;
+    font-size: 16px;
+    font-weight: 400;
+    color: %(text_secondary)s;
     max-width: 720px;
     line-height: 1.6;
 }
@@ -356,147 +340,225 @@ div[data-testid="stSlider"] label {
     margin-bottom: 24px;
 }
 .eks-page-title .eks-eyebrow {
-    color: %(primary_light)s;
+    color: %(focus_ring)s;
     margin-bottom: 4px;
 }
 .eks-page-title h1 {
-    font-family: Inter, sans-serif;
+    font-family: %(font_ui)s;
     font-size: 26px;
     font-weight: 700;
     color: %(text_primary)s;
     margin: 0 0 4px 0;
 }
 .eks-subtitle {
-    font-family: Inter, sans-serif;
+    font-family: %(font_ui)s;
     font-size: 14px;
     color: %(text_secondary)s;
 }
 
-/* --- KPI card --- */
+/* --- KPI card ---
+   Values never wrap inside a number: the card is a size container and the
+   value scales with its width; anything still too long is clipped with an
+   ellipsis and shown in full in the card's title tooltip. */
 .eks-kpi {
-    background: %(card_bg)s;
+    container-type: inline-size;
+    min-width: 0;
+    background: %(canvas)s;
     border: 1px solid %(border)s;
     border-radius: 4px;
     padding: 18px 20px;
     position: relative;
-    border-left: 3px solid %(primary)s;
+    border-left: 3px solid %(border)s;
 }
-.eks-kpi.variant-success { border-left-color: %(success)s; }
-.eks-kpi.variant-danger  { border-left-color: %(danger)s; }
-.eks-kpi.variant-warning { border-left-color: %(warning)s; }
+.eks-kpi--hero { padding: 20px; }
+.eks-kpi--sm   { padding: 14px 16px; }
+/* The left border carries colour only when a tone is set; the status
+   pill (or the delta arrow) carries the same meaning in text. */
+.eks-kpi.tone-positive { border-left-color: %(positive)s; }
+.eks-kpi.tone-negative { border-left-color: %(negative)s; }
+.eks-kpi.tone-caution  { border-left-color: %(caution)s; }
 .eks-kpi-label {
-    font-family: Inter, sans-serif;
-    font-size: 10.5px;
+    font-family: %(font_ui)s;
+    font-size: 11.5px;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.06em;
     color: %(text_secondary)s;
     margin-bottom: 6px;
+    /* A single long word (TILLVERKNINGSKOSTNAD) hyphenates instead of
+       touching the card edge in narrow columns. */
+    overflow-wrap: break-word;
+    hyphens: auto;
+}
+.eks-chart-title {
+    font-family: %(font_ui)s;
+    font-size: 15px;
+    font-weight: 600;
+    color: %(text_primary)s;
+    margin: 4px 0 -8px;
+    line-height: 1.35;
 }
 .eks-kpi-value {
-    font-family: "IBM Plex Mono", monospace;
-    /* Scale down on narrow cards so long values (e.g. 9 186 359 kr) never
-       overflow the card while staying large on wide layouts. */
-    font-size: clamp(19px, 2.1vw, 30px);
+    font-family: %(font_ui)s;
+    font-size: 22px;
     font-weight: 700;
     color: %(text_primary)s;
-    line-height: 1.15;
+    line-height: 1.2;
     font-variant-numeric: tabular-nums;
-    overflow-wrap: anywhere;
-    word-break: break-word;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
+.eks-kpi--hero .eks-kpi-value { font-size: 28px; }
+.eks-kpi--sm .eks-kpi-value   { font-size: 18px; font-weight: 600; }
+@container (min-width: 220px) {
+    .eks-kpi--hero .eks-kpi-value { font-size: clamp(20px, 11cqi, 28px); }
+}
+/* Narrow cards (four KPIs in a results column) scale down further. */
+@container (max-width: 219.98px) {
+    .eks-kpi-value { font-size: clamp(13px, 12cqi, 22px); }
+    .eks-kpi--hero .eks-kpi-value { font-size: clamp(16px, 13cqi, 28px); }
+    .eks-kpi--sm .eks-kpi-value { font-size: clamp(12px, 10cqi, 18px); }
+}
+/* The unit holds its own leading NBSP and sits inside the nowrap value,
+   so it can never wrap away from the number. */
 .eks-kpi-unit {
-    font-family: Inter, sans-serif;
-    font-size: 13px;
-    font-weight: 400;
+    font-size: max(0.6em, 11.5px);
+    font-weight: 500;
     color: %(text_secondary)s;
-    margin-left: 4px;
 }
+.eks-kpi-status { margin-top: 8px; }
+
+/* --- Status pill: glyph + word, never colour alone --- */
+.eks-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-family: %(font_ui)s;
+    font-size: 11.5px;
+    font-weight: 600;
+    line-height: 1.4;
+    white-space: nowrap;
+    background: %(surface_input)s;
+    color: %(text_secondary)s;
+}
+.eks-pill--positive { background: %(positive_subtle)s; color: %(positive)s; }
+.eks-pill--negative { background: %(negative_subtle)s; color: %(negative)s; }
+.eks-pill--caution  { background: %(caution_subtle)s; color: %(caution)s; }
 .eks-kpi-delta {
-    font-family: "IBM Plex Mono", monospace;
+    font-family: %(font_ui)s;
     font-size: 12px;
     font-weight: 500;
+    font-variant-numeric: tabular-nums;
     margin-top: 6px;
 }
-.eks-kpi-delta.delta-up   { color: %(success)s; }
-.eks-kpi-delta.delta-down { color: %(danger)s; }
+.eks-kpi-delta.delta-up   { color: %(positive)s; }
+.eks-kpi-delta.delta-down { color: %(negative)s; }
 .eks-kpi-delta.delta-flat { color: %(text_tertiary)s; }
 
-/* --- Standard card --- */
-.eks-card {
-    background: %(card_bg)s;
+/* --- Investering components: KPI grid ---
+   Wraps to the next line instead of squeezing cards below 180 px; cards in
+   a row share one height. */
+.eks-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+}
+
+/* --- Investering components: probability meter --- */
+.eks-meter {
+    background: %(canvas)s;
     border: 1px solid %(border)s;
     border-radius: 4px;
-    padding: 22px 24px;
-    margin-bottom: 24px;
+    padding: 18px 20px;
+    margin: 8px 0 16px;
+}
+.eks-meter-head {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+}
+.eks-meter-value {
+    font-family: %(font_ui)s;
+    font-size: 40px;
+    font-weight: 700;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    color: %(text_primary)s;
+}
+.eks-meter-track {
+    height: 8px;
+    border-radius: 999px;
+    background: %(surface_input)s;
+    overflow: hidden;
+    margin: 12px 0 8px;
+}
+.eks-meter-fill { height: 100%%; border-radius: 999px; }
+.eks-meter--positive .eks-meter-fill { background: %(positive)s; }
+.eks-meter--caution .eks-meter-fill  { background: %(caution)s; }
+.eks-meter--negative .eks-meter-fill { background: %(negative)s; }
+.eks-meter-label {
+    font-family: %(font_ui)s;
+    font-size: 13px;
+    color: %(text_secondary)s;
 }
 
-/* --- Card header --- */
-.eks-card-header {
-    border-bottom: 1px solid %(border)s;
-    padding-bottom: 12px;
-    margin-bottom: 16px;
+/* --- Investering components: base-values bar --- */
+.eks-base-values {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-.eks-card-header h3 {
-    font-family: Inter, sans-serif;
-    font-size: 15px;
-    font-weight: 700;
-    color: %(text_primary)s;
+    flex-wrap: wrap;
+    gap: 6px 24px;
     margin: 0;
 }
-.eks-tag {
-    font-family: "IBM Plex Mono", monospace;
-    font-size: 10px;
-    font-weight: 500;
-    color: %(text_tertiary)s;
-    background: %(bg)s;
-    padding: 2px 8px;
-    border-radius: 3px;
-}
-.eks-card-subtitle {
-    font-family: Inter, sans-serif;
-    font-size: 12px;
-    color: %(text_secondary)s;
-    margin-top: 2px;
-}
-
-/* --- Stat strip --- */
-.eks-stat-strip {
-    display: flex;
-    gap: 0;
-    margin-bottom: 24px;
-}
-.eks-stat-cell {
-    flex: 1;
-    text-align: center;
-    padding: 16px 12px;
-    background: %(card_bg)s;
-    border: 1px solid %(border)s;
-    border-right: none;
-}
-.eks-stat-cell:first-child { border-radius: 4px 0 0 4px; }
-.eks-stat-cell:last-child  { border-right: 1px solid %(border)s; border-radius: 0 4px 4px 0; }
-.eks-stat-value {
-    font-family: "IBM Plex Mono", monospace;
-    font-size: clamp(16px, 1.7vw, 22px);
-    font-weight: 500;
-    color: %(text_primary)s;
-    display: block;
-    overflow-wrap: anywhere;
-    word-break: break-word;
-}
-.eks-stat-label {
-    font-family: Inter, sans-serif;
-    font-size: 10px;
+.eks-base-values > div { min-width: 0; }
+.eks-base-values dt {
+    font-family: %(font_ui)s;
+    font-size: 11.5px;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: 0.06em;
     color: %(text_tertiary)s;
-    margin-top: 4px;
-    display: block;
+}
+.eks-base-values dd {
+    margin: 0;
+    font-family: %(font_ui)s;
+    font-size: 15px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    color: %(text_primary)s;
+}
+
+/* --- Stat strip (quiet inline row) --- */
+.eks-stat-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 40px;
+    margin: 0 0 24px 0;
+    padding: 0 4px;
+}
+.eks-stat-cell {
+    min-width: 0;
+}
+.eks-stat-value {
+    font-family: %(font_ui)s;
+    font-size: 18px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: %(text_primary)s;
+    display: inline;
+    margin-right: 8px;
+}
+.eks-stat-label {
+    font-family: %(font_ui)s;
+    font-size: 12px;
+    font-weight: 400;
+    color: %(text_tertiary)s;
+    display: inline;
 }
 
 /* --- Pipeline steps --- */
@@ -509,7 +571,7 @@ div[data-testid="stSlider"] label {
     flex-wrap: wrap;
 }
 .eks-pipeline-step {
-    background: %(card_bg)s;
+    background: %(canvas)s;
     border: 1px solid %(border)s;
     border-radius: 4px;
     min-width: 140px;
@@ -517,135 +579,136 @@ div[data-testid="stSlider"] label {
     text-align: center;
 }
 .eks-step-num {
-    font-family: "IBM Plex Mono", monospace;
-    font-size: 10px;
-    color: %(primary_light)s;
+    font-family: %(font_mono)s;
+    font-size: 11px;
+    color: %(focus_ring)s;
     display: block;
     margin-bottom: 4px;
 }
 .eks-step-label {
-    font-family: Inter, sans-serif;
+    font-family: %(font_ui)s;
     font-size: 13px;
     font-weight: 600;
     color: %(text_primary)s;
 }
 .eks-pipeline-arrow {
     font-size: 18px;
-    color: %(primary_light)s;
+    color: %(focus_ring)s;
     padding: 0 8px;
 }
+
+/* --- Status stepper (Budget): labels with a computed status, not buttons --- */
+/* "div ol" outranks Streamlit's own ".container ol" list indent. */
+div ol.eks-stepper {
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 8px;
+    margin: 8px 0 20px 0;
+    padding: 0;
+}
+/* Element + class beats the generic list styles of the page. */
+ol.eks-stepper > li.eks-stepper-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    min-width: 0;
+    margin: 0;
+    padding: 12px 14px;
+    background: %(canvas)s;
+    border: 1px solid %(border)s;
+    border-top: 3px solid %(border)s;
+    border-radius: 4px;
+}
+.eks-stepper-item.tone-positive { border-top-color: %(positive)s; }
+.eks-stepper-item.tone-negative { border-top-color: %(negative)s; }
+.eks-stepper-item.tone-caution  { border-top-color: %(caution)s; }
+.eks-stepper-num {
+    flex: 0 0 auto;
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-family: %(font_ui)s;
+    font-size: 12px;
+    font-weight: 700;
+    color: %(primary)s;
+    background: %(primary_subtle)s;
+}
+.eks-stepper-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.eks-stepper-title {
+    font-family: %(font_ui)s;
+    font-size: 13px;
+    font-weight: 600;
+    color: %(text_primary)s;
+}
+.eks-stepper-status {
+    font-family: %(font_ui)s;
+    font-size: 12.5px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    color: %(text_secondary)s;
+}
+.eks-stepper-item.tone-positive .eks-stepper-status { color: %(positive)s; }
+.eks-stepper-item.tone-negative .eks-stepper-status { color: %(negative)s; }
+.eks-stepper-item.tone-caution  .eks-stepper-status { color: %(caution)s; }
+.eks-stepper-glyph { margin-right: 4px; }
 
 /* --- In-page section heading --- */
 .eks-section-heading {
     margin: 20px 0 8px 0;
 }
 .eks-section-heading h2 {
-    font-family: Inter, sans-serif;
+    font-family: %(font_ui)s;
     font-size: 20px;
     font-weight: 700;
     color: %(text_primary)s;
     margin: 2px 0 0 0;
 }
 
-/* --- Module map (interconnected modules) --- */
-.eks-map {
-    display: flex;
-    align-items: stretch;
-    gap: 0;
-    margin: 4px 0 18px 0;
-}
-.eks-map-node {
-    flex: 1 1 0;
-    min-width: 0;
-    background: %(card_bg)s;
-    border: 1px solid %(border)s;
-    border-top: 3px solid %(primary)s;
-    border-radius: 4px;
-    padding: 16px 18px;
-    display: flex;
-    flex-direction: column;
-}
-.eks-map-role {
-    font-family: "IBM Plex Mono", monospace;
-    font-size: 9.5px;
-    font-weight: 500;
+/* --- Landing: module cards and numbered steps --- */
+.eks-card-role {
+    font-family: %(font_ui)s;
+    font-size: 11.5px;
+    font-weight: 600;
     letter-spacing: 1.5px;
     text-transform: uppercase;
-    color: %(primary_light)s;
+    color: %(focus_ring)s;
     display: block;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
 }
-.eks-map-node h4 {
-    font-family: Inter, sans-serif;
-    /* Scale slightly with the card so long names like
-       "Standardkostnadsanalys" never overflow a narrow column. */
-    font-size: clamp(13px, 1vw, 14px);
+.eks-card-title {
+    font-family: %(font_ui)s;
+    font-size: 14px;
     font-weight: 700;
     color: %(text_primary)s;
     margin: 0 0 6px 0;
     line-height: 1.25;
-    overflow-wrap: anywhere;
-    hyphens: auto;
+    overflow-wrap: break-word;
+    hyphens: manual;
 }
-.eks-map-tag {
-    font-family: "IBM Plex Mono", monospace;
-    font-size: 9.5px;
-    color: %(text_tertiary)s;
-    background: %(bg)s;
-    padding: 2px 7px;
-    border-radius: 3px;
-    align-self: flex-start;
-    margin-bottom: 10px;
-}
-.eks-map-node p {
-    font-family: Inter, sans-serif;
-    font-size: 12px;
-    line-height: 1.5;
-    color: %(text_secondary)s;
-    margin: 0;
-    overflow-wrap: anywhere;
-    hyphens: auto;
-}
-.eks-map-arrow {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: %(primary_light)s;
-    font-size: 17px;
-    padding: 0 7px;
-    flex: 0 0 auto;
-}
-.eks-map-thread {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: linear-gradient(90deg, rgba(30,64,175,0.07), rgba(59,130,246,0.02));
-    border: 1px dashed %(primary_light)s;
-    border-radius: 4px;
-    padding: 12px 18px;
-    margin-bottom: 24px;
-    font-family: Inter, sans-serif;
+.eks-card-desc {
+    font-family: %(font_ui)s;
     font-size: 13px;
-    color: %(text_secondary)s;
     line-height: 1.5;
+    color: %(text_secondary)s;
+    margin: 8px 0 0 0;
+    overflow-wrap: break-word;
 }
-.eks-map-thread strong { color: %(text_primary)s; font-weight: 600; }
-.eks-map-thread .eks-map-thread-mark {
-    font-family: "IBM Plex Mono", monospace;
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 1px;
-    color: %(primary_light)s;
-    border: 1px solid %(primary_light)s;
-    border-radius: 3px;
-    padding: 2px 7px;
-    flex: 0 0 auto;
+/* Module cards: a wrapping row of equal-height cards, at least 170 px wide. */
+.st-key-eks_module_cards { align-items: stretch !important; }
+.st-key-eks_module_cards > div { flex: 1 1 170px !important; min-width: 0; }
+.eks-steps {
+    font-family: %(font_ui)s;
+    font-size: 15px;
+    color: %(text_primary)s;
+    margin: 4px 0 20px 0;
+    padding-left: 24px;
+    line-height: 1.7;
 }
-/* Stack the map vertically on narrow screens; arrows point downward. */
-@media (max-width: 900px) {
-    .eks-map { flex-direction: column; }
-    .eks-map-arrow { transform: rotate(90deg); padding: 6px 0; }
-}
+.eks-steps li::marker { font-weight: 600; color: %(focus_ring)s; }
 
 /* --- Inline info tooltip (hover badge) --- */
 .eks-tip {
@@ -654,18 +717,18 @@ div[data-testid="stSlider"] label {
     align-items: center;
     gap: 8px;
     margin: 0 0 20px 0;
-    font-family: Inter, sans-serif;
+    font-family: %(font_ui)s;
     font-size: 12.5px;
     font-weight: 600;
     color: %(text_secondary)s;
     cursor: help;
 }
 .eks-tip-badge {
-    font-family: "IBM Plex Mono", monospace;
-    font-size: 11px;
+    font-family: %(font_mono)s;
+    font-size: 11.5px;
     font-weight: 700;
     color: %(primary)s;
-    background: %(bg)s;
+    background: %(surface_input)s;
     border: 1px solid %(border)s;
     border-radius: 999px;
     width: 18px;
@@ -691,7 +754,7 @@ div[data-testid="stSlider"] label {
     line-height: 1.6;
     padding: 12px 15px;
     border-radius: 6px;
-    box-shadow: 0 8px 28px rgba(17,24,39,0.22);
+    box-shadow: 0 8px 24px rgba(16,24,40,0.12);
     transition: opacity 0.15s ease;
     pointer-events: none;
 }
@@ -703,11 +766,11 @@ div[data-testid="stSlider"] label {
 
 /* --- Summary callout --- */
 .eks-summary {
-    font-family: Inter, sans-serif;
+    font-family: %(font_ui)s;
     font-size: 14px;
     color: %(text_secondary)s;
-    background: %(bg)s;
-    border-left: 3px solid %(primary_light)s;
+    background: %(surface_input)s;
+    border-left: 3px solid %(focus_ring)s;
     padding: 14px 20px;
     margin-bottom: 24px;
     border-radius: 0 4px 4px 0;
@@ -722,122 +785,232 @@ div[data-testid="stSlider"] label {
     border-top: 1px solid %(border)s;
 }
 .eks-footer-label {
-    font-family: Inter, sans-serif;
-    font-size: 11px;
+    font-family: %(font_ui)s;
+    font-size: 11.5px;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.06em;
     color: %(text_tertiary)s;
 }
 .eks-footer-version {
-    font-family: "IBM Plex Mono", monospace;
-    font-size: 10px;
+    font-family: %(font_mono)s;
+    font-size: 11.5px;
     color: %(text_tertiary)s;
-    background: %(bg)s;
+    background: %(surface_input)s;
     padding: 2px 8px;
     border-radius: 3px;
     margin-left: 8px;
 }
 
-/* --- Sidebar brand & nav --- */
-.eks-sidebar-brand {
-    padding: 20px 16px 16px 16px;
-    border-bottom: 1px solid rgba(255,255,255,0.08);
-    margin-bottom: 16px;
-}
-.eks-brand-bar {
-    width: 32px;
-    height: 3px;
-    background: %(primary_light)s;
-    margin-bottom: 12px;
-}
-.eks-brand-mark {
-    font-family: "IBM Plex Mono", monospace;
-    font-size: 11px;
-    font-weight: 500;
-    color: %(primary_light)s !important;
-    letter-spacing: 2px;
-    display: block;
-}
-.eks-brand-title {
-    font-family: Inter, sans-serif;
-    font-size: 15px;
-    font-weight: 700;
-    color: #FFFFFF !important;
-    margin-top: 4px;
-    display: block;
-}
-.eks-brand-sub {
-    font-family: Inter, sans-serif;
-    font-size: 11px;
-    color: rgba(255,255,255,0.5) !important;
-    display: block;
-}
-.eks-sidebar-section-label {
-    font-family: Inter, sans-serif;
-    font-size: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    color: rgba(255,255,255,0.55) !important;
-    padding: 12px 16px 6px 16px;
-    display: block;
-}
-.eks-sidebar-footer {
-    padding: 16px;
-    border-top: 1px solid rgba(255,255,255,0.08);
-    margin-top: 16px;
-    font-family: Inter, sans-serif;
-    font-size: 10px;
-    color: rgba(255,255,255,0.55) !important;
-}
-
-/* --- LLM elements --- */
-.eks-llm-badge {
-    font-family: Inter, sans-serif;
-    font-size: 11px;
-    font-weight: 600;
-    background: %(bg)s;
-    border: 1px solid %(border)s;
-    padding: 3px 10px;
-    border-radius: 12px;
-    display: inline-block;
-}
-.eks-llm-section {
-    background: %(bg)s;
-    border-left: 3px solid %(primary_light)s;
-    padding: 16px 20px;
-    border-radius: 0 4px 4px 0;
-    font-family: Inter, sans-serif;
-    font-size: 14px;
-    line-height: 1.7;
-    color: %(text_primary)s;
-    margin-bottom: 12px;
-}
-.eks-llm-section h4 {
-    font-family: Inter, sans-serif;
-    font-size: 13px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: %(text_secondary)s;
-    margin: 0 0 8px 0;
-}
+/* --- Explanation status messages --- */
 .eks-offline-badge {
-    font-family: Inter, sans-serif;
-    font-size: 11px;
+    font-family: %(font_ui)s;
+    font-size: 12px;
     font-weight: 600;
-    color: %(warning)s;
-    background: rgba(217,119,6,0.08);
-    border: 1px solid rgba(217,119,6,0.3);
+    color: %(caution)s;
+    background: %(caution_subtle)s;
+    border: 1px solid %(caution)s;
     padding: 4px 12px;
     border-radius: 4px;
     display: inline-block;
     margin-bottom: 8px;
 }
-/* --- Accessibility --- */
-.eks-tip:focus-visible {
-    outline: 2px solid %(primary_light)s;
+.eks-grounding-warn {
+    font-family: %(font_ui)s;
+    font-size: 13px;
+    line-height: 1.5;
+    color: %(caution)s;
+    background: %(caution_subtle)s;
+    border: 1px solid %(caution)s;
+    border-left-width: 4px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    display: inline-block;
+    margin-top: 8px;
+}
+
+/* --- Company card (page_blocks.render_scenario_info) --- */
+.eks-company-card {
+    font-family: %(font_ui)s;
+    border-top: 1px solid %(border)s;
+    padding-top: 12px;
+}
+.eks-company-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: %(text_primary)s;
+    margin-bottom: 2px;
+}
+.eks-company-desc {
+    font-size: 13px;
+    line-height: 1.5;
+    color: %(text_secondary)s;
+}
+
+/* --- Statement table (utils.tables.statement_table) --- */
+.eks-statement-wrap {
+    width: 100%%;
+    overflow-x: auto;
+    margin: 0 0 16px;
+}
+.eks-statement {
+    width: 100%%;
+    border-collapse: collapse;
+    font-family: %(font_ui)s;
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+    color: %(text_primary)s;
+}
+.eks-statement caption {
+    caption-side: top;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 600;
+    color: %(text_secondary)s;
+    padding: 0 0 8px;
+}
+.eks-statement th,
+.eks-statement td {
+    padding: 6px 12px;
+    line-height: 1.4;
+    text-align: left;
+    font-weight: 400;
+    border-bottom: 1px solid %(border)s;
+}
+.eks-statement thead th {
+    background: %(surface_muted)s;
+    font-size: 12px;
+    font-weight: 600;
+    color: %(text_secondary)s;
+    border-bottom: 1px solid %(border_strong)s;
+}
+.eks-statement .eks-num {
+    text-align: right;
+    white-space: nowrap;
+}
+.eks-statement tbody th {
+    padding-left: calc(12px + var(--eks-indent, 0) * 16px);
+}
+.eks-statement-subtotal th,
+.eks-statement-subtotal td {
+    font-weight: 600;
+    border-top: 1px solid %(border_strong)s;
+}
+.eks-statement-total th,
+.eks-statement-total td {
+    font-weight: 700;
+    border-top: 3px double %(text_primary)s;
+}
+.eks-statement-section th {
+    padding-top: 16px;
+    font-size: 11.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: %(text_tertiary)s;
+}
+/* Budget step 1 cost fields: two per row, one per row when narrow. */
+.st-key-eks_bud_costs > div { flex: 1 1 130px !important; min-width: 0; }
+@media (max-width: 639.98px) {
+    .eks-statement { min-width: 480px; }
+    /* Page header: stack the title and the share action on phones, as the
+       former column split did, instead of squeezing the title. */
+    .st-key-eks_page_header { flex-direction: column; }
+}
+
+/* === Kunskapstest (quiz card) === */
+.eks-quiz-card {
+    background: %(canvas)s;
+    border: 1px solid %(border)s;
+    border-radius: 6px;
+    padding: 24px;
+    margin: 16px 0;
+    box-shadow: 0 1px 2px rgba(16,24,40,0.04);
+}
+.eks-quiz-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+.eks-quiz-badge {
+    font-family: %(font_ui)s;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: %(primary)s;
+    background: %(primary_subtle)s;
+    border: 1px solid %(primary)s33;
+    padding: 4px 12px;
+    border-radius: 999px;
+    text-transform: uppercase;
+}
+.eks-quiz-badge.diff-latt  { color: %(positive)s; background: %(positive_subtle)s; border-color: %(positive)s33; }
+.eks-quiz-badge.diff-medel { color: %(caution)s;  background: %(caution_subtle)s;  border-color: %(caution)s33; }
+.eks-quiz-badge.diff-svar  { color: %(negative)s; background: %(negative_subtle)s; border-color: %(negative)s33; }
+.eks-quiz-scenario {
+    font-family: %(font_ui)s;
+    font-size: 13px;
+    color: %(text_secondary)s;
+    background: %(surface_muted)s;
+    border-left: 3px solid %(primary)s;
+    padding: 12px 16px;
+    border-radius: 0 4px 4px 0;
+    margin-bottom: 16px;
+    line-height: 1.55;
+}
+.eks-quiz-question {
+    font-family: %(font_ui)s;
+    font-size: 17px;
+    font-weight: 600;
+    color: %(text_primary)s;
+    line-height: 1.45;
+    margin-bottom: 16px;
+}
+.eks-quiz-given {
+    background: %(surface_input)s;
+    border-radius: 4px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+}
+.eks-quiz-given-title {
+    font-family: %(font_ui)s;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: %(text_tertiary)s;
+    margin-bottom: 8px;
+}
+.eks-quiz-given ul {
+    margin: 0;
+    padding-left: 18px;
+    font-family: %(font_ui)s;
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+    color: %(text_primary)s;
+}
+.eks-quiz-given li { margin: 2px 0; }
+.eks-quiz-chip {
+    display: inline-block;
+    font-family: %(font_ui)s;
+    font-variant-numeric: tabular-nums;
+    font-size: 11px;
+    color: %(text_tertiary)s;
+    background: %(surface_input)s;
+    border: 1px solid %(border)s;
+    padding: 2px 8px;
+    border-radius: 999px;
+}
+
+/* === Accessibility === */
+.eks-tip:focus-visible,
+div[data-testid="stPageLink"] a:focus-visible,
+[class^="eks-"][tabindex]:focus-visible,
+[class*=" eks-"][tabindex]:focus-visible,
+a[class^="eks-"]:focus-visible,
+button[class^="eks-"]:focus-visible {
+    outline: 2px solid %(focus_ring)s;
     outline-offset: 2px;
     border-radius: 3px;
 }
@@ -845,20 +1018,8 @@ div[data-testid="stSlider"] label {
     .eks-tip-text { transition: none; }
     * { scroll-behavior: auto !important; }
 }
-
-.eks-grounding-warn {
-    font-family: Inter, sans-serif;
-    font-size: 11px;
-    color: %(danger)s;
-    background: rgba(220,38,38,0.06);
-    border: 1px solid rgba(220,38,38,0.2);
-    padding: 4px 12px;
-    border-radius: 4px;
-    display: inline-block;
-    margin-top: 8px;
-}
 """
-    % COLORS
+    % _CSS_VARS
 )
 
 # ---------------------------------------------------------------------------
@@ -887,15 +1048,99 @@ def hero(eyebrow: str, title: str, lead: str) -> str:
     )
 
 
-def page_title(eyebrow: str, title: str, subtitle: str = "") -> str:
-    """Page title block for inner module pages."""
-    sub_html = f'<div class="eks-subtitle">{subtitle}</div>' if subtitle else ""
+def page_header(
+    eyebrow: str,
+    title: str,
+    subtitle: str = "",
+    chapter: str | None = None,
+) -> DeltaGenerator:
+    """Render the module page header and return its right-hand action slot.
+
+    The title block (eyebrow, optional chapter, ``h1``, subtitle) stretches
+    on the left; the returned container is a content-width slot on the right
+    for page-level actions. Pages fill it with the share popover at the end of
+    the script, after every ``save_state`` call has written the query
+    string::
+
+        header_actions = page_header(t("BUDGETERING"), t("Budget"), ...)
+        ...                                   # the rest of the page
+        render_share_link(header_actions)     # last, so the URL is complete
+
+    All text is escaped. Pass already translated strings.
+    """
+    eyebrow_text = html.escape(eyebrow)
+    if chapter:
+        eyebrow_text += (
+            ' <span aria-hidden="true">·</span> '
+            f"{html.escape(chapter)}"
+        )
+    # A horizontal row whose action slot takes only its content width, so the
+    # share button keeps its label on one line at every viewport (a fixed
+    # 5:1 column split squeezed it onto three lines at 1024 px).
+    row = st.container(
+        horizontal=True, vertical_alignment="top", gap="medium", key="eks_page_header"
+    )
+    left = row.container(width="stretch")
+    right = row.container(width="content")
+    with left:
+        st.html(
+            '<div class="eks-page-title">'
+            f'<div class="eks-eyebrow">{eyebrow_text}</div>'
+            f"<h1>{html.escape(title)}</h1>"
+            + (f'<div class="eks-subtitle">{html.escape(subtitle)}</div>' if subtitle else "")
+            + "</div>"
+        )
+    return right
+
+
+# variant (legacy) -> status tone. "default" has no tone: neutral border.
+_VARIANT_TONES: dict[str, str] = {
+    "success": "positive",
+    "danger": "negative",
+    "warning": "caution",
+}
+_TONES: tuple[str, ...] = ("positive", "negative", "caution", "neutral")
+_PILL_GLYPHS: dict[str, str] = {
+    "positive": "✓",
+    "negative": "✕",
+    "caution": "!",
+    "neutral": "•",
+}
+_KPI_SIZES: tuple[str, ...] = ("hero", "md", "sm")
+
+# A trailing unit on a pre-formatted value ("1 966,20 kr", "12,5 %",
+# "3,2 år", "40 000 kr/år"). The separator before the unit (NBSP or space)
+# belongs to the unit group, so number + unit concatenate back to the
+# original string.
+_UNIT_RE = re.compile(
+    r"^(?P<num>.*?\S)(?P<unit>[ \u00a0](?:kr|%|år|st|ggr)(?:/år|/yr)?|/år|/yr)$"
+)
+
+
+def _split_unit(value: str) -> tuple[str, str]:
+    """Split a formatted value into (number, unit). unit is '' if none."""
+    match = _UNIT_RE.match(value)
+    if not match:
+        return value, ""
+    unit = match.group("unit")
+    if unit[0] == " ":
+        unit = "\u00a0" + unit[1:]
+    return match.group("num"), unit
+
+
+def status_pill(text: str, tone: str = "neutral", glyph: str | None = None) -> str:
+    """Status pill: glyph + word on a tinted background (never colour alone).
+
+    Args:
+        text: Status word, e.g. "Lönsam" or "Ofördelaktig". Escaped.
+        tone: 'positive' | 'negative' | 'caution' | 'neutral'.
+        glyph: Optional glyph override, e.g. '▲'/'▼' for F/O variances.
+    """
+    tone = tone if tone in _TONES else "neutral"
+    mark = html.escape(glyph if glyph is not None else _PILL_GLYPHS[tone])
     return (
-        f'<div class="eks-page-title">'
-        f'<div class="eks-eyebrow">{eyebrow}</div>'
-        f"<h1>{title}</h1>"
-        f"{sub_html}"
-        f"</div>"
+        f'<span class="eks-pill eks-pill--{tone}">'
+        f'<span aria-hidden="true">{mark}</span>{html.escape(text)}</span>'
     )
 
 
@@ -906,19 +1151,50 @@ def kpi_card(
     delta: str | None = None,
     delta_direction: str = "flat",
     variant: str = "default",
+    *,
+    status: str | None = None,
+    status_tone: str | None = None,
+    size: str = "md",
+    help: str | None = None,
+    status_glyph: str | None = None,
 ) -> str:
-    """KPI metric card with colored left border.
+    """KPI metric card.
 
     Args:
-        label: Short uppercase label shown above the value.
-        value: Primary metric value (pre-formatted string).
-        unit: Optional unit shown next to the value in smaller text.
+        label: Short uppercase label shown above the value. Escaped.
+        value: Primary metric value (pre-formatted string). A trailing unit
+            ("kr", "%", "år", "st", "ggr", "/år") is split into its own span
+            so it is styled smaller but never wraps away from the number.
+        unit: Optional explicit unit shown next to the value.
         delta: Optional change string (e.g. '+12 kr').
         delta_direction: 'up' | 'down' | 'flat'
-        variant: 'default' | 'success' | 'danger' | 'warning'
+        variant: Legacy tone: 'default' | 'success' | 'danger' | 'warning'.
+        status: Optional status word, rendered as a pill under the value.
+        status_tone: 'positive' | 'negative' | 'caution' | 'neutral'.
+            Defaults to the tone mapped from variant.
+        size: 'hero' | 'md' | 'sm'.
+        help: Optional explanation added to the card's title tooltip.
+        status_glyph: Optional glyph for the status pill (e.g. '▲' / '▼').
     """
-    variant_class = f" variant-{variant}" if variant != "default" else ""
-    unit_html = f'<span class="eks-kpi-unit">{unit}</span>' if unit else ""
+    tone = status_tone if status_tone in _TONES else _VARIANT_TONES.get(variant, "neutral")
+    size = size if size in _KPI_SIZES else "md"
+    classes = f"eks-kpi eks-kpi--{size} tone-{tone}"
+    if variant != "default":
+        classes += f" variant-{variant}"
+
+    if unit:
+        num, unit_text = value, "\u00a0" + unit
+    else:
+        num, unit_text = _split_unit(value)
+    unit_html = f'<span class="eks-kpi-unit">{unit_text}</span>' if unit_text else ""
+
+    # Full value as a tooltip, for the rare case that a long value is
+    # clipped with an ellipsis on a narrow card; help text follows it.
+    title_text = f"{label}: {value}{' ' + unit if unit else ''}"
+    if help:
+        title_text += f"\n{help}"
+    title = html.escape(title_text, quote=True)
+
     # Direction arrow so color is never the only signal carrier (WCAG 1.4.1).
     delta_arrow = {"up": "▲ ", "down": "▼ "}.get(delta_direction, "")
     delta_html = (
@@ -927,37 +1203,32 @@ def kpi_card(
         if delta
         else ""
     )
+    status_html = (
+        f'<div class="eks-kpi-status">{status_pill(status, tone, status_glyph)}</div>' if status else ""
+    )
     return (
-        f'<div class="eks-kpi{variant_class}">'
-        f'<div class="eks-kpi-label">{label}</div>'
-        f'<div class="eks-kpi-value">{value}{unit_html}</div>'
+        f'<div class="{classes}" title="{title}">'
+        f'<div class="eks-kpi-label">{html.escape(label)}</div>'
+        f'<div class="eks-kpi-value"><span class="eks-kpi-num">{num}</span>{unit_html}</div>'
         f"{delta_html}"
+        f"{status_html}"
         f"</div>"
     )
 
 
-def render_kpi_row(cards: list[str]) -> None:
-    """Render a list of kpi_card() HTML strings in equal-width columns."""
-    cols = st.columns(len(cards))
+def render_kpi_row(cards: list[str], sizes: list[float] | None = None) -> None:
+    """Render kpi_card() HTML strings side by side.
+
+    Args:
+        cards: Card HTML strings.
+        sizes: Optional relative column widths (e.g. [2, 1, 1] lets a hero
+            card take two units). Equal widths when omitted.
+    """
+    if sizes is not None and len(sizes) != len(cards):
+        raise ValueError("sizes must have one entry per card")
+    cols = st.columns(sizes if sizes is not None else len(cards))
     for col, card_html in zip(cols, cards, strict=True):
         col.html(card_html)
-
-
-def card_header(title: str, subtitle: str = "", tag: str = "") -> str:
-    """Card header with bottom divider for use inside st.container(border=True)."""
-    tag_html = f'<span class="eks-tag">{tag}</span>' if tag else ""
-    sub_html = (
-        f'<div class="eks-card-subtitle">{subtitle}</div>' if subtitle else ""
-    )
-    return (
-        f'<div class="eks-card-header">'
-        f"<div>"
-        f"<h3>{title}</h3>"
-        f"{sub_html}"
-        f"</div>"
-        f"{tag_html}"
-        f"</div>"
-    )
 
 
 def stat_strip(cells: list[tuple[str, str]]) -> str:
@@ -987,10 +1258,46 @@ def pipeline_steps(steps: list[str]) -> str:
     return f'<div class="eks-pipeline">{"".join(parts)}</div>'
 
 
+# --- Budget components ---
+
+
+def status_stepper(items: list[dict[str, str]]) -> str:
+    """Numbered status overview: one item per step with glyph and status text.
+
+    Purely presentational (the items are labels, not navigation).
+
+    Args:
+        items: One dict per step with keys ``title`` (step name), ``status``
+            (short status text) and ``tone`` ('positive' | 'negative' |
+            'caution' | 'neutral'). Title and status are escaped; pass them
+            already translated.
+    """
+    parts: list[str] = []
+    for i, item in enumerate(items, start=1):
+        tone = item.get("tone", "neutral")
+        tone = tone if tone in _TONES else "neutral"
+        title = item.get("title", "")
+        status = item.get("status", "")
+        aria = html.escape(t("Steg {0}: {1}, {2}", i, title, status), quote=True)
+        parts.append(
+            f'<li class="eks-stepper-item tone-{tone}" aria-label="{aria}">'
+            f'<span class="eks-stepper-num" aria-hidden="true">{i}</span>'
+            f'<span class="eks-stepper-body">'
+            f'<span class="eks-stepper-title">{html.escape(title)}</span>'
+            f'<span class="eks-stepper-status">'
+            f'<span class="eks-stepper-glyph" aria-hidden="true">'
+            f"{html.escape(_PILL_GLYPHS[tone])}</span>"
+            f"{html.escape(status)}</span>"
+            f"</span></li>"
+        )
+    label = html.escape(t("Budgetens status"), quote=True)
+    return f'<ol class="eks-stepper" aria-label="{label}">{"".join(parts)}</ol>'
+
+
 def section_heading(eyebrow: str, title: str) -> str:
     """Render a lightweight in-page section heading (eyebrow + title).
 
-    Smaller than ``page_title``; used to introduce sections on the landing
+    Smaller than the ``page_header`` title; used to introduce sections on the landing
     page so they match the design system instead of raw Markdown headers.
     """
     return (
@@ -1001,46 +1308,24 @@ def section_heading(eyebrow: str, title: str) -> str:
     )
 
 
-def module_map(nodes: list[dict[str, str]]) -> str:
-    """Render the modules as an interconnected flow of nodes.
-
-    Each node dict accepts ``role`` (short stage label), ``title``, ``tag``
-    (e.g. chapter reference) and ``desc``. Arrow connectors are inserted
-    between nodes to show the modules belong to one continuous workflow.
-    Nodes are not links; navigation happens through the sidebar.
-    """
-    parts: list[str] = []
-    for i, node in enumerate(nodes):
-        role = node.get("role", "")
-        tag = node.get("tag", "")
-        role_html = f'<span class="eks-map-role">{role}</span>' if role else ""
-        tag_html = f'<span class="eks-map-tag">{tag}</span>' if tag else ""
-        parts.append(
-            f'<div class="eks-map-node">'
-            f"{role_html}"
-            f'<h4>{node["title"]}</h4>'
-            f"{tag_html}"
-            f'<p>{node["desc"]}</p>'
-            f"</div>"
-        )
-        if i < len(nodes) - 1:
-            parts.append('<div class="eks-map-arrow">&#8594;</div>')
-    return f'<div class="eks-map">{"".join(parts)}</div>'
-
-
-def thread_band(mark: str, text: str) -> str:
-    """Render a full-width band that ties the modules together visually.
-
-    Used under the module map to highlight what every module shares (for
-    example the common LLM tutor). ``text`` may contain inline HTML such as
-    ``<strong>``.
-    """
+# --- Landing page helpers (T09) ---
+def module_card_head(role: str, title: str) -> str:
+    """Role eyebrow and title for a landing-page module card."""
     return (
-        f'<div class="eks-map-thread">'
-        f'<span class="eks-map-thread-mark">{mark}</span>'
-        f"<span>{text}</span>"
-        f"</div>"
+        f'<span class="eks-card-role">{role}</span>'
+        f'<h4 class="eks-card-title">{title}</h4>'
     )
+
+
+def module_card_desc(desc: str) -> str:
+    """Description paragraph for a landing-page module card."""
+    return f'<p class="eks-card-desc">{desc}</p>'
+
+
+def numbered_steps(steps: list[str]) -> str:
+    """Compact numbered list of workflow steps."""
+    items = "".join(f"<li>{step}</li>" for step in steps)
+    return f'<ol class="eks-steps">{items}</ol>'
 
 
 def summary_box(text: str) -> str:
@@ -1066,7 +1351,7 @@ def info_tooltip(label: str, text: str) -> str:
     )
 
 
-def footer_note(version: str = "1.0", updated: str = "") -> str:
+def footer_note(version: str = APP_VERSION, updated: str = "") -> str:
     """Page footer with version badge and optional updated date."""
     label = t("Uppdaterad {0}", updated) if updated else "Ekonomistyrning Sandbox"
     return (
@@ -1077,32 +1362,100 @@ def footer_note(version: str = "1.0", updated: str = "") -> str:
     )
 
 
-def offline_badge() -> str:
-    """Warning badge shown when the explanation service is unavailable."""
-    return f'<div class="eks-offline-badge">{t(LABELS["llm_offline"])}</div>'
+# --- Investering components ---
 
 
-def grounding_warning(cited_value: float, calc_value: float) -> str:
-    """Warning when a cited number deviates from calculator output."""
+def render_kpi_grid(cards: list[str]) -> None:
+    """Render kpi_card() HTML strings in a wrapping grid.
+
+    Unlike :func:`render_kpi_row` (one Streamlit column per card), the grid
+    moves a card to the next line when it would get narrower than 180 px,
+    so values in a narrow results column keep a legible size.
+    """
+    st.html(f'<div class="eks-kpi-grid">{"".join(cards)}</div>')
+
+
+def probability_meter(prob_pct: float, thresholds: tuple[float, float] = (70.0, 50.0)) -> str:
+    """Probability meter for "probability of a positive NPV".
+
+    Shows the percentage large, an 8 px track filled to the value, a status
+    pill ("Hög"/"Måttlig"/"Låg") and the label. ``thresholds`` are the
+    (high, moderate) limits in percent; the defaults are the ones the
+    Monte Carlo decision text uses, so the meter and the text always agree.
+
+    Args:
+        prob_pct: Probability in percent (0 to 100). Clamped.
+        thresholds: (high, moderate) limits in percent.
+    """
+    p = max(0.0, min(100.0, float(prob_pct)))
+    high, moderate = thresholds
+    if p >= high:
+        tone, word = "positive", t("Hög")
+    elif p >= moderate:
+        tone, word = "caution", t("Måttlig")
+    else:
+        tone, word = "negative", t("Låg")
+    shown = f"{p:.1f}".replace(".", ",") + " %"
+    label = t("Sannolikhet för positivt NPV")
     return (
-        f'<div class="eks-grounding-warn">'
-        f"OBS: Förklaringen angav {cited_value:,.0f} men kalkylatorn ger "
-        f"{calc_value:,.0f}. Lita på kalkylatorns värde."
+        f'<div class="eks-meter eks-meter--{tone}" role="meter" '
+        f'aria-valuenow="{p:.1f}" aria-valuemin="0" aria-valuemax="100" '
+        f'aria-valuetext="{html.escape(shown + " " + word, quote=True)}" '
+        f'aria-label="{html.escape(label, quote=True)}">'
+        f'<div class="eks-meter-head">'
+        f'<span class="eks-meter-value">{shown}</span>'
+        f"{status_pill(word, tone)}"
+        f"</div>"
+        f'<div class="eks-meter-track"><div class="eks-meter-fill" '
+        f'style="width:{p:.1f}%"></div></div>'
+        f'<div class="eks-meter-label">{html.escape(label)}</div>'
         f"</div>"
     )
+
+
+def base_values_html(items: list[tuple[str, str]]) -> str:
+    """Label/value pairs of a base-values bar as an escaped ``<dl>``."""
+    cells = "".join(
+        f"<div><dt>{html.escape(label)}</dt><dd>{html.escape(value)}</dd></div>"
+        for label, value in items
+    )
+    return f'<dl class="eks-base-values">{cells}</dl>'
 
 
 # ---------------------------------------------------------------------------
 # Sidebar
 # ---------------------------------------------------------------------------
 
-_NAV_PAGES: list[tuple[str, str, str]] = [
-    ("hem", "Hem", "streamlit_app.py"),
-    ("kalkyl", "Kalkylering", "pages/1_Kalkyl.py"),
-    ("investering", "Investering", "pages/2_Investering.py"),
-    ("budget", "Budget", "pages/3_Budget.py"),
-    ("standardkostnad", "Standardkostnadsanalys", "pages/4_Standardkostnadsanalys.py"),
-    ("quiz", "Kunskapstest", "pages/5_Kunskapstest.py"),
+# Grouped sidebar navigation: (group label, [(key, label, path, icon)]).
+# Labels are Swedish source text, translated through t() at render time.
+_NAV_GROUPS: list[tuple[str, list[tuple[str, str, str, str]]]] = [
+    (
+        "ÖVERSIKT",
+        [("hem", "Hem", "pages/0_Hem.py", ":material/home:")],
+    ),
+    (
+        "MODULER",
+        [
+            ("kalkyl", "Kalkylering", "pages/1_Kalkyl.py", ":material/calculate:"),
+            (
+                "investering",
+                "Investering",
+                "pages/2_Investering.py",
+                ":material/trending_up:",
+            ),
+            ("budget", "Budget", "pages/3_Budget.py", ":material/account_balance:"),
+            (
+                "standardkostnad",
+                "Standardkostnadsanalys",
+                "pages/4_Standardkostnadsanalys.py",
+                ":material/difference:",
+            ),
+        ],
+    ),
+    (
+        "ÖVNING",
+        [("quiz", "Kunskapstest", "pages/5_Kunskapstest.py", ":material/quiz:")],
+    ),
 ]
 
 
@@ -1119,13 +1472,8 @@ def scenario_banner_html(
     descriptions are truncated for a tidy sidebar; the full text remains
     available on each page's per-module info banner.
     """
-    # The sidebar forces rgba(255,255,255,0.65) !important on all children,
-    # so the hierarchy must be expressed in white-scale inline styles with
-    # !important (inline !important wins over stylesheet !important) —
-    # otherwise the old gray palette is flattened to uniform half-white.
     meta_html = (
-        f'<div style="font-size:10px;color:rgba(255,255,255,0.6) !important;'
-        f'margin-top:2px;">'
+        '<div class="eks-company-meta">'
         f"{' • '.join(html.escape(bit) for bit in meta_bits)}</div>"
         if meta_bits
         else ""
@@ -1135,15 +1483,10 @@ def scenario_banner_html(
         snippet = (
             description if len(description) <= 140 else description[:137] + "..."
         )
-        desc_html = (
-            f'<div style="font-size:11px;color:rgba(255,255,255,0.8) !important;'
-            f'margin-top:6px;line-height:1.35;">{html.escape(snippet)}</div>'
-        )
+        desc_html = f'<div class="eks-company-desc">{html.escape(snippet)}</div>'
     return (
-        '<div style="padding:8px 16px 4px 16px;">'
-        '<div style="font-size:12px;font-weight:600;'
-        'color:rgba(255,255,255,0.95) !important;">'
-        f"{html.escape(name)}</div>"
+        '<div class="eks-company">'
+        f'<div class="eks-company-name">{html.escape(name)}</div>'
         f"{meta_html}{desc_html}"
         "</div>"
     )
@@ -1184,7 +1527,7 @@ def _render_current_scenario_banner() -> None:
     if st.button(
         t("Rensa aktuellt företag"),
         key="eks_clear_current_scenario",
-        use_container_width=True,
+        width="stretch",
     ):
         clear_current_scenario()
         st.rerun()
@@ -1242,8 +1585,7 @@ def _render_llm_budget_meter() -> None:
     remaining = get_session_calls_remaining()
     st.html(
         f'<span class="eks-sidebar-section-label">{t("FÖRKLARINGAR")}</span>'
-        '<div style="padding:0 16px 4px 16px;font-family:\'IBM Plex Mono\','
-        'monospace;font-size:11px;">'
+        '<div class="eks-meter">'
         + t("Kvar denna session: {0}/{1}", remaining, SESSION_CALL_CAP)
         + "</div>"
     )
@@ -1262,7 +1604,6 @@ def _render_language_switch() -> None:
         format_func=lambda code: {"sv": "Svenska", "en": "English"}[code],
         key="lang",
         horizontal=True,
-        label_visibility="collapsed",
     )
     sync_lang_param()
 
@@ -1270,27 +1611,38 @@ def _render_language_switch() -> None:
 def render_sidebar(active_page: str) -> None:
     """Render the full sidebar with brand, navigation, LLM status, and session info.
 
+    Order: brand, grouped navigation, divider, language switch, then the
+    current company card, model selector and explanation budget meter.
+
     Args:
         active_page: One of 'hem', 'kalkyl', 'investering', 'budget',
-                     'standardkostnad', 'quiz'.
+                     'standardkostnad', 'quiz'. Marks the current page link
+                     with the ``eks_nav_active`` style hook.
     """
     with st.sidebar:
         st.html(
             '<div class="eks-sidebar-brand">'
             '<div class="eks-brand-bar"></div>'
-            '<span class="eks-brand-mark">EKS</span>'
             '<span class="eks-brand-title">Ekonomistyrning</span>'
-            '<span class="eks-brand-sub">'
-            + t("Kalkyl &middot; Investering &middot; Budget &middot; Avvikelser")
-            + "</span>"
+            f'<span class="eks-brand-sub">{t("Andersson kap. 4–17")}</span>'
             "</div>"
         )
 
-        _render_language_switch()
+        for group_label, links in _NAV_GROUPS:
+            st.html(f'<span class="eks-sidebar-section-label">{t(group_label)}</span>')
+            with st.container(key=f"eks_nav_{links[0][0]}", gap=None):
+                for key, label, path, icon in links:
+                    if key == active_page:
+                        # Streamlit's own current-page styling cannot be
+                        # targeted from CSS; this wrapper carries the
+                        # .st-key-eks_nav_active hook instead.
+                        with st.container(key="eks_nav_active", gap=None):
+                            st.page_link(path, label=t(label), icon=icon)
+                    else:
+                        st.page_link(path, label=t(label), icon=icon)
 
-        st.html(f'<span class="eks-sidebar-section-label">{t("MODULER")}</span>')
-        for _key, label, path in _NAV_PAGES:
-            st.page_link(path, label=t(label))
+        st.html('<div class="eks-sidebar-divider"></div>')
+        _render_language_switch()
 
         _render_current_scenario_banner()
         _render_model_selector()

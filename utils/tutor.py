@@ -17,11 +17,12 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 
 import streamlit as st
+from streamlit.delta_generator import DeltaGenerator
 
-from utils.grounding_ui import show_grounding_warning
 from utils.humanizer import humanize
 from utils.i18n import get_lang, t
 from utils.llm import (
@@ -55,6 +56,27 @@ def get_cached_tutor_text(state_key: str) -> str | None:
     if isinstance(store, dict):
         return store.get("text")
     return None
+
+
+@contextmanager
+def tutor_panel(heading: str | None = "Förklaring") -> Iterator[DeltaGenerator]:
+    """Bordered "Förklaring och stöd" panel at the end of a results area.
+
+    ``heading`` is the Swedish source text of the panel's ``h3``
+    ("Förklaring", "Tolkning", "Sammanfattande analys"); it is translated
+    here. Wrap the section's tutor calls in it and pass ``heading=None``
+    to :func:`render_tutor_explanation` so the heading is not repeated::
+
+        with tutor_panel("Tolkning"):
+            render_tutor_explanation(..., heading=None)
+            render_step_guide(...)
+            render_qa_chat(...)
+    """
+    panel = st.container(border=True)
+    with panel:
+        if heading:
+            st.markdown(f"### {t(heading)}")
+        yield panel
 
 
 def render_tutor_explanation(
@@ -102,13 +124,16 @@ def render_tutor_explanation(
     # --- Render cached text first if we have a fresh one ---
     if is_fresh and cached_text:
         st.markdown(cached_text)
-        if cached_grounding and cached_grounding.get("missing"):
+        # One warning only: the box also covers the "wrong" case that
+        # grounding_ui.show_grounding_warning reported.
+        if cached_grounding and (
+            cached_grounding.get("missing") or cached_grounding.get("wrong")
+        ):
             st.html(
                 '<div class="eks-grounding-warn">'
                 + t("OBS: Förklaringen kan ha refererat fel siffra, verifiera mot beräkningen ovan.")
                 + "</div>"
             )
-            show_grounding_warning(cached_grounding)
 
     # --- Stale: warn + offer regenerate ---
     if is_stale and cached_text:
@@ -126,8 +151,10 @@ def render_tutor_explanation(
         clicked = st.button(
             t(label),
             key=f"{state_key}__btn",
-            type="primary" if not is_fresh else "secondary",
-            use_container_width=True,
+            # Secondary always: the section's primary action is its compute
+            # or submit button, never the explanation.
+            type="secondary",
+            width="stretch",
         )
     with info_col:
         if help_text and not is_fresh:
@@ -229,14 +256,14 @@ def render_step_guide(
     clicked = cols[0].button(
         t(btn_label),
         key=f"{state_key}__btn",
-        use_container_width=True,
+        width="stretch",
     )
     cleared = False
     if has_cache:
         cleared = cols[1].button(
             t(clear_label),
             key=f"{state_key}__clear",
-            use_container_width=True,
+            width="stretch",
         )
 
     if cleared:

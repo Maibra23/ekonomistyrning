@@ -284,7 +284,11 @@ Streamlits AppTest (på svenska och engelska, utan förklaringstjänst) och
 klickar igenom centrala flöden. Det fångar exceptions och logikfel men
 inte layoutproblem i en riktig webbläsare.
 
-**Planerad lösning:** En minimal Playwright-svit för visuella
+**Aktuell hantering:** `scripts/ui_snapshots.py` (utvecklingsverktyg,
+inte del av CI) tar skärmbilder av alla sidor i 1440 och 390 px och räknar
+Streamlit-undantag; det används för manuell visuell kontroll.
+
+**Planerad lösning:** En minimal Playwright-svit i CI för visuella
 regressioner.
 
 ### IRR konvergens 🟡 (förklarande meddelanden vid kantfall)
@@ -317,6 +321,51 @@ till t.ex. utskrift och skärminställningar (medvetet val).
 **Aktuell hantering:** Under 768 px visas headern igen eftersom den
 hostar sidofältets expandera/stäng-kontroll, som är enda vägen till
 navigationen på mobil.
+
+### Sifferfält utan svenska tusentalsavgränsare 🟢
+
+`st.number_input` formaterar med webbläsarens printf-format och kan inte
+visa mellanslag som tusentalsavgränsare eller decimalkomma. Ett belopp
+skrivs därför som `12000000` och en procentsats som `20.6` i
+inmatningsfälten.
+
+**Aktuell hantering:** Enheten står i varje etikett ("(kr)", "(%)",
+"(dagar)"), formaten är valda per fälttyp och alla resultat, tabeller och
+KPI-kort visas med svensk formatering (`12 000 000 kr`, `20,6 %`).
+
+### Sidans språk (`<html lang>`) anges inte 🟢
+
+Streamlit har inget API för att sätta `lang`-attributet på sidan. Den är
+därför omärkt, och skärmläsare kan välja fel uttal för svensk text.
+
+**Aktuell hantering:** Ingen. En lösning med ett JavaScript-snutt som
+sätter attributet i föräldradokumentet är skör och fungerar bara när appen
+körs på samma ursprung, så den är medvetet inte införd.
+
+### Inget mörkt tema 🟢
+
+Appen har bara ett ljust tema. Tokens, CSS och diagrammall är skrivna för
+ljus bakgrund; ett mörkt läge kräver mörka varianter av alla tokens och en
+kontrastkontroll för båda.
+
+**Aktuell hantering:** Temat är låst till `base = "light"` i
+`.streamlit/config.toml`, så appen ser likadan ut oavsett systeminställning.
+
+### Mobil sidomeny stängs inte efter navigering 🟢
+
+På en telefon öppnas sidomenyn från headerns knapp. Navigeringslänkarna är
+`st.page_link`, och Streamlit stänger inte menyn automatiskt efter ett
+klick på en sådan länk, så användaren stänger den själv.
+
+### Diagramrubrik och förklaring kan överlappa i smala diagram 🟢
+
+När ett diagram är smalt (telefon, eller resultatkolumnen vid 1024 px) och
+förklaringen (legend) behöver två rader kan den överlappa
+diagramrubriken, och långa rubriker kan kapas. Plotly radbryter varken
+rubrik eller förklaring automatiskt.
+
+**Planerad lösning:** Rendera diagramrubriken som text ovanför diagrammet
+i `show_chart`, eller placera förklaringen under diagrammet i smala lägen.
 
 ### Promptinjektion i Q&A-chatten 🟢
 
@@ -507,3 +556,4 @@ cookies utöver Streamlits egna session cookies.
 |---------|------------|--------------------------------------------------|
 | 1.0     | 2026-05-19 | Initial inventering                              |
 | 1.1     | 2026-10-19 | Uppdaterad efter offline-förklaringar, språkväljare, delbara länkar, AppTest-sidtester och länkad balansbudget |
+| 1.2     | 2026-11-24 | UX-moderniseringen: sifferfältens format, `<html lang>`, mörkt tema, mobil sidomeny och diagramrubriker i smala lägen |

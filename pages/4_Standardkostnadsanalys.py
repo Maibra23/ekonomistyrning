@@ -14,18 +14,22 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from utils.charts import COLORS, PALETTE, apply_layout
+from utils.charts import CHART_CATEGORICAL, COLORS, apply_layout, show_chart
 from utils.explain import interpret_variances, steps_fixed_overhead, steps_variance
-from utils.export import export_to_excel, table_range
-from utils.formatting import format_sek
-from utils.i18n import t, t_frame
+from utils.export import table_range
+from utils.formatting import format_sek, format_signed_sek, variance_status
+from utils.i18n import t
 from utils.page_blocks import (
+    cached_excel,
     finish_scenario,
     render_qa_chat,
     render_scenario_controls,
     render_scenario_info,
     render_share_link,
+    results_toolbar,
     scenario_header_lines,
+    toolbar_download,
+    toolbar_reset,
 )
 from utils.prompts import (
     FALLBACK_TEMPLATES,
@@ -37,16 +41,24 @@ from utils.standardkost import (
     variance_fixed_overhead_volume,
     variance_summary,
 )
-from utils.state_save import clear_state, load_state, save_state
-from utils.tutor import render_tutor_explanation
+from utils.state_save import (
+    clear_state,
+    link_records,
+    load_state,
+    restore_number,
+    save_state,
+)
+from utils.tables import fin_dataframe
+from utils.tutor import render_tutor_explanation, tutor_panel
 from utils.ui import (
     APP_UPDATED,
     footer_note,
     inject_css,
     kpi_card,
-    page_title,
+    page_header,
     render_kpi_row,
     render_sidebar,
+    status_pill,
 )
 
 _XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -103,6 +115,30 @@ def _num(value: object) -> float:
     return 0.0 if pd.isna(out) else out
 
 
+def _variance_card(label: str, value: float, *, size: str = "md") -> str:
+    """KPI card for a variance with a text status (F/O), not colour alone."""
+    status, tone = variance_status(value)
+    glyph = {"negative": "▲", "positive": "▼"}.get(tone)
+    return kpi_card(
+        label,
+        format_sek(value),
+        variant="success" if value <= 0 else "danger",
+        status=t(status),
+        status_tone=tone,
+        status_glyph=glyph,
+        size=size,
+    )
+
+
+def _fo_label(value: float) -> str:
+    """Short F/O marker for a table row total (positive = unfavourable)."""
+    if value > 0:
+        return "O"
+    if value < 0:
+        return "F"
+    return "-"
+
+
 # ---------------------------------------------------------------------------
 # Page config
 # ---------------------------------------------------------------------------
@@ -110,7 +146,7 @@ def _num(value: object) -> float:
 st.set_page_config(
     page_title="Standardkostnadsanalys, Ekonomistyrning",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="auto",
 )
 inject_css()
 render_sidebar("standardkostnad")
@@ -130,16 +166,25 @@ if st.session_state.pop("_reset_sk", False):
 # Page header
 # ---------------------------------------------------------------------------
 
+# The right-hand slot gets the share popover at the end of the script.
+header_actions = page_header(
+    eyebrow=t("AVVIKELSEANALYS"),
+    title=t("Standardkostnadsanalys"),
+    subtitle=(
+        t("Analysera avvikelser mellan standardkostnad och verkligt utfall. "
+        "Bryt ner i volym-, pris- och effektivitetsavvikelser för rörliga kostnader, "
+        "och i budget- och volymavvikelse för fasta omkostnader.")
+    ),
+    chapter=t("Kap. 17"),
+)
+
+# Sign convention, visible on every tab (the bottom caption stays too).
 st.html(
-    page_title(
-        eyebrow=t("AVVIKELSEANALYS"),
-        title=t("Standardkostnadsanalys"),
-        subtitle=(
-            t("Analysera avvikelser mellan standardkostnad och verkligt utfall. "
-            "Bryt ner i volym-, pris- och effektivitetsavvikelser för rörliga kostnader, "
-            "och i budget- och volymavvikelse för fasta omkostnader.")
-        ),
-    )
+    '<div class="eks-sign-legend" style="display:flex;flex-wrap:wrap;'
+    'align-items:center;gap:6px 14px;margin:2px 0 10px 0;font-size:0.85rem;">'
+    f'<span>{status_pill(t("Ofördelaktig ▲"), "negative", glyph="")} {t("positivt belopp")}</span>'
+    f'<span>{status_pill(t("Fördelaktig ▼"), "positive", glyph="")} {t("negativt belopp")}</span>'
+    "</div>"
 )
 
 tab1, tab2, tab3 = st.tabs([
@@ -163,10 +208,10 @@ with tab1:
     _sk_saved = load_state("standardkost_rorlig")
     if _sk_saved is not None:
         for _k in ("std_volym", "verk_volym"):
-            if _k in _sk_saved:
-                st.session_state[_k] = float(_sk_saved[_k])
-        if isinstance(_sk_saved.get("items"), list) and _sk_saved["items"]:
-            _set_items_base(_items_df(_sk_saved["items"]))
+            restore_number(_sk_saved, _k)
+        _sk_rows = link_records(_sk_saved, "items", _ITEM_COLUMNS, (_C_NAME, _C_UNIT))
+        if _sk_rows:
+            _set_items_base(_items_df(_sk_rows))
         elif "std_pris" in _sk_saved:
             # Saved before the table existed: one item with the old fields.
             _set_items_base(_items_df([{
@@ -218,18 +263,32 @@ with tab1:
         items_df: pd.DataFrame = st.data_editor(
             st.session_state["sk_items_df"],
             num_rows="dynamic",
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
             key="sk_items_de",
             column_config={
-                _C_NAME: st.column_config.TextColumn(t(_C_NAME), required=True),
-                _C_UNIT: st.column_config.TextColumn(
-                    t(_C_UNIT), help=t("Insatsens enhet, t.ex. kg eller timmar")
+                _C_NAME: st.column_config.TextColumn(
+                    t("Kostnadsslag"), required=True, help=t(_C_NAME)
                 ),
-                _C_SP: st.column_config.NumberColumn(t(_C_SP), min_value=0.0, format="%.2f"),
-                _C_SF: st.column_config.NumberColumn(t(_C_SF), min_value=0.0, format="%.3f"),
-                _C_VP: st.column_config.NumberColumn(t(_C_VP), min_value=0.0, format="%.2f"),
-                _C_VF: st.column_config.NumberColumn(t(_C_VF), min_value=0.0, format="%.3f"),
+                _C_UNIT: st.column_config.TextColumn(
+                    t("Enhet"), help=t("Insatsens enhet, t.ex. kg eller timmar"), width="small"
+                ),
+                _C_SP: st.column_config.NumberColumn(
+                    t("Std-pris (kr/enh)"), help=t(_C_SP),
+                    min_value=0.0, format="%.2f", width="small",
+                ),
+                _C_SF: st.column_config.NumberColumn(
+                    t("Std-förbr. (enh/st)"), help=t(_C_SF),
+                    min_value=0.0, format="%.3f", width="small",
+                ),
+                _C_VP: st.column_config.NumberColumn(
+                    t("Verkl. pris (kr/enh)"), help=t(_C_VP),
+                    min_value=0.0, format="%.2f", width="small",
+                ),
+                _C_VF: st.column_config.NumberColumn(
+                    t("Verkl. förbr. (enh/st)"), help=t(_C_VF),
+                    min_value=0.0, format="%.3f", width="small",
+                ),
             },
         )
         st.form_submit_button(t("Uppdatera värden"), type="primary")
@@ -255,6 +314,7 @@ with tab1:
         )
         items.append(res)
 
+    sk_rorlig_export_slot, sk_reset_slot = results_toolbar()
     if not items:
         st.session_state["sk_rorlig_result"] = None
         st.info(t("Lägg till minst ett kostnadsslag i tabellen för att beräkna avvikelser."))
@@ -271,15 +331,9 @@ with tab1:
             ],
         }
 
-        def _variant(value: float) -> str:
-            return "success" if value <= 0 else "danger"
-
         render_kpi_row([
-            kpi_card(t("Total avvikelse"), format_sek(totals["total"]), variant=_variant(totals["total"])),
-            *[
-                kpi_card(t(_COMPONENT_LABELS[c]), format_sek(totals[c]), variant=_variant(totals[c]))
-                for c in _COMPONENTS
-            ],
+            _variance_card(t("Total avvikelse"), totals["total"]),
+            *[_variance_card(t(_COMPONENT_LABELS[c]), totals[c]) for c in _COMPONENTS],
         ])
 
         # Waterfall: standard cost -> the three components -> actual cost
@@ -305,7 +359,7 @@ with tab1:
             textfont=dict(size=11),
         ))
         apply_layout(fig_waterfall, title=t("Avvikelseanalys, alla rörliga kostnader (vattenfall)"), height=420)
-        st.plotly_chart(fig_waterfall, use_container_width=True)
+        show_chart(fig_waterfall)
 
         # Per item: which cost type drives which variance
         summary_df = variance_summary(items)
@@ -315,24 +369,26 @@ with tab1:
                 name=t(_COMPONENT_LABELS[comp]),
                 x=[t(k) for k in summary_df["komponent"]],
                 y=summary_df[comp],
-                marker_color=PALETTE[i % len(PALETTE)],
-                text=[format_sek(v) for v in summary_df[comp]],
+                marker_color=CHART_CATEGORICAL[i % 3],
+                text=[format_signed_sek(v) for v in summary_df[comp]],
                 textposition="outside",
                 textfont=dict(size=11),
             ))
         fig_items.add_hline(y=0, line_dash="dot", line_color=COLORS["neutral"], line_width=1)
         fig_items.update_layout(barmode="group")
         apply_layout(fig_items, title=t("Avvikelser per kostnadsslag (positivt = ofördelaktigt)"), height=400)
-        st.plotly_chart(fig_items, use_container_width=True)
+        show_chart(fig_items)
 
-        st.dataframe(
-            t_frame(pd.DataFrame({
+        fin_dataframe(
+            pd.DataFrame({
                 "Kostnadsslag": summary_df["komponent"],
-                **{_COMPONENT_LABELS[c]: summary_df[c].map(format_sek) for c in _COMPONENTS},
-                "Totalt": summary_df["total"].map(format_sek),
-            })),
-            use_container_width=True,
-            hide_index=True,
+                **{_COMPONENT_LABELS[c]: summary_df[c] for c in _COMPONENTS},
+                "Totalt": summary_df["total"],
+                "F/O": summary_df["total"].map(_fo_label),
+            }),
+            money=[*(_COMPONENT_LABELS[c] for c in _COMPONENTS), "Totalt"],
+            text=["Kostnadsslag", "F/O"],
+            total_row="Summa",
         )
 
         if totals["reconciliation_ok"]:
@@ -365,26 +421,27 @@ with tab1:
             for r in items
         ]
         _rorlig_outputs = {"total_avvikelse": totals["total"], **{c: totals[c] for c in _COMPONENTS}}
-        render_tutor_explanation(
-            state_key="sk_rorlig_llm",
-            inputs={
-                "standard_volym": std_volym,
-                "verklig_volym": verk_volym,
-                "kostnadsslag": ", ".join(r["komponent"] for r in items),
-            },
-            outputs=_rorlig_outputs,
-            build_prompt=lambda: build_standardkost_interpretation_prompt(_rorlig_components),
-            fallback_text=lambda: FALLBACK_TEMPLATES["standardkost"](
-                "standardkost",
-                {"standard_volym": std_volym, "verklig_volym": verk_volym},
-                _rorlig_outputs,
-                interpretation=interpret_variances(totals),
-            ),
-            required_sections=TUTOR_REQUIRED_SECTIONS,
-            expected_numbers=_rorlig_outputs,
-            heading=t("### Tolkning"),
-            spinner_label=t("Analyserar avvikelser..."),
-        )
+        with tutor_panel("Tolkning"):
+            render_tutor_explanation(
+                state_key="sk_rorlig_llm",
+                inputs={
+                    "standard_volym": std_volym,
+                    "verklig_volym": verk_volym,
+                    "kostnadsslag": ", ".join(r["komponent"] for r in items),
+                },
+                outputs=_rorlig_outputs,
+                build_prompt=lambda: build_standardkost_interpretation_prompt(_rorlig_components),
+                fallback_text=lambda: FALLBACK_TEMPLATES["standardkost"](
+                    "standardkost",
+                    {"standard_volym": std_volym, "verklig_volym": verk_volym},
+                    _rorlig_outputs,
+                    interpretation=interpret_variances(totals),
+                ),
+                required_sections=TUTOR_REQUIRED_SECTIONS,
+                expected_numbers=_rorlig_outputs,
+                heading=None,
+                spinner_label=t("Analyserar avvikelser..."),
+            )
 
         _sk_header = scenario_header_lines(st.session_state.get("sk_scenario_info"))
         _rorlig_export_df = pd.DataFrame({
@@ -394,9 +451,10 @@ with tab1:
             },
             "Total avvikelse": [*summary_df["total"], totals["total"]],
         })
-        st.download_button(
-            label=t("Exportera till Excel"),
-            data=export_to_excel(
+        toolbar_download(
+            sk_rorlig_export_slot,
+            t("Exportera till Excel"),
+            data=cached_excel(
                 {"Rorliga avvikelser": _rorlig_export_df},
                 header_lines=_sk_header or None,
                 charts={"Rorliga avvikelser": [{
@@ -422,13 +480,11 @@ with tab1:
         },
     )
 
-    if st.button(t("Återställ till standardvärden"), key="sk_reset_autosave"):
+    if toolbar_reset(sk_reset_slot, t("Återställ till standardvärden"), key="sk_reset_autosave"):
         clear_state("standardkost_rorlig")
         clear_state("standardkost_fast")
         st.session_state["_reset_sk"] = True
         st.rerun()
-
-    st.html(footer_note(updated=APP_UPDATED))
 
 # ===========================================================================
 # TAB 2 -- FASTA OMKOSTNADER (kapitel 17.7)
@@ -446,8 +502,7 @@ with tab2:
     _sk_fast_saved = load_state("standardkost_fast")
     if _sk_fast_saved is not None:
         for _k in ("fast_budget", "fast_verkligt", "fast_normal_volym", "fast_verklig_volym"):
-            if _k in _sk_fast_saved:
-                st.session_state[_k] = float(_sk_fast_saved[_k])
+            restore_number(_sk_fast_saved, _k)
 
     if st.button(t("Hämta volymer från Rörliga kostnader"), key="fast_pull_volumes"):
         st.session_state["fast_normal_volym"] = float(st.session_state["std_volym"])
@@ -494,30 +549,16 @@ with tab2:
             st.form_submit_button(t("Uppdatera värden"), type="primary")
 
     with col_fix_res:
+        sk_fast_export_slot, _ = results_toolbar()
         fast_result = variance_fixed_overhead_volume(
             budget_belopp, verkligt_belopp, normal_volym, fast_verklig_volym
         )
         st.session_state["sk_fast_result"] = fast_result
 
-        def _fvariant(value: float) -> str:
-            return "success" if value <= 0 else "danger"
-
         render_kpi_row([
-            kpi_card(
-                t("Budgetavvikelse"),
-                format_sek(fast_result["budgetavvikelse"]),
-                variant=_fvariant(fast_result["budgetavvikelse"]),
-            ),
-            kpi_card(
-                t("Volymavvikelse"),
-                format_sek(fast_result["volymavvikelse"]),
-                variant=_fvariant(fast_result["volymavvikelse"]),
-            ),
-            kpi_card(
-                t("Total avvikelse"),
-                format_sek(fast_result["total"]),
-                variant=_fvariant(fast_result["total"]),
-            ),
+            _variance_card(t("Budgetavvikelse"), fast_result["budgetavvikelse"]),
+            _variance_card(t("Volymavvikelse"), fast_result["volymavvikelse"]),
+            _variance_card(t("Total avvikelse"), fast_result["total"]),
         ])
         if normal_volym <= 0:
             st.warning(t("Ange en normalvolym över noll för att räkna ut volymavvikelsen."))
@@ -564,7 +605,7 @@ with tab2:
             textfont=dict(size=11),
         ))
         apply_layout(fig_fast, title=t("Fasta omkostnader: budget, utfall och fördelat"), height=380)
-        st.plotly_chart(fig_fast, use_container_width=True)
+        show_chart(fig_fast)
 
         with st.expander(t("Visa uträkningen")):
             st.markdown(
@@ -583,9 +624,10 @@ with tab2:
                 fast_result["total"],
             ],
         })
-        st.download_button(
-            label=t("Exportera till Excel"),
-            data=export_to_excel(
+        toolbar_download(
+            sk_fast_export_slot,
+            t("Exportera till Excel"),
+            data=cached_excel(
                 {"Fasta omkostnader": _fast_export_df},
                 header_lines=_sk_header_fast or None,
                 charts={"Fasta omkostnader": [{
@@ -624,33 +666,32 @@ with tab2:
         "volymavvikelse": fast_result["volymavvikelse"],
         "total_avvikelse": fast_result["total"],
     }
-    render_tutor_explanation(
-        state_key="sk_fast_llm",
-        inputs={
-            "budgeterat": budget_belopp,
-            "verkligt": verkligt_belopp,
-            "normalvolym": normal_volym,
-            "verklig_volym": fast_verklig_volym,
-        },
-        outputs=_fast_outputs,
-        build_prompt=lambda: build_standardkost_interpretation_prompt(_fast_components),
-        fallback_text=lambda: FALLBACK_TEMPLATES["standardkost"](
-            "standardkost",
-            {"budgeterat": budget_belopp, "verkligt": verkligt_belopp},
-            _fast_outputs,
-            interpretation=(
-                "Budgetavvikelsen följs upp av den som ansvarar för kostnaderna, "
-                "volymavvikelsen av den som planerar produktion och försäljning. "
-                "Volymavvikelsen är ingen verklig kostnad utan visar hur mycket av "
-                "de fasta omkostnaderna som inte fördelades ut på produkterna."
+    with tutor_panel("Tolkning"):
+        render_tutor_explanation(
+            state_key="sk_fast_llm",
+            inputs={
+                "budgeterat": budget_belopp,
+                "verkligt": verkligt_belopp,
+                "normalvolym": normal_volym,
+                "verklig_volym": fast_verklig_volym,
+            },
+            outputs=_fast_outputs,
+            build_prompt=lambda: build_standardkost_interpretation_prompt(_fast_components),
+            fallback_text=lambda: FALLBACK_TEMPLATES["standardkost"](
+                "standardkost",
+                {"budgeterat": budget_belopp, "verkligt": verkligt_belopp},
+                _fast_outputs,
+                interpretation=(
+                    "Budgetavvikelsen följs upp av den som ansvarar för kostnaderna, "
+                    "volymavvikelsen av den som planerar produktion och försäljning. "
+                    "Volymavvikelsen är ingen verklig kostnad utan visar hur mycket av "
+                    "de fasta omkostnaderna som inte fördelades ut på produkterna."
+                ),
             ),
-        ),
-        expected_numbers={"total_avvikelse": fast_result["total"]},
-        heading=t("### Tolkning"),
-        spinner_label=t("Analyserar..."),
-    )
-
-    st.html(footer_note(updated=APP_UPDATED))
+            expected_numbers={"total_avvikelse": fast_result["total"]},
+            heading=None,
+            spinner_label=t("Analyserar..."),
+        )
 
 # ===========================================================================
 # TAB 3 -- SAMMANSTÄLLNING
@@ -673,6 +714,7 @@ with tab3:
     rorlig_total = rorlig_res["total"] if rorlig_res else 0.0
     fast_total = fast_res["total"] if fast_res else 0.0
 
+    sk_sum_export_slot, _ = results_toolbar()
     if rorlig_res is None and fast_res is None:
         st.info(
             t("Inga beräkningar tillgängliga. "
@@ -682,21 +724,9 @@ with tab3:
         total_all = rorlig_total + fast_total
 
         render_kpi_row([
-            kpi_card(
-                t("Total avvikelse (alla)"),
-                format_sek(total_all),
-                variant="success" if total_all <= 0 else "danger",
-            ),
-            kpi_card(
-                t("Rörliga kostnader"),
-                format_sek(rorlig_total),
-                variant="success" if rorlig_total <= 0 else "danger",
-            ),
-            kpi_card(
-                t("Fasta omkostnader"),
-                format_sek(fast_total),
-                variant="success" if fast_total <= 0 else "danger",
-            ),
+            _variance_card(t("Total avvikelse (alla)"), total_all),
+            _variance_card(t("Rörliga kostnader"), rorlig_total),
+            _variance_card(t("Fasta omkostnader"), fast_total),
         ])
 
         summary_rows: list[dict] = []
@@ -725,23 +755,6 @@ with tab3:
             bar_names.extend([t("Budgetavvikelse (fasta)"), t("Volymavvikelse (fasta)")])
             bar_values.extend([fast_res["budgetavvikelse"], fast_res["volymavvikelse"]])
 
-        bar_colors = [
-            COLORS["success"] if v < 0 else (COLORS["danger"] if v > 0 else COLORS["neutral"])
-            for v in bar_values
-        ]
-        fig_summary = go.Figure()
-        fig_summary.add_trace(go.Bar(
-            x=bar_names,
-            y=bar_values,
-            marker_color=bar_colors,
-            text=[format_sek(v) for v in bar_values],
-            textposition="outside",
-            textfont=dict(size=11),
-        ))
-        fig_summary.add_hline(y=0, line_dash="dot", line_color=COLORS["neutral"], line_width=1)
-        apply_layout(fig_summary, title=t("Sammanställning av alla avvikelser"), height=420)
-        st.plotly_chart(fig_summary, use_container_width=True)
-
         if summary_rows:
             dominant = max(summary_rows, key=lambda r: abs(r["Belopp (kr)"]))
             direction = t("fördelaktig") if dominant["Belopp (kr)"] < 0 else t("ofördelaktig")
@@ -754,18 +767,41 @@ with tab3:
                 )
             )
 
+        bar_colors = [
+            COLORS["success"] if v < 0 else (COLORS["danger"] if v > 0 else COLORS["neutral"])
+            for v in bar_values
+        ]
+        fig_summary = go.Figure()
+        fig_summary.add_trace(go.Bar(
+            x=bar_names,
+            y=bar_values,
+            marker_color=bar_colors,
+            text=[format_signed_sek(v) for v in bar_values],
+            textposition="outside",
+            textfont=dict(size=11),
+        ))
+        fig_summary.add_hline(y=0, line_dash="dot", line_color=COLORS["neutral"], line_width=1)
+        apply_layout(fig_summary, title=t("Sammanställning av alla avvikelser"), height=420)
+        show_chart(fig_summary)
+
+        # Display: per-row F/O and a Summa row from fin_dataframe; the export
+        # frame keeps its own TOTALT row and original columns.
+        display_df = pd.DataFrame(summary_rows)
+        display_df["F/O"] = display_df["Belopp (kr)"].map(_fo_label)
+        fin_dataframe(
+            display_df,
+            money=["Belopp (kr)"],
+            text=["Komponent", "Typ", "F/O"],
+            total_row="Summa",
+        )
         summary_rows.append({"Komponent": "TOTALT", "Belopp (kr)": total_all, "Typ": ""})
         export_df = pd.DataFrame(summary_rows)
-        st.dataframe(
-            t_frame(export_df.assign(**{"Belopp (kr)": export_df["Belopp (kr)"].map(format_sek)})),
-            use_container_width=True,
-            hide_index=True,
-        )
 
         _sum_header = scenario_header_lines(st.session_state.get("sk_scenario_info"))
-        st.download_button(
+        toolbar_download(
+            sk_sum_export_slot,
             t("Exportera till Excel"),
-            data=export_to_excel(
+            data=cached_excel(
                 {"Sammanställning": export_df},
                 header_lines=_sum_header or None,
                 charts={"Sammanställning": [{
@@ -781,54 +817,56 @@ with tab3:
             mime=_XLSX_MIME,
         )
 
-    if bar_values:
-        _all_components: list[dict] = []
-        if rorlig_res:
-            for item in rorlig_res["items"]:
-                _all_components.append({"typ": item["komponent"], **{c: item[c] for c in _COMPONENTS}})
-        if fast_res:
-            _all_components.append({
-                "typ": "Fast omkostnad",
-                "budgetavvikelse": fast_res["budgetavvikelse"],
-                "volymavvikelse": fast_res["volymavvikelse"],
-            })
-        _expected: dict[str, float] = {"total_avvikelse": total_all}
-        if rorlig_res:
-            for comp in _COMPONENTS:
-                _expected[comp] = rorlig_res[comp]
-        render_tutor_explanation(
-            state_key="sk_summary_llm",
-            inputs={"rorlig_total": rorlig_total, "fast_avvikelse": fast_total},
-            outputs=_expected,
-            build_prompt=lambda: build_standardkost_interpretation_prompt(_all_components),
-            fallback_text=lambda: FALLBACK_TEMPLATES["standardkost"](
-                "standardkost",
-                {"rorlig_total": rorlig_total, "fast_avvikelse": fast_total},
-                {"total_avvikelse": total_all},
-                interpretation=(
-                    interpret_variances(rorlig_res) if rorlig_res else None
+    with tutor_panel("Tolkning"):
+        if bar_values:
+            _all_components: list[dict] = []
+            if rorlig_res:
+                for item in rorlig_res["items"]:
+                    _all_components.append({"typ": item["komponent"], **{c: item[c] for c in _COMPONENTS}})
+            if fast_res:
+                _all_components.append({
+                    "typ": "Fast omkostnad",
+                    "budgetavvikelse": fast_res["budgetavvikelse"],
+                    "volymavvikelse": fast_res["volymavvikelse"],
+                })
+            _expected: dict[str, float] = {"total_avvikelse": total_all}
+            if rorlig_res:
+                for comp in _COMPONENTS:
+                    _expected[comp] = rorlig_res[comp]
+            render_tutor_explanation(
+                state_key="sk_summary_llm",
+                inputs={"rorlig_total": rorlig_total, "fast_avvikelse": fast_total},
+                outputs=_expected,
+                build_prompt=lambda: build_standardkost_interpretation_prompt(_all_components),
+                fallback_text=lambda: FALLBACK_TEMPLATES["standardkost"](
+                    "standardkost",
+                    {"rorlig_total": rorlig_total, "fast_avvikelse": fast_total},
+                    {"total_avvikelse": total_all},
+                    interpretation=(
+                        interpret_variances(rorlig_res) if rorlig_res else None
+                    ),
                 ),
-            ),
-            expected_numbers=_expected,
-            heading=t("### Tolkning"),
-            spinner_label=t("Analyserar sammanställning..."),
-        )
+                expected_numbers=_expected,
+                heading=None,
+                spinner_label=t("Analyserar sammanställning..."),
+            )
 
-    render_qa_chat(
-        chat_key="sk_chat_history",
-        input_key="sk_chat_input",
-        placeholder=t("Fråga om standardkostnadsanalysen"),
-        context="standardkost",
-        inputs={"total_avvikelse": total_all} if bar_values else {},
-        outputs={"total_avvikelse": total_all} if bar_values else {},
-        ground=False,
-    )
+        render_qa_chat(
+            chat_key="sk_chat_history",
+            input_key="sk_chat_input",
+            placeholder=t("Fråga om standardkostnadsanalysen"),
+            context="standardkost",
+            inputs={"total_avvikelse": total_all} if bar_values else {},
+            outputs={"total_avvikelse": total_all} if bar_values else {},
+            ground=False,
+        )
     st.caption(
         t("Positivt belopp = ofördelaktig avvikelse (högre kostnad än standard), "
         "negativt belopp = fördelaktig.")
     )
 
-    st.html(footer_note(updated=APP_UPDATED))
-
 # One share link for the whole page: the URL holds the inputs of every tab.
-render_share_link()
+# Rendered last (after every save_state) into the header's action slot.
+render_share_link(header_actions)
+
+st.html(footer_note(updated=APP_UPDATED))

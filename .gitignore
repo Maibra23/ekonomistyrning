@@ -39,3 +39,6 @@ tests/eval_results_*.json
 
 # Server-side daily LLM budget counter (runtime state, never tracked)
 data/.llm_daily_usage.json
+
+# Local UI snapshots (scripts/ui_snapshots.py)
+.ui_snapshots/

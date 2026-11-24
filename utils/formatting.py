@@ -7,6 +7,8 @@ separator, "kr" as currency unit.
 """
 from __future__ import annotations
 
+from decimal import ROUND_HALF_UP, Decimal
+
 NBSP = "\u00a0"  # non-breaking space
 
 
@@ -53,3 +55,46 @@ def format_years(value: float | None, decimals: int = 1) -> str:
     if value is None:
         return "-"
     return f"{_format_with_swedish_separators(value, decimals)}{NBSP}år"
+
+
+# ---------------------------------------------------------------------------
+# Display-only helpers
+#
+# These produce typographic output (a real minus sign, U+2212) for new
+# HTML displays. They never feed calculations or exports, and the helpers
+# above keep the plain hyphen-minus that existing displays and tests use.
+# ---------------------------------------------------------------------------
+
+MINUS = "−"  # typographic minus sign
+
+
+def format_signed_sek(value: float, decimals: int = 0) -> str:
+    """Signed SEK amount for display: -1234.5 -> '−1 235 kr', 50 -> '+50 kr'.
+
+    Always shows a sign (zero gets '+'), uses U+2212 for negatives and
+    rounds halves away from zero, as a reader would by hand.
+    """
+    quant = Decimal(1).scaleb(-decimals)
+    magnitude = float(Decimal(str(abs(value))).quantize(quant, rounding=ROUND_HALF_UP))
+    sign = MINUS if value < 0 and magnitude != 0 else "+"
+    return f"{sign}{_format_with_swedish_separators(magnitude, decimals)}{NBSP}kr"
+
+
+def display_minus(text: str) -> str:
+    """Replace a leading hyphen-minus with a real minus sign (U+2212)."""
+    if text.startswith("-") and text != "-":
+        return MINUS + text[1:]
+    return text
+
+
+def variance_status(value: float) -> tuple[str, str]:
+    """Status word and tone for a cost variance (verklig minus standard).
+
+    A positive variance means higher cost than standard (unfavourable).
+    Returns Swedish source text; callers translate it with t().
+    """
+    if value > 0:
+        return ("Ofördelaktig", "negative")
+    if value < 0:
+        return ("Fördelaktig", "positive")
+    return ("Ingen avvikelse", "neutral")

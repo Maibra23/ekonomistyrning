@@ -273,6 +273,6 @@ the best visual payoff per hour in the whole list.
 - Monthly likviditetsbudget with seasonality (about 1–1.5 days).
 - Several variable cost items in Standardkost together with the
   fixed-overhead volume variance (about 1 day for both together).
-- English language toggle (`LABELS` already exists, but the strings are
-  spread across five page files).
+- English language toggle (the strings were spread across five page
+  files; since done with `t()` and `utils/i18n_en.py`).
 - Shareable links that encode every input in the URL.
