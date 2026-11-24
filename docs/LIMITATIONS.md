@@ -333,23 +333,25 @@ inmatningsfälten.
 "(dagar)"), formaten är valda per fälttyp och alla resultat, tabeller och
 KPI-kort visas med svensk formatering (`12 000 000 kr`, `20,6 %`).
 
-### Sidans språk (`<html lang>`) anges inte 🟢
+### Sidans språk (`<html lang>`) sätts med ett skript 🟢
 
-Streamlit har inget API för att sätta `lang`-attributet på sidan. Den är
-därför omärkt, och skärmläsare kan välja fel uttal för svensk text.
+Streamlit har inget API för att sätta `lang`-attributet. `render_sidebar()`
+lägger därför in ett skript (`st.html` med `unsafe_allow_javascript`) som
+sätter `lang` till `sv` eller `en` efter språkvalet.
 
-**Aktuell hantering:** Ingen. En lösning med ett JavaScript-snutt som
-sätter attributet i föräldradokumentet är skör och fungerar bara när appen
-körs på samma ursprung, så den är medvetet inte införd.
+**Kvarvarande risk:** Det kräver att webbläsaren kör JavaScript. Före skriptet körs är attributet
+Streamlits standard.
 
-### Inget mörkt tema 🟢
+### Mörkt tema följer systeminställningen 🟢
 
-Appen har bara ett ljust tema. Tokens, CSS och diagrammall är skrivna för
-ljus bakgrund; ett mörkt läge kräver mörka varianter av alla tokens och en
-kontrastkontroll för båda.
+`.streamlit/config.toml` har `[theme.dark]` och `utils/ui.py` har
+`TOKENS_DARK`; den egna CSS:en och diagrammallen byter till mörka värden
+när webbläsaren eller Streamlit anger mörkt läge. Kontrast (WCAG AA 4,5:1)
+för mörka texttokens testas i `tests/test_design_tokens.py`.
 
-**Aktuell hantering:** Temat är låst till `base = "light"` i
-`.streamlit/config.toml`, så appen ser likadan ut oavsett systeminställning.
+**Kvarvarande risk:** Färger som sätts direkt i vissa diagramserier
+(till exempel staplar) följer ljusa tokens och är inte omprövade för
+mörk bakgrund.
 
 ### Mobil sidomeny stängs inte efter navigering 🟢
 

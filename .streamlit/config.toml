@@ -1,7 +1,6 @@
 # Theme values mirror utils/ui.py TOKENS and CHART_CATEGORICAL;
 # tests/test_design_tokens.py checks that they stay in sync.
 [theme]
-base = "light"
 primaryColor = "#1E40AF"
 backgroundColor = "#FFFFFF"
 secondaryBackgroundColor = "#F2F4F7"
@@ -55,6 +54,22 @@ backgroundColor = "#F7F8FA"
 secondaryBackgroundColor = "#FFFFFF"
 textColor = "#344054"
 borderColor = "#E4E7EC"
+
+[theme.dark]
+base = "dark"
+primaryColor = "#8DA2FB"
+backgroundColor = "#0E1117"
+secondaryBackgroundColor = "#1D2433"
+textColor = "#F2F4F7"
+borderColor = "#2F3747"
+linkColor = "#8DA2FB"
+dataframeHeaderBackgroundColor = "#161B26"
+
+[theme.dark.sidebar]
+backgroundColor = "#161B26"
+secondaryBackgroundColor = "#0E1117"
+textColor = "#B0B8C8"
+borderColor = "#2F3747"
 
 [server]
 headless = true
