@@ -14,7 +14,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from utils.charts import COLORS, apply_layout, show_chart
+from utils.charts import CHART_SEMANTIC, COLORS, apply_layout, show_chart
 from utils.explain import (
     interpret_inflation_tax,
     interpret_monte_carlo,
@@ -42,6 +42,7 @@ from utils.investering import (
     with_residual_and_working_capital,
 )
 from utils.page_blocks import (
+    base_values_bar,
     finish_scenario,
     render_qa_chat,
     render_scenario_controls,
@@ -64,13 +65,17 @@ from utils.state_save import (
     restore_number,
     save_state,
 )
+from utils.tables import fin_dataframe
 from utils.tutor import render_tutor_explanation, tutor_panel
 from utils.ui import (
     APP_UPDATED,
+    TOKENS,
     footer_note,
     inject_css,
     kpi_card,
     page_header,
+    probability_meter,
+    render_kpi_grid,
     render_kpi_row,
     render_sidebar,
 )
@@ -189,6 +194,41 @@ def _effective_investment() -> tuple[list[float], float]:
         float(st.session_state.get("inv_restvarde", 0.0)),
         float(st.session_state.get("inv_rorelsekapital", 0.0)),
     )
+
+
+def _verdict(message: str) -> str:
+    """Bold the first sentence of an already translated decision message.
+
+    The text is split at runtime at the first ". ", so the message string
+    (and its translation) stays exactly as it is; the verdict sentence goes
+    on its own line in bold and the explanation follows in normal weight.
+    """
+    head, sep, rest = message.partition(". ")
+    if not sep:
+        return f"**{message}**"
+    return f"**{head}.**  \n{rest}"
+
+
+def _base_items_tab1() -> list[tuple[str, str]]:
+    """Tab 1's base values for the context bar on tabs 2 to 5."""
+    _, base_initial = _effective_investment()
+    initial_label = (
+        t("Grundinvestering inkl. rörelsekapital")
+        if base_initial != float(st.session_state["inv_initial"])
+        else t("Grundinvestering")
+    )
+    items = [
+        (initial_label, format_sek(base_initial)),
+        (t("Kalkylränta"), format_percent(st.session_state["inv_rate"] / 100.0)),
+        (t("Livslängd"), t("{0} år", st.session_state["inv_years"])),
+    ]
+    if st.session_state.get("inv_restvarde"):
+        items.append((t("Restvärde"), format_sek(float(st.session_state["inv_restvarde"]))))
+    if st.session_state.get("inv_rorelsekapital"):
+        items.append(
+            (t("Rörelsekapital"), format_sek(float(st.session_state["inv_rorelsekapital"])))
+        )
+    return items
 
 
 def _render_investering_llm(
@@ -323,6 +363,7 @@ with tab1:
         st.markdown(t("**Investeringsparametrar**"))
 
         with st.form("inv_basic_form"):
+            st.markdown(t("**Investering**"))
             antal_ar = st.slider(
                 t("Antal år"),
                 min_value=1,
@@ -364,6 +405,7 @@ with tab1:
             cf_df = st.data_editor(
                 st.session_state["inv_cf_df"],
                 use_container_width=True,
+                hide_index=True,
                 num_rows="fixed",
                 key="cf_editor_tab1",
                 column_config={
@@ -433,22 +475,39 @@ with tab1:
 
         # KPI cards
         irr_str = format_percent(irr_val) if irr_val is not None else t("Ej beräkningsbar")
-        irr_variant = (
-            "success" if (irr_val is not None and irr_val >= rate) else "danger"
-        )
         pb_str = format_years(payback_val) if payback_val is not None else t("Ej återbetald")
 
+        # NPV is the headline on its own row; the three secondary metrics
+        # share the next row, so no value is squeezed into a quarter column.
+        if npv_val > 0:
+            npv_status, npv_tone = t("Lönsam"), "positive"
+        elif npv_val < 0:
+            npv_status, npv_tone = t("Ej lönsam"), "negative"
+        else:
+            npv_status, npv_tone = t("På gränsen"), "caution"
         render_kpi_row([
             kpi_card(
                 t("Nuvärde (NPV)"),
                 format_sek(npv_val),
-                variant="success" if npv_val >= 0 else "danger",
+                size="hero",
+                status=npv_status,
+                status_tone=npv_tone,
             ),
-            kpi_card(
-                t("Internränta (IRR)"),
-                irr_str,
-                variant=irr_variant if irr_val is not None else "default",
-            ),
+        ])
+        if irr_val is None:
+            irr_card = kpi_card(t("Internränta (IRR)"), irr_str)
+        elif irr_val >= rate:
+            irr_card = kpi_card(
+                t("Internränta (IRR)"), irr_str,
+                status=t("Över kalkylräntan"), status_tone="positive",
+            )
+        else:
+            irr_card = kpi_card(
+                t("Internränta (IRR)"), irr_str,
+                status=t("Under kalkylräntan"), status_tone="negative",
+            )
+        render_kpi_grid([
+            irr_card,
             kpi_card(t("Återbetalningstid"), pb_str),
             kpi_card(t("Annuitet"), format_sek(annuitet_val) + t("/år")),
         ])
@@ -463,36 +522,42 @@ with tab1:
                 )
             )
 
-        # Recommendation banner
+        # Recommendation banner: verdict line in bold, the rest unchanged.
         if npv_val > 0:
             st.success(
-                t(
+                _verdict(t(
                     "Investeringen rekommenderas. NPV = {0}, vilket är positivt vid kalkylräntan {1} %. Investeringen skapar värde utöver avkastningskravet.",
                     format_sek(npv_val),
                     kalkylranta,
-                )
+                )),
+                icon=":material/check_circle:",
             )
         elif npv_val < 0:
             if irr_val is not None and irr_val < rate:
                 st.error(
-                    t(
+                    _verdict(t(
                         "Investeringen rekommenderas inte. NPV = {0}, vilket är negativt vid kalkylräntan {1} %. De diskonterade kassaflödena täcker inte grundinvesteringen vid detta avkastningskrav: kapitalet kostar mer än vad investeringen genererar. Investeringens internränta är {2}, vilket är den högsta kalkylränta investeringen klarar. Med en kalkylränta på högst {3} blir NPV noll, och en lägre kalkylränta än så gör investeringen lönsam. Kan avkastningskravet inte sänkas behöver kassaflödena förbättras eller grundinvesteringen minskas.",
                         format_sek(npv_val),
                         kalkylranta,
                         format_percent(irr_val),
                         format_percent(irr_val),
-                    )
+                    )),
+                    icon=":material/cancel:",
                 )
             else:
                 st.error(
-                    t(
+                    _verdict(t(
                         "Investeringen rekommenderas inte. NPV = {0}, vilket är negativt vid kalkylräntan {1} %. Kassaflödena räcker inte för att täcka grundinvesteringen oavsett kalkylränta. En lönsam version kräver högre kassaflöden eller en lägre grundinvestering.",
                         format_sek(npv_val),
                         kalkylranta,
-                    )
+                    )),
+                    icon=":material/cancel:",
                 )
         else:
-            st.info(t("Investeringen är precis på gränsen (NPV = 0). Övriga faktorer avgör."))
+            st.info(
+                _verdict(t("Investeringen är precis på gränsen (NPV = 0). Övriga faktorer avgör.")),
+                icon=":material/info:",
+            )
 
         # Bar chart (cash flows) + cumulative discounted line
         years = list(range(1, antal_ar + 1))
@@ -504,8 +569,10 @@ with tab1:
             cumulative_disc.append(running)
 
         fig1 = go.Figure()
+        # Neutral navy bars, muted red only for negative years; the
+        # cumulative line is a dotted slate series on the right axis.
         bar_colors = [
-            COLORS["success"] if cf >= 0 else COLORS["danger"] for cf in cash_flows
+            COLORS["primary"] if cf >= 0 else CHART_SEMANTIC["negative"] for cf in cash_flows
         ]
         fig1.add_trace(go.Bar(
             x=years,
@@ -519,21 +586,16 @@ with tab1:
             y=cumulative_disc,
             name=t("Kumulativt nuvärde (kr)"),
             mode="lines+markers",
-            line=dict(
-                color=COLORS["success"] if npv_val >= 0 else COLORS["danger"],
-                width=2,
-                dash="dot",
-            ),
+            line=dict(color=TOKENS["text_secondary"], width=2, dash="dot"),
+            marker=dict(color=TOKENS["text_secondary"]),
             yaxis="y2",
         ))
-        fig1.add_hline(y=0, line_dash="dot", line_color=COLORS["neutral"], line_width=1)
-        # Axis titles colored to match their series so it is readable
-        # which scale belongs to which trace.
+        fig1.add_hline(y=0, line_dash="dot", line_color=CHART_SEMANTIC["reference"], line_width=1)
         fig1.update_layout(
             yaxis=dict(
                 title=dict(
                     text=t("Kassaflöde (kr)"),
-                    font=dict(color=COLORS["primary"]),
+                    font=dict(color=TOKENS["text_secondary"]),
                 ),
             ),
             yaxis2=dict(
@@ -541,9 +603,7 @@ with tab1:
                 side="right",
                 title=dict(
                     text=t("Kumulativt nuvärde (kr)"),
-                    font=dict(
-                        color=COLORS["success"] if npv_val >= 0 else COLORS["danger"]
-                    ),
+                    font=dict(color=TOKENS["text_secondary"]),
                 ),
             ),
         )
@@ -581,6 +641,14 @@ with tab1:
                 x=[irr_val * 100], y=[0], mode="markers", name=t("IRR (NPV = 0)"),
                 marker=dict(color=COLORS["danger"], size=11, symbol="circle"),
             ))
+            fig_prof.add_annotation(
+                x=irr_val * 100, y=0,
+                text=t("IRR {0}", format_percent(irr_val)),
+                showarrow=True, arrowhead=0, arrowcolor=TOKENS["text_secondary"],
+                ax=0, ay=-32,
+                font=dict(color=TOKENS["text_primary"], size=12),
+                bgcolor="rgba(255,255,255,0.88)",
+            )
         apply_layout(fig_prof, title=t("NPV-profil: nuvärde vid olika kalkylräntor"), height=340)
         fig_prof.update_xaxes(title_text=t("Kalkylränta (%)"))
         fig_prof.update_yaxes(title_text=t("NPV (kr)"))
@@ -725,20 +793,10 @@ with tab2:
     base_cfs, base_inv = _effective_investment()
     base_rate = st.session_state["inv_rate"] / 100.0
 
-    _includes_extra = (
-        base_inv != float(st.session_state["inv_initial"])
-        or bool(st.session_state.get("inv_restvarde"))
-    )
-    st.caption(
-        t(
-            "Basparametrar från **Grundläggande metoder**: grundinvestering {0} • "
-            "kalkylränta {1} • livslängd {2} år{3}. Ändra dem i den första fliken "
-            "för att uppdatera känslighetsanalysen.",
-            format_sek(base_inv),
-            format_percent(base_rate),
-            st.session_state["inv_years"],
-            t(" (inklusive restvärde och rörelsekapital)") if _includes_extra else "",
-        )
+    # Sensitivity reads tab 1 live, so the bar has no pull button.
+    base_values_bar(
+        _base_items_tab1(),
+        note=t("Ändra dem i den första fliken för att uppdatera känslighetsanalysen."),
     )
 
     col_sa_in, col_sa_res = st.columns([1, 3], gap="large")
@@ -979,21 +1037,25 @@ with tab3:
 
     # The button sits above the inputs, so on the click run it can still
     # write their session keys before they are created.
-    _it_pull_col, _it_cap_col = st.columns([1, 3])
-    with _it_pull_col:
-        if st.button(t("Hämta värden från Grundläggande metoder"), key="it_pull_tab1",
-                     use_container_width=True):
-            st.session_state["it_real_rate_pct"] = float(st.session_state["inv_rate"])
-            st.session_state["it_depreciation"] = float(st.session_state["inv_initial"]) / max(
-                int(st.session_state["inv_years"]), 1
-            )
-    with _it_cap_col:
-        st.caption(
-            t(
-                "Real kalkylränta och avskrivning följer inte automatiskt med när du ändrar flik 1 (kalkylränta just nu: {0} %, rak avskrivning {1}/år). Tryck på knappen för att hämta dem.",
-                format_number(float(st.session_state['inv_rate']), 1),
-                format_sek(float(st.session_state['inv_initial']) / max(int(st.session_state['inv_years']), 1)),
-            )
+    _it_straight_line = float(st.session_state["inv_initial"]) / max(
+        int(st.session_state["inv_years"]), 1
+    )
+    if base_values_bar(
+        [
+            (t("Kalkylränta"), format_percent(st.session_state["inv_rate"] / 100.0)),
+            (t("Rak avskrivning per år"), format_sek(_it_straight_line)),
+        ],
+        button_label=t("Hämta värden från Grundläggande metoder"),
+        button_key="it_pull_tab1",
+        note=t(
+            "Real kalkylränta och avskrivning följer inte automatiskt med när du ändrar flik 1 (kalkylränta just nu: {0} %, rak avskrivning {1}/år). Tryck på knappen för att hämta dem.",
+            format_number(float(st.session_state['inv_rate']), 1),
+            format_sek(_it_straight_line),
+        ),
+    ):
+        st.session_state["it_real_rate_pct"] = float(st.session_state["inv_rate"])
+        st.session_state["it_depreciation"] = float(st.session_state["inv_initial"]) / max(
+            int(st.session_state["inv_years"]), 1
         )
 
     col_it_in, col_it_res = st.columns([1, 2], gap="large")
@@ -1224,24 +1286,22 @@ with tab4:
             except (ValueError, TypeError):
                 pass
 
-    _mc_pull_col, _mc_cap_col = st.columns([1, 3])
-    with _mc_pull_col:
-        if st.button(t("Hämta värden från Grundläggande metoder"), key="mc_pull_tab1",
-                     use_container_width=True):
-            _eff_flows, _eff_initial = _effective_investment()
-            st.session_state["mc_inv_mean"] = _eff_initial
-            st.session_state["mc_inv_std"] = _eff_initial * 0.10
-            st.session_state["mc_rate_mean"] = float(st.session_state["inv_rate"])
-            st.session_state["mc_cf_df"] = _init_mc_cf_df(len(_eff_flows), _eff_flows)
-            st.session_state.pop("mc_last_result", None)
-    with _mc_cap_col:
-        st.caption(
-            t(
-                "Grundinvestering, kalkylränta och kassaflöden följer inte automatiskt med när du ändrar flik 1 (grundinvestering just nu: {0}, kalkylränta {1} %). Tryck på knappen för att hämta dem, inklusive restvärde och rörelsekapital.",
-                format_sek(float(st.session_state['inv_initial'])),
-                format_number(float(st.session_state['inv_rate']), 1),
-            )
-        )
+    if base_values_bar(
+        _base_items_tab1(),
+        button_label=t("Hämta värden från Grundläggande metoder"),
+        button_key="mc_pull_tab1",
+        note=t(
+            "Grundinvestering, kalkylränta och kassaflöden följer inte automatiskt med när du ändrar flik 1 (grundinvestering just nu: {0}, kalkylränta {1} %). Tryck på knappen för att hämta dem, inklusive restvärde och rörelsekapital.",
+            format_sek(float(st.session_state['inv_initial'])),
+            format_number(float(st.session_state['inv_rate']), 1),
+        ),
+    ):
+        _eff_flows, _eff_initial = _effective_investment()
+        st.session_state["mc_inv_mean"] = _eff_initial
+        st.session_state["mc_inv_std"] = _eff_initial * 0.10
+        st.session_state["mc_rate_mean"] = float(st.session_state["inv_rate"])
+        st.session_state["mc_cf_df"] = _init_mc_cf_df(len(_eff_flows), _eff_flows)
+        st.session_state.pop("mc_last_result", None)
 
     col_mc_in, col_mc_res = st.columns([1, 2], gap="large")
 
@@ -1318,6 +1378,7 @@ with tab4:
         mc_cf_df = st.data_editor(
             st.session_state[mc_cf_key],
             use_container_width=True,
+            hide_index=True,
             num_rows="fixed",
             column_config={
                 "År": st.column_config.NumberColumn(t("År"), disabled=True, width="small"),
@@ -1367,8 +1428,9 @@ with tab4:
         mc_result = st.session_state.get("mc_last_result")
 
         if mc_result is not None:
-            # 4 KPI metrics
-            render_kpi_row([
+            # Four KPIs in a wrapping grid (four or two per row), so the
+            # values stay legible in the results column on narrow screens.
+            render_kpi_grid([
                 kpi_card(t("Medel-NPV"), format_sek(mc_result["mean"])),
                 kpi_card(t("Median-NPV"), format_sek(mc_result["median"])),
                 kpi_card(
@@ -1381,31 +1443,10 @@ with tab4:
                 ),
             ])
 
-            # Probability of positive NPV — prominent display
+            # Probability of positive NPV; the meter's status word uses the
+            # same limits as the decision text below, so the two agree.
             prob_pct = mc_result["prob_positive_npv"] * 100
-            if prob_pct >= 60:
-                prob_color = COLORS["success"]
-            elif prob_pct >= 40:
-                prob_color = COLORS["warning"]
-            else:
-                prob_color = COLORS["danger"]
-
-            st.markdown(
-                f"""
-                <div style="text-align:center;padding:20px;margin:16px 0;
-                            background:{prob_color}1A;border-radius:8px;
-                            border:2px solid {prob_color};">
-                    <div style="font-size:2.8rem;font-weight:700;color:{prob_color};
-                                font-family:'IBM Plex Mono',monospace;">
-                        {prob_pct:.1f} %
-                    </div>
-                    <div style="font-size:1rem;color:#111827;margin-top:4px;">
-                        {t("Sannolikhet för positivt NPV")}
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+            st.html(probability_meter(prob_pct))
 
             # Histogram with vertical reference lines. Annotations are placed
             # at staggered y positions (yref="paper") so the four labels don't
@@ -1420,10 +1461,10 @@ with tab4:
                 opacity=0.75,
             ))
             vline_specs = [
-                (0, COLORS["danger"], "NPV = 0", 0.96),
-                (mc_result["p5"], "#F97316", f"P5: {format_sek(mc_result['p5'])}", 0.84),
+                (0, CHART_SEMANTIC["negative"], "NPV = 0", 0.96),
+                (mc_result["p5"], CHART_SEMANTIC["caution"], f"P5: {format_sek(mc_result['p5'])}", 0.84),
                 (mc_result["median"], COLORS["primary"], f"Median: {format_sek(mc_result['median'])}", 0.72),
-                (mc_result["mean"], "#7C3AED", f"Medel: {format_sek(mc_result['mean'])}", 0.60),
+                (mc_result["mean"], TOKENS["text_secondary"], f"Medel: {format_sek(mc_result['mean'])}", 0.60),
             ]
             for val, color, _label, _y in vline_specs:
                 fig4.add_vline(x=val, line_dash="dash", line_color=color)
@@ -1601,7 +1642,11 @@ with tab5:
             else:
                 restore_number(_cmp_saved, _k)
 
-    if st.button(t("Hämta alternativ A från Grundläggande metoder"), key="cmp_pull_tab1"):
+    if base_values_bar(
+        _base_items_tab1(),
+        button_label=t("Hämta alternativ A från Grundläggande metoder"),
+        button_key="cmp_pull_tab1",
+    ):
         _eff_flows, _eff_initial = _effective_investment()
         st.session_state["cmp_rate"] = float(st.session_state["inv_rate"])
         st.session_state["cmp_a_initial"] = _eff_initial
@@ -1690,6 +1735,9 @@ with tab5:
 
     inv_cmp_export_slot, inv_cmp_reset_slot = results_toolbar()
 
+    # The winner is only recommended when it has a positive value (the
+    # same condition as the success message below).
+    _recommended = _best_row[_value_col] > 0
     render_kpi_row([
         kpi_card(
             f"{'NPV' if criterion == 'npv' else t('Annuitet av NPV')}: {row['name']}",
@@ -1702,24 +1750,40 @@ with tab5:
                 if row["name"] == _best_row["name"] else None
             ),
             delta_direction="up",
+            status=(
+                t("Rekommenderas")
+                if _recommended and row["name"] == _best_row["name"] else None
+            ),
+            status_tone="positive",
         )
         for _, row in cmp_df.iterrows()
     ])
 
+    # One row per alternative, numeric columns. IRR and payback can be
+    # undefined; those cells keep the text "Ej definierad"/"Ej återbetald",
+    # so the two columns are pre-formatted strings, right-aligned.
+    def _defined(value: object) -> bool:
+        return value is not None and not pd.isna(value)
+
     _cmp_table = pd.DataFrame({
-        "Mått": ["Livslängd", "NPV (kr)", "Annuitet av NPV (kr/år)", "IRR", "Payback"],
-        **{
-            str(row["name"]): [
-                f"{int(row['years'])} år",
-                format_sek(row["npv"]),
-                format_sek(row["annuity"]),
-                format_percent(row["irr"]) if row["irr"] is not None and not pd.isna(row["irr"]) else "Ej definierad",
-                format_years(row["payback"]) if row["payback"] is not None and not pd.isna(row["payback"]) else "Ej återbetald",
-            ]
-            for _, row in cmp_df.iterrows()
-        },
+        "Alternativ": [str(n) for n in cmp_df["name"]],
+        "Livslängd": [float(y) for y in cmp_df["years"]],
+        "NPV (kr)": [float(v) for v in cmp_df["npv"]],
+        "Annuitet av NPV (kr/år)": [float(v) for v in cmp_df["annuity"]],
+        "IRR": [
+            format_percent(v) if _defined(v) else t("Ej definierad") for v in cmp_df["irr"]
+        ],
+        "Payback": [
+            format_years(v) if _defined(v) else t("Ej återbetald") for v in cmp_df["payback"]
+        ],
     })
-    st.dataframe(t_frame(_cmp_table), use_container_width=True, hide_index=True)
+    fin_dataframe(
+        _cmp_table,
+        money=["NPV (kr)", "Annuitet av NPV (kr/år)"],
+        years=["Livslängd"],
+        text=["Alternativ"],
+        right_text=["IRR", "Payback"],
+    )
 
     if _best_row[_value_col] <= 0 and _other_row[_value_col] <= 0:
         st.error(

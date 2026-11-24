@@ -47,7 +47,7 @@ from utils.llm import (
 from utils.prompts import QA_QUESTION_MAX_CHARS, build_qa_prompt
 from utils.scenario_continuity import render_adopt_button
 from utils.scenarios import generate_scenario, set_current_scenario
-from utils.ui import SCENARIO_DIFFICULTY_HELP, render_session_cap_card
+from utils.ui import SCENARIO_DIFFICULTY_HELP, base_values_html, render_session_cap_card
 
 DIFFICULTY_OPTIONS = ("Lätt", "Medel", "Svår")
 DIFFICULTY_MAP = {"Lätt": "latt", "Medel": "medel", "Svår": "svar"}
@@ -361,3 +361,35 @@ def toolbar_reset(slot: DeltaGenerator, label: str, *, key: str) -> bool:
     clicked; the page keeps its own reset logic.
     """
     return slot.button(label, key=key, type="tertiary", icon=":material/restart_alt:")
+
+
+# ---------------------------------------------------------------------------
+# Base-values bar (values a tab takes from another tab)
+# ---------------------------------------------------------------------------
+
+
+def base_values_bar(
+    items: list[tuple[str, str]],
+    button_label: str | None = None,
+    button_key: str | None = None,
+    note: str | None = None,
+) -> bool:
+    """Bordered context bar: "Basvärden från Grundläggande metoder".
+
+    ``items`` are (label, value) pairs, both already translated and
+    formatted; they are escaped. With ``button_label`` a secondary button
+    is shown under the values and the function returns True on the run it
+    was clicked, so the caller can write session keys before the widgets
+    below the bar are created. ``note`` is an optional caption (markdown).
+    """
+    clicked = False
+    with st.container(border=True):
+        st.markdown(t("**Basvärden från Grundläggande metoder**"))
+        st.html(base_values_html(items))
+        if note:
+            st.caption(note)
+        if button_label is not None:
+            clicked = st.button(
+                button_label, key=button_key, icon=":material/sync:"
+            )
+    return clicked
