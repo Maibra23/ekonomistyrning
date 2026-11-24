@@ -285,3 +285,20 @@ def test_fin_dataframe_total_row_blanks_are_not_missing_values(tmp_path):
     shown = dataframe_util.convert_arrow_bytes_to_pandas_df(arrow.styler.display_values)
     assert list(shown["Per styck"]) == [f"1,50{NBSP}kr", f"2,50{NBSP}kr", ""]
     assert list(shown["Total"])[-1] == f"30{NBSP}kr"
+
+
+def test_fin_dataframe_total_row_keeps_columns_arrow_compatible():
+    import pyarrow as pa
+
+    df = pd.DataFrame({"Produkt": ["A", "B"], "Kostnad": [100.0, 200.0], "Per styck": [1.5, 2.5]})
+    captured = {}
+    with patch.object(tables.st, "dataframe", lambda s, **k: captured.setdefault("s", s)):
+        tables.fin_dataframe(
+            df, text=["Produkt"], money=["Kostnad", "Per styck"],
+            money_decimals={"Per styck": 2}, total_row="Summa", total_skip=["Per styck"],
+        )
+    data = captured["s"].data
+    pa.Table.from_pandas(data)  # mixed number/str columns would raise here
+    assert data["Kostnad"].iloc[-1] == 300.0
+    assert data["Per styck"].iloc[-1] == ""
+    assert data["Per styck"].iloc[0].startswith("1,50")

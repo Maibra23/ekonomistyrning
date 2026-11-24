@@ -170,11 +170,18 @@ def fin_dataframe(
     if total_row is not None:
         # The grid draws a missing raw value as "None" whatever the Styler
         # display value says, so blank cells of the total row (per-unit and
-        # text columns) hold an empty string instead.
+        # text columns) hold an empty string instead. A numeric column with
+        # a blank cell is pre-formatted to display text as a whole: a mixed
+        # number/str column fails Arrow serialisation (a traceback per render
+        # and Streamlit's own lossy fallback).
         for pos in range(shown.shape[1]):
             if pd.isna(shown.iat[-1, pos]):
                 col = shown.columns[pos]
-                shown[col] = shown[col].astype(object)
+                fmt = formats.pop(col, None)
+                values = shown[col].astype(object)
+                if fmt is not None:
+                    values = values.map(lambda v, f=fmt: "" if pd.isna(v) else f(v))
+                shown[col] = values
                 shown.iat[-1, pos] = ""
     styler = shown.style.format(formats, na_rep="")
     if total_row is not None:
