@@ -95,6 +95,41 @@ def test_offline_step_guide_shows_worked_example():
     assert any("Påläggsmetoden, per styck" in m.value for m in at.markdown)
 
 
+def _shown_tables(at: AppTest) -> list:
+    from streamlit import dataframe_util
+
+    return [
+        dataframe_util.convert_arrow_bytes_to_pandas_df(
+            df.proto.arrow_data.styler.display_values
+        )
+        for df in at.dataframe
+        if df.proto.arrow_data.styler.display_values  # skips the data editors
+    ]
+
+
+def test_kalkyl_abc_table_has_readable_headers_and_summa():
+    at = _run("pages/1_Kalkyl.py")
+    nbsp = " "
+    tables = _shown_tables(at)
+    abc = next(t for t in tables if "Kostnad per styck (kr)" in t.columns)
+    assert not any("_" in str(c) for c in abc.columns)
+    assert list(abc["Produkt"]) == ["Standardrevision", "Komplex revision", "Summa"]
+    # Hand calculation for the defaults: 1.8 + 2.55 Mkr and 2.0 + 4.55 Mkr.
+    assert list(abc["Total kostnad (kr)"]) == [
+        f"4{nbsp}350{nbsp}000{nbsp}kr", f"6{nbsp}550{nbsp}000{nbsp}kr",
+        f"10{nbsp}900{nbsp}000{nbsp}kr",
+    ]
+    assert list(abc["Planering (kr)"])[-1] == f"2{nbsp}400{nbsp}000{nbsp}kr"
+    # A sum of per-unit costs means nothing, so that cell stays empty.
+    assert list(abc["Kostnad per styck (kr)"])[-1] == ""
+    cmp = next(t for t in tables if "Bedömning" in t.columns)
+    assert list(cmp["Produkt"])[-1] == "Summa"
+    assert set(cmp["Bedömning"][:2]) <= {
+        "Traditionell överkalkylerar", "Traditionell underkalkylerar", "Ingen skillnad",
+    }
+    assert list(cmp["Per styck ABC"])[-1] == ""
+
+
 def test_quiz_offline_numeric_question_is_answerable():
     at = _run("pages/5_Kunskapstest.py")
     at.selectbox[2].set_value("numerisk")

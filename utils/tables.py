@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import html
 import math
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any, Literal, NotRequired, TypedDict
 
 import pandas as pd
@@ -108,12 +108,13 @@ def fin_dataframe(
     df: pd.DataFrame,
     *,
     money: Sequence[str] = (),
-    money_decimals: int | None = None,
+    money_decimals: int | Mapping[str, int] | None = None,
     pct: Sequence[str] = (),
     num: Sequence[str] = (),
     years: Sequence[str] = (),
     text: Sequence[str] = (),
     total_row: str | None = None,
+    total_skip: Sequence[str] = (),
     hide_index: bool = True,
     key: str | None = None,
     height: int | None = None,
@@ -126,13 +127,17 @@ def fin_dataframe(
     the sums of the ``money`` and ``num`` columns, shown in bold. Headers
     and text cells are translated with ``t_frame``. ``num`` columns show no
     decimals when their dtype is integer, else two.
+
+    ``money_decimals`` may also map column names to decimals (columns not
+    in the mapping get 0). ``total_skip`` lists columns whose sum means
+    nothing (per-unit figures); their cell in the total row stays empty.
     """
     data = df.copy()
     if total_row is not None:
         data = _with_total_row(
             data,
             label=total_row,
-            sum_cols=[*money, *num],
+            sum_cols=[c for c in (*money, *num) if c not in total_skip],
             label_col=_label_column(data, text),
         )
 
@@ -141,8 +146,11 @@ def fin_dataframe(
     names = dict(zip(data.columns, shown.columns, strict=True))
 
     formats: dict[Any, Callable[[Any], str]] = {}
-    dec = 0 if money_decimals is None else money_decimals
     for col in money:
+        if isinstance(money_decimals, Mapping):
+            dec = money_decimals.get(col, 0)
+        else:
+            dec = 0 if money_decimals is None else money_decimals
         formats[names[col]] = _formatter(format_sek, decimals=dec)
     for col in pct:
         formats[names[col]] = _formatter(format_percent)
