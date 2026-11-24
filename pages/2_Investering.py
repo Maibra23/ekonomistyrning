@@ -405,7 +405,7 @@ with tab1:
             st.markdown(t("**Kassaflöden per år**"))
             cf_df = st.data_editor(
                 st.session_state["inv_cf_df"],
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
                 num_rows="fixed",
                 key="cf_editor_tab1",
@@ -1075,7 +1075,7 @@ with tab3:
         )
         st.dataframe(
             t_frame(_tab3_display_cf),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
         it_cf_df = st.session_state["inv_cf_df"]
@@ -1381,7 +1381,7 @@ with tab4:
 
         mc_cf_df = st.data_editor(
             st.session_state[mc_cf_key],
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
             num_rows="fixed",
             column_config={
@@ -1406,7 +1406,7 @@ with tab4:
             },
         )
 
-        run_sim = st.button(t("Kör simulering"), type="primary", use_container_width=True)
+        run_sim = st.button(t("Kör simulering"), type="primary", width="stretch")
 
     with col_mc_res:
         inv_mc_export_slot, inv_mc_reset_slot = results_toolbar()

@@ -124,13 +124,13 @@ def render_scenario_controls(
             generate = st.button(
                 t("Generera ett exempelföretag"),
                 key=f"{prefix}_gen_scenario",
-                use_container_width=True,
+                width="stretch",
             )
         reset = False
         if reset_label:
             with cols[2]:
                 reset = st.button(
-                    t(reset_label), key=f"{prefix}_reset_defaults", use_container_width=True
+                    t(reset_label), key=f"{prefix}_reset_defaults", width="stretch"
                 )
 
         adopt = render_adopt_button(module, f"{prefix}_adopt_scenario")

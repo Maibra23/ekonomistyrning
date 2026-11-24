@@ -144,7 +144,7 @@ def show_chart(fig: go.Figure, *, key: str | None = None) -> None:
     """Render a Plotly figure full-width with the shared toolbar config."""
     import streamlit as st  # local import keeps the module usable without Streamlit
 
-    st.plotly_chart(fig, use_container_width=True, config=dict(CHART_CONFIG), key=key)
+    st.plotly_chart(fig, width="stretch", config=dict(CHART_CONFIG), key=key)
 
 
 def color_by_sign(value: float, favorable_when_negative: bool = False) -> str:

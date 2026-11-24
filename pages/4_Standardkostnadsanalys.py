@@ -263,7 +263,7 @@ with tab1:
         items_df: pd.DataFrame = st.data_editor(
             st.session_state["sk_items_df"],
             num_rows="dynamic",
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
             key="sk_items_de",
             column_config={

@@ -902,7 +902,7 @@ with tab_abc:
             act_df: pd.DataFrame = st.data_editor(
                 st.session_state.abc_act_df,
                 num_rows="dynamic",
-                use_container_width=True,
+                width="stretch",
                 key="abc_act_de",
                 column_config={
                     "Aktivitet": st.column_config.TextColumn(t("Aktivitet"), required=True),
@@ -921,7 +921,7 @@ with tab_abc:
             prod_df: pd.DataFrame = st.data_editor(
                 _align_products(st.session_state.abc_prod_df, act_names_now),
                 num_rows="dynamic",
-                use_container_width=True,
+                width="stretch",
                 key="abc_prod_de",
                 column_config={
                     "Produkt": st.column_config.TextColumn(t("Produkt"), required=True),

@@ -1515,7 +1515,7 @@ def _render_current_scenario_banner() -> None:
     if st.button(
         t("Rensa aktuellt företag"),
         key="eks_clear_current_scenario",
-        use_container_width=True,
+        width="stretch",
     ):
         clear_current_scenario()
         st.rerun()

@@ -405,7 +405,7 @@ with st.expander(t("Steg 1: Resultatbudget"), expanded=True):
             )
             st.session_state["bud_skattesats"] = skattesats
             bud_step1_form_submit = st.form_submit_button(
-                t("Uppdatera värden"), type="primary", use_container_width=True
+                t("Uppdatera värden"), type="primary", width="stretch"
             )
 
     with col_res1:
@@ -463,7 +463,7 @@ with st.expander(t("Steg 1: Resultatbudget"), expanded=True):
             display_resultat["Belopp (kr)"] = display_resultat["Belopp"].apply(format_sek)
             st.dataframe(
                 t_frame(display_resultat[["Post", "Belopp (kr)"]]),
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
             )
 
@@ -586,7 +586,7 @@ with st.expander(t("Steg 2: Likviditetsbudget"), expanded=True):
             )
             st.session_state["bud_finansiering"] = finansiering_belopp
             bud_step2_form_submit = st.form_submit_button(
-                t("Uppdatera värden"), type="primary", use_container_width=True
+                t("Uppdatera värden"), type="primary", width="stretch"
             )
 
     with col_res2:
@@ -667,7 +667,7 @@ with st.expander(t("Steg 2: Likviditetsbudget"), expanded=True):
             display_likviditet["Belopp (kr)"] = display_likviditet["Belopp"].apply(format_sek)
             st.dataframe(
                 t_frame(display_likviditet[["Post", "Belopp (kr)"]]),
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
             )
 
@@ -819,7 +819,7 @@ with st.expander(t("Steg 3: Balansbudget"), expanded=True):
             )
             st.caption(":material/link: " + t("Synkad från steg 1"))
             bud_step3_form_submit = st.form_submit_button(
-                t("Uppdatera värden"), type="primary", use_container_width=True
+                t("Uppdatera värden"), type="primary", width="stretch"
             )
 
     with col_res3:
@@ -889,7 +889,7 @@ with st.expander(t("Steg 3: Balansbudget"), expanded=True):
             display_balans["Utgående (kr)"] = display_balans["Utgaende"].apply(_fmt_or_blank)
             st.dataframe(
                 t_frame(display_balans[["Post", "Ingående (kr)", "Utgående (kr)"]]),
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
             )
 
@@ -1122,7 +1122,7 @@ with st.expander(t("Steg 4: Likviditetsbudget per månad"), expanded=False):
         edited_season = st.data_editor(
             season_df,
             hide_index=True,
-            use_container_width=True,
+            width="stretch",
             disabled=["Månad"] if season_choice == "Egen" else True,
             key="bud_season_editor",
             column_config={

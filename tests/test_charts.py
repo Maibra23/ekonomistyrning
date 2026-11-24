@@ -84,7 +84,7 @@ def test_show_chart_passes_shared_config():
     args, kwargs = fake_st.plotly_chart.call_args
     assert args[0] is fig
     assert kwargs["key"] == "k1"
-    assert kwargs["use_container_width"] is True
+    assert kwargs["width"] == "stretch"
     config = kwargs["config"]
     assert config["displaylogo"] is False
     assert set(config["modeBarButtonsToRemove"]) == {"lasso2d", "select2d", "autoScale2d"}

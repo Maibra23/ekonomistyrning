@@ -75,11 +75,11 @@ def render_landing() -> None:
             t("Börja med Kalkylering"),
             type="primary",
             icon=":material/arrow_forward:",
-            use_container_width=True,
+            width="stretch",
         ):
             st.switch_page("pages/1_Kalkyl.py")
     with cta_secondary:
-        if st.button(t("Gör ett kunskapstest"), use_container_width=True):
+        if st.button(t("Gör ett kunskapstest"), width="stretch"):
             st.switch_page("pages/5_Kunskapstest.py")
 
     # --- Interconnected module map ---------------------------------------

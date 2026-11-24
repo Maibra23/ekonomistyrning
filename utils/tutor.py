@@ -154,7 +154,7 @@ def render_tutor_explanation(
             # Secondary always: the section's primary action is its compute
             # or submit button, never the explanation.
             type="secondary",
-            use_container_width=True,
+            width="stretch",
         )
     with info_col:
         if help_text and not is_fresh:
@@ -256,14 +256,14 @@ def render_step_guide(
     clicked = cols[0].button(
         t(btn_label),
         key=f"{state_key}__btn",
-        use_container_width=True,
+        width="stretch",
     )
     cleared = False
     if has_cache:
         cleared = cols[1].button(
             t(clear_label),
             key=f"{state_key}__clear",
-            use_container_width=True,
+            width="stretch",
         )
 
     if cleared:
