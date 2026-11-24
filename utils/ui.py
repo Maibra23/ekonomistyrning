@@ -446,6 +446,81 @@ section[data-testid="stSidebar"] div[data-testid="stPageLink"] a {
 .eks-kpi-delta.delta-down { color: %(negative)s; }
 .eks-kpi-delta.delta-flat { color: %(text_tertiary)s; }
 
+/* --- Investering components: KPI grid ---
+   Wraps to the next line instead of squeezing cards below 180 px; cards in
+   a row share one height. */
+.eks-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+}
+
+/* --- Investering components: probability meter --- */
+.eks-meter {
+    background: %(canvas)s;
+    border: 1px solid %(border)s;
+    border-radius: 4px;
+    padding: 18px 20px;
+    margin: 8px 0 16px;
+}
+.eks-meter-head {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+}
+.eks-meter-value {
+    font-family: %(font_ui)s;
+    font-size: 40px;
+    font-weight: 700;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    color: %(text_primary)s;
+}
+.eks-meter-track {
+    height: 8px;
+    border-radius: 999px;
+    background: %(surface_input)s;
+    overflow: hidden;
+    margin: 12px 0 8px;
+}
+.eks-meter-fill { height: 100%%; border-radius: 999px; }
+.eks-meter--positive .eks-meter-fill { background: %(positive)s; }
+.eks-meter--caution .eks-meter-fill  { background: %(caution)s; }
+.eks-meter--negative .eks-meter-fill { background: %(negative)s; }
+.eks-meter-label {
+    font-family: %(font_ui)s;
+    font-size: 13px;
+    color: %(text_secondary)s;
+}
+
+/* --- Investering components: base-values bar --- */
+.eks-base-values {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 24px;
+    margin: 0;
+}
+.eks-base-values > div { min-width: 0; }
+.eks-base-values dt {
+    font-family: %(font_ui)s;
+    font-size: 11.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: %(text_tertiary)s;
+}
+.eks-base-values dd {
+    margin: 0;
+    font-family: %(font_ui)s;
+    font-size: 15px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    color: %(text_primary)s;
+}
+
 /* --- Stat strip (quiet inline row) --- */
 .eks-stat-strip {
     display: flex;
@@ -1175,6 +1250,66 @@ def footer_note(version: str = APP_VERSION, updated: str = "") -> str:
         f'<span class="eks-footer-version">v{version}</span>'
         f"</div>"
     )
+
+
+# --- Investering components ---
+
+
+def render_kpi_grid(cards: list[str]) -> None:
+    """Render kpi_card() HTML strings in a wrapping grid.
+
+    Unlike :func:`render_kpi_row` (one Streamlit column per card), the grid
+    moves a card to the next line when it would get narrower than 180 px,
+    so values in a narrow results column keep a legible size.
+    """
+    st.html(f'<div class="eks-kpi-grid">{"".join(cards)}</div>')
+
+
+def probability_meter(prob_pct: float, thresholds: tuple[float, float] = (70.0, 50.0)) -> str:
+    """Probability meter for "probability of a positive NPV".
+
+    Shows the percentage large, an 8 px track filled to the value, a status
+    pill ("Hög"/"Måttlig"/"Låg") and the label. ``thresholds`` are the
+    (high, moderate) limits in percent; the defaults are the ones the
+    Monte Carlo decision text uses, so the meter and the text always agree.
+
+    Args:
+        prob_pct: Probability in percent (0 to 100). Clamped.
+        thresholds: (high, moderate) limits in percent.
+    """
+    p = max(0.0, min(100.0, float(prob_pct)))
+    high, moderate = thresholds
+    if p >= high:
+        tone, word = "positive", t("Hög")
+    elif p >= moderate:
+        tone, word = "caution", t("Måttlig")
+    else:
+        tone, word = "negative", t("Låg")
+    shown = f"{p:.1f}".replace(".", ",") + " %"
+    label = t("Sannolikhet för positivt NPV")
+    return (
+        f'<div class="eks-meter eks-meter--{tone}" role="meter" '
+        f'aria-valuenow="{p:.1f}" aria-valuemin="0" aria-valuemax="100" '
+        f'aria-valuetext="{html.escape(shown + " " + word, quote=True)}" '
+        f'aria-label="{html.escape(label, quote=True)}">'
+        f'<div class="eks-meter-head">'
+        f'<span class="eks-meter-value">{shown}</span>'
+        f"{status_pill(word, tone)}"
+        f"</div>"
+        f'<div class="eks-meter-track"><div class="eks-meter-fill" '
+        f'style="width:{p:.1f}%"></div></div>'
+        f'<div class="eks-meter-label">{html.escape(label)}</div>'
+        f"</div>"
+    )
+
+
+def base_values_html(items: list[tuple[str, str]]) -> str:
+    """Label/value pairs of a base-values bar as an escaped ``<dl>``."""
+    cells = "".join(
+        f"<div><dt>{html.escape(label)}</dt><dd>{html.escape(value)}</dd></div>"
+        for label, value in items
+    )
+    return f'<dl class="eks-base-values">{cells}</dl>'
 
 
 # ---------------------------------------------------------------------------

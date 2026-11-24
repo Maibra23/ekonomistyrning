@@ -113,6 +113,7 @@ def fin_dataframe(
     num: Sequence[str] = (),
     years: Sequence[str] = (),
     text: Sequence[str] = (),
+    right_text: Sequence[str] = (),
     total_row: str | None = None,
     total_skip: Sequence[str] = (),
     hide_index: bool = True,
@@ -131,6 +132,10 @@ def fin_dataframe(
     ``money_decimals`` may also map column names to decimals (columns not
     in the mapping get 0). ``total_skip`` lists columns whose sum means
     nothing (per-unit figures); their cell in the total row stays empty.
+
+    ``right_text`` columns hold pre-formatted strings (a number column with
+    text for missing values, e.g. "Ej definierad") and are right-aligned
+    like numbers.
     """
     data = df.copy()
     if total_row is not None:
@@ -167,7 +172,7 @@ def fin_dataframe(
         )
 
     column_config: dict[Any, Any] = {}
-    for col in (*money, *pct, *num, *years):
+    for col in (*money, *pct, *num, *years, *right_text):
         column_config[names[col]] = st.column_config.Column(alignment="right")
     for col in text:
         if col in names:
