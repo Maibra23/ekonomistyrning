@@ -721,7 +721,6 @@ EN: dict[str, str] = {
     "Stark": "Strong",
     "Svag": "Weak",
     "Trygg": "Safe",
-    "Låg": "Low",
     "Positiv": "Positive",
     "Negativ": "Negative",
     "riktvärde ≥ 20 %": "benchmark ≥ 20 %",
