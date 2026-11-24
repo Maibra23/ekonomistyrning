@@ -1129,7 +1129,7 @@ with tab3:
         )
 
     with col_it_res:
-        _, inv_inflation_reset_slot = results_toolbar()
+        inv_inflation_export_slot, inv_inflation_reset_slot = results_toolbar()
         it_cfs = it_cf_df["Kassaflöde (kr)"].tolist()
 
         if not it_cfs:
@@ -1212,6 +1212,48 @@ with tab3:
                     format_number(inflation_pct, 1),
                     format_number(nom_rate * 100, 2),
                 )
+            )
+
+            it_export_df = pd.DataFrame({
+                "Mått": [
+                    "Real kalkylränta", "Inflationstakt", "Skattesats",
+                    "Avskrivning per år", "Grundinvestering",
+                    "Nominell kalkylränta", "NPV före skatt", "NPV efter skatt",
+                ],
+                "Värde": [
+                    format_percent(real_rate_pct / 100.0),
+                    format_percent(inflation_pct / 100.0),
+                    format_percent(tax_pct / 100.0),
+                    format_sek(depreciation),
+                    format_sek(float(st.session_state["inv_initial"])),
+                    format_percent(nom_rate),
+                    format_sek(it_res["npv_before_tax"]),
+                    format_sek(it_res["npv_after_tax"]),
+                ],
+            })
+            it_npv_df = pd.DataFrame({
+                "Mått": ["NPV före skatt", "Skatteeffekt", "NPV efter skatt"],
+                "NPV (kr)": [it_res["npv_before_tax"], tax_impact, it_res["npv_after_tax"]],
+            })
+            it_export_header = _header_lines()
+            toolbar_download(
+                inv_inflation_export_slot,
+                t("Exportera till Excel"),
+                data=cached_excel(
+                    {"Resultat": it_export_df, "NPV": it_npv_df},
+                    header_lines=it_export_header or None,
+                    charts={"NPV": [{
+                        "type": "column",
+                        "title": "NPV före och efter skatt",
+                        "categories": table_range("A", len(it_npv_df), it_export_header),
+                        "values": table_range("B", len(it_npv_df), it_export_header),
+                        "position": "D2",
+                        "y_axis_title": "NPV (kr)",
+                    }]},
+                ),
+                file_name="investering_inflation_skatt.xlsx",
+                mime=_XLSX_MIME,
+                key="inflation_export",
             )
 
     # LLM explanation and Q&A for Tab 3
@@ -1307,299 +1349,306 @@ with tab4:
         st.session_state["mc_cf_df"] = _init_mc_cf_df(len(_eff_flows), _eff_flows)
         st.session_state.pop("mc_last_result", None)
 
-    col_mc_in, col_mc_res = st.columns([1, 2], gap="large")
+    @st.fragment
+    def _mc_block() -> None:
+        """Monte Carlo inputs and results; reruns only this block."""
+        col_mc_in, col_mc_res = st.columns([1, 2], gap="large")
 
-    with col_mc_in:
-        st.markdown(t("**Grundinvestering**"))
-        mc_inv_mean = st.number_input(
-            t("Förväntat grundinvesteringsbelopp (kr)"),
-            min_value=0.0,
-            step=10_000.0,
-            format="%.0f",
-            help=t("Medelvärde för grundinvesteringen"),
-            key="mc_inv_mean",
-        )
-        mc_inv_std = st.number_input(
-            t("Standardavvikelse grundinvestering (kr)"),
-            min_value=0.0,
-            step=5_000.0,
-            format="%.0f",
-            help=t("Osäkerhet (1 standardavvikelse) kring grundinvesteringens storlek"),
-            key="mc_inv_std",
-        )
+        with col_mc_in:
+            st.markdown(t("**Grundinvestering**"))
+            mc_inv_mean = st.number_input(
+                t("Förväntat grundinvesteringsbelopp (kr)"),
+                min_value=0.0,
+                step=10_000.0,
+                format="%.0f",
+                help=t("Medelvärde för grundinvesteringen"),
+                key="mc_inv_mean",
+            )
+            mc_inv_std = st.number_input(
+                t("Standardavvikelse grundinvestering (kr)"),
+                min_value=0.0,
+                step=5_000.0,
+                format="%.0f",
+                help=t("Osäkerhet (1 standardavvikelse) kring grundinvesteringens storlek"),
+                key="mc_inv_std",
+            )
 
-        st.markdown(t("**Kalkylränta**"))
-        mc_rate_mean = st.number_input(
-            t("Förväntad kalkylränta (%)"),
-            min_value=0.0,
-            max_value=50.0,
-            step=0.5,
-            format="%.1f",
-            help=t("Medelvärde för kalkylräntan"),
-            key="mc_rate_mean",
-        )
-        mc_rate_std = st.number_input(
-            t("Standardavvikelse kalkylränta (%)"),
-            min_value=0.0,
-            max_value=20.0,
-            step=0.5,
-            format="%.1f",
-            help=t("Osäkerhet (1 standardavvikelse) kring kalkylräntan"),
-            key="mc_rate_std",
-        )
+            st.markdown(t("**Kalkylränta**"))
+            mc_rate_mean = st.number_input(
+                t("Förväntad kalkylränta (%)"),
+                min_value=0.0,
+                max_value=50.0,
+                step=0.5,
+                format="%.1f",
+                help=t("Medelvärde för kalkylräntan"),
+                key="mc_rate_mean",
+            )
+            mc_rate_std = st.number_input(
+                t("Standardavvikelse kalkylränta (%)"),
+                min_value=0.0,
+                max_value=20.0,
+                step=0.5,
+                format="%.1f",
+                help=t("Osäkerhet (1 standardavvikelse) kring kalkylräntan"),
+                key="mc_rate_std",
+            )
 
-        n_sims = st.slider(
-            t("Antal simuleringar"),
-            min_value=1_000,
-            max_value=50_000,
-            step=1_000,
-            help=t("Fler simuleringar ger precisare resultat men tar längre tid"),
-            key="mc_n_sims",
-        )
+            n_sims = st.slider(
+                t("Antal simuleringar"),
+                min_value=1_000,
+                max_value=50_000,
+                step=1_000,
+                help=t("Fler simuleringar ger precisare resultat men tar längre tid"),
+                key="mc_n_sims",
+            )
 
-        mc_corr = st.slider(
-            t("Korrelation mellan årens kassaflöden"),
-            min_value=0.0,
-            max_value=0.9,
-            step=0.1,
-            help=(
-                t("0 = åren är oberoende. Högre värden betyder att bra år "
-                "tenderar att följas av bra år (dras via Cholesky-"
-                "faktorisering), vilket ger en bredare och mer realistisk "
-                "NPV-spridning.")
-            ),
-            key="mc_corr",
-        )
-
-        st.markdown(t("**Kassaflöden per år (medelvärde och standardavvikelse)**"))
-        n_mc_years = st.session_state["inv_years"]
-        mc_cf_key = "mc_cf_df"
-
-        if mc_cf_key not in st.session_state or len(st.session_state[mc_cf_key]) != n_mc_years:
-            tab1_means = st.session_state["inv_cf_df"]["Kassaflöde (kr)"].tolist()
-            st.session_state[mc_cf_key] = _init_mc_cf_df(n_mc_years, tab1_means)
-
-        mc_cf_df = st.data_editor(
-            st.session_state[mc_cf_key],
-            width="stretch",
-            hide_index=True,
-            num_rows="fixed",
-            column_config={
-                "År": st.column_config.NumberColumn(t("År"), disabled=True, width=48),
-                "Medel (kr)": st.column_config.NumberColumn(t("Medel (kr)"), format="%.0f"),
-                "Std (kr)": st.column_config.NumberColumn(t("Std (kr)"), format="%.0f"),
-            },
-        )
-        st.session_state[mc_cf_key] = mc_cf_df
-
-        # Autosave Monte Carlo input parameters only (not simulation result arrays)
-        save_state(
-            "investering_monte_carlo",
-            {
-                "mc_inv_mean": mc_inv_mean,
-                "mc_inv_std": mc_inv_std,
-                "mc_rate_mean": mc_rate_mean,
-                "mc_rate_std": mc_rate_std,
-                "mc_n_sims": n_sims,
-                "mc_corr": mc_corr,
-                "mc_cf_records": mc_cf_df.to_dict(orient="records"),
-            },
-        )
-
-        run_sim = st.button(t("Kör simulering"), type="primary", width="stretch")
-
-    with col_mc_res:
-        inv_mc_export_slot, inv_mc_reset_slot = results_toolbar()
-        mc_cf_means_tup = tuple(mc_cf_df["Medel (kr)"].tolist())
-        mc_cf_stds_tup = tuple(mc_cf_df["Std (kr)"].tolist())
-
-        # Run only on explicit button press: no surprise
-        # 10 000-draw simulation on first page visit.
-        if run_sim:
-            with st.spinner(t("Kör Monte Carlo-simulering...")):
-                mc_result = _run_monte_carlo(
-                    inv_mean=mc_inv_mean,
-                    inv_std=mc_inv_std,
-                    cf_means=mc_cf_means_tup,
-                    cf_stds=mc_cf_stds_tup,
-                    rate_mean=mc_rate_mean / 100.0,
-                    rate_std=mc_rate_std / 100.0,
-                    n_sims=n_sims,
-                    cf_corr=mc_corr,
-                )
-                st.session_state["mc_last_result"] = mc_result
-
-        mc_result = st.session_state.get("mc_last_result")
-
-        if mc_result is not None:
-            # Four KPIs in a wrapping grid (four or two per row), so the
-            # values stay legible in the results column on narrow screens.
-            render_kpi_grid([
-                kpi_card(t("Medel-NPV"), format_sek(mc_result["mean"])),
-                kpi_card(t("Median-NPV"), format_sek(mc_result["median"])),
-                kpi_card(
-                    t("P5 (pessimistiskt)"), format_sek(mc_result["p5"]),
-                    variant="success" if mc_result["p5"] >= 0 else "danger",
+            mc_corr = st.slider(
+                t("Korrelation mellan årens kassaflöden"),
+                min_value=0.0,
+                max_value=0.9,
+                step=0.1,
+                help=(
+                    t("0 = åren är oberoende. Högre värden betyder att bra år "
+                    "tenderar att följas av bra år (dras via Cholesky-"
+                    "faktorisering), vilket ger en bredare och mer realistisk "
+                    "NPV-spridning.")
                 ),
-                kpi_card(
-                    t("P95 (optimistiskt)"), format_sek(mc_result["p95"]),
-                    variant="success" if mc_result["p95"] >= 0 else "danger",
-                ),
-            ])
+                key="mc_corr",
+            )
 
-            # Probability of positive NPV; the meter's status word uses the
-            # same limits as the decision text below, so the two agree.
-            prob_pct = mc_result["prob_positive_npv"] * 100
-            st.html(probability_meter(prob_pct))
+            st.markdown(t("**Kassaflöden per år (medelvärde och standardavvikelse)**"))
+            n_mc_years = st.session_state["inv_years"]
+            mc_cf_key = "mc_cf_df"
 
-            # Histogram with vertical reference lines. Annotations are placed
-            # at staggered y positions (yref="paper") so the four labels don't
-            # collide with each other or the chart title.
-            npvs_list = mc_result["npvs"].tolist()
-            fig4 = go.Figure()
-            fig4.add_trace(go.Histogram(
-                x=npvs_list,
-                nbinsx=60,
-                name=t("NPV-fördelning"),
-                marker_color=COLORS["primary_light"],
-                opacity=0.75,
-            ))
-            vline_specs = [
-                (0, CHART_SEMANTIC["negative"], "NPV = 0", 0.96),
-                (mc_result["p5"], CHART_SEMANTIC["caution"], f"P5: {format_sek(mc_result['p5'])}", 0.84),
-                (mc_result["median"], COLORS["primary"], f"Median: {format_sek(mc_result['median'])}", 0.72),
-                (mc_result["mean"], TOKENS["text_secondary"], f"Medel: {format_sek(mc_result['mean'])}", 0.60),
-            ]
-            for val, color, _label, _y in vline_specs:
-                fig4.add_vline(x=val, line_dash="dash", line_color=color)
-            for val, color, label, y_paper in vline_specs:
-                fig4.add_annotation(
-                    x=val,
-                    y=y_paper,
-                    yref="paper",
-                    text=label,
-                    showarrow=False,
-                    font=dict(color=color, size=11),
-                    bgcolor="rgba(255,255,255,0.88)",
-                    bordercolor=color,
-                    borderwidth=1,
-                    borderpad=3,
-                    xanchor="left" if val >= 0 else "right",
-                    xshift=4 if val >= 0 else -4,
+            if mc_cf_key not in st.session_state or len(st.session_state[mc_cf_key]) != n_mc_years:
+                tab1_means = st.session_state["inv_cf_df"]["Kassaflöde (kr)"].tolist()
+                st.session_state[mc_cf_key] = _init_mc_cf_df(n_mc_years, tab1_means)
+
+            mc_cf_df = st.data_editor(
+                st.session_state[mc_cf_key],
+                width="stretch",
+                hide_index=True,
+                num_rows="fixed",
+                column_config={
+                    "År": st.column_config.NumberColumn(t("År"), disabled=True, width=48),
+                    "Medel (kr)": st.column_config.NumberColumn(t("Medel (kr)"), format="%.0f"),
+                    "Std (kr)": st.column_config.NumberColumn(t("Std (kr)"), format="%.0f"),
+                },
+            )
+            st.session_state[mc_cf_key] = mc_cf_df
+
+            # Autosave Monte Carlo input parameters only (not simulation result arrays)
+            save_state(
+                "investering_monte_carlo",
+                {
+                    "mc_inv_mean": mc_inv_mean,
+                    "mc_inv_std": mc_inv_std,
+                    "mc_rate_mean": mc_rate_mean,
+                    "mc_rate_std": mc_rate_std,
+                    "mc_n_sims": n_sims,
+                    "mc_corr": mc_corr,
+                    "mc_cf_records": mc_cf_df.to_dict(orient="records"),
+                },
+            )
+
+            run_sim = st.button(t("Kör simulering"), type="primary", width="stretch")
+
+        with col_mc_res:
+            inv_mc_export_slot, inv_mc_reset_slot = results_toolbar()
+            mc_cf_means_tup = tuple(mc_cf_df["Medel (kr)"].tolist())
+            mc_cf_stds_tup = tuple(mc_cf_df["Std (kr)"].tolist())
+
+            # Run only on explicit button press: no surprise
+            # 10 000-draw simulation on first page visit.
+            if run_sim:
+                with st.spinner(t("Kör Monte Carlo-simulering...")):
+                    mc_result = _run_monte_carlo(
+                        inv_mean=mc_inv_mean,
+                        inv_std=mc_inv_std,
+                        cf_means=mc_cf_means_tup,
+                        cf_stds=mc_cf_stds_tup,
+                        rate_mean=mc_rate_mean / 100.0,
+                        rate_std=mc_rate_std / 100.0,
+                        n_sims=n_sims,
+                        cf_corr=mc_corr,
+                    )
+                    st.session_state["mc_last_result"] = mc_result
+
+            mc_result = st.session_state.get("mc_last_result")
+
+            if mc_result is not None:
+                # Four KPIs in a wrapping grid (four or two per row), so the
+                # values stay legible in the results column on narrow screens.
+                render_kpi_grid([
+                    kpi_card(t("Medel-NPV"), format_sek(mc_result["mean"])),
+                    kpi_card(t("Median-NPV"), format_sek(mc_result["median"])),
+                    kpi_card(
+                        t("P5 (pessimistiskt)"), format_sek(mc_result["p5"]),
+                        variant="success" if mc_result["p5"] >= 0 else "danger",
+                    ),
+                    kpi_card(
+                        t("P95 (optimistiskt)"), format_sek(mc_result["p95"]),
+                        variant="success" if mc_result["p95"] >= 0 else "danger",
+                    ),
+                ])
+
+                # Probability of positive NPV; the meter's status word uses the
+                # same limits as the decision text below, so the two agree.
+                prob_pct = mc_result["prob_positive_npv"] * 100
+                st.html(probability_meter(prob_pct))
+
+                # Histogram with vertical reference lines. Annotations are placed
+                # at staggered y positions (yref="paper") so the four labels don't
+                # collide with each other or the chart title.
+                npvs_list = mc_result["npvs"].tolist()
+                fig4 = go.Figure()
+                fig4.add_trace(go.Histogram(
+                    x=npvs_list,
+                    nbinsx=60,
+                    name=t("NPV-fördelning"),
+                    marker_color=COLORS["primary_light"],
+                    opacity=0.75,
+                ))
+                vline_specs = [
+                    (0, CHART_SEMANTIC["negative"], "NPV = 0", 0.96),
+                    (mc_result["p5"], CHART_SEMANTIC["caution"], f"P5: {format_sek(mc_result['p5'])}", 0.84),
+                    (mc_result["median"], COLORS["primary"], f"Median: {format_sek(mc_result['median'])}", 0.72),
+                    (mc_result["mean"], TOKENS["text_secondary"], f"Medel: {format_sek(mc_result['mean'])}", 0.60),
+                ]
+                for val, color, _label, _y in vline_specs:
+                    fig4.add_vline(x=val, line_dash="dash", line_color=color)
+                for val, color, label, y_paper in vline_specs:
+                    fig4.add_annotation(
+                        x=val,
+                        y=y_paper,
+                        yref="paper",
+                        text=label,
+                        showarrow=False,
+                        font=dict(color=color, size=11),
+                        bgcolor="rgba(255,255,255,0.88)",
+                        bordercolor=color,
+                        borderwidth=1,
+                        borderpad=3,
+                        xanchor="left" if val >= 0 else "right",
+                        xshift=4 if val >= 0 else -4,
+                    )
+
+                apply_layout(fig4, title=t("NPV-fördelning (Monte Carlo-histogram)"), height=420)
+                fig4.update_layout(margin={"t": 80})
+                show_chart(fig4)
+
+                # Box plot
+                fig5 = go.Figure()
+                fig5.add_trace(go.Box(
+                    y=npvs_list,
+                    name=t("NPV"),
+                    marker_color=COLORS["primary"],
+                    boxmean=True,
+                    boxpoints=False,
+                ))
+                apply_layout(fig5, title=t("NPV-spridning (lådagram)"), height=300)
+                show_chart(fig5)
+
+                # Swedish decision text
+                if prob_pct >= 70:
+                    st.success(
+                        t(
+                            "Stark sannolikhet för positivt utfall ({0} %). Investeringen förväntas skapa värde i det stora flertalet scenarier.",
+                            format(prob_pct, ".1f"),
+                        )
+                    )
+                elif prob_pct >= 50:
+                    st.warning(
+                        t(
+                            "Måttlig sannolikhet för positivt utfall ({0} %). Grundlig riskbedömning och känslighetsanalys rekommenderas före beslut.",
+                            format(prob_pct, ".1f"),
+                        )
+                    )
+                else:
+                    st.error(
+                        t(
+                            "Låg sannolikhet för positivt utfall ({0} %). Investeringen bedöms som riskfylld. Överväg alternativ eller omstrukturering.",
+                            format(prob_pct, ".1f"),
+                        )
+                    )
+
+                st.caption(
+                    t("Simulering baserad på {0} iterationer, seed = 42", f"{n_sims:,}".replace(",", " "))
                 )
 
-            apply_layout(fig4, title=t("NPV-fördelning (Monte Carlo-histogram)"), height=420)
-            fig4.update_layout(margin={"t": 80})
-            show_chart(fig4)
-
-            # Box plot
-            fig5 = go.Figure()
-            fig5.add_trace(go.Box(
-                y=npvs_list,
-                name=t("NPV"),
-                marker_color=COLORS["primary"],
-                boxmean=True,
-                boxpoints=False,
-            ))
-            apply_layout(fig5, title=t("NPV-spridning (lådagram)"), height=300)
-            show_chart(fig5)
-
-            # Swedish decision text
-            if prob_pct >= 70:
-                st.success(
-                    t(
-                        "Stark sannolikhet för positivt utfall ({0} %). Investeringen förväntas skapa värde i det stora flertalet scenarier.",
-                        format(prob_pct, ".1f"),
-                    )
-                )
-            elif prob_pct >= 50:
-                st.warning(
-                    t(
-                        "Måttlig sannolikhet för positivt utfall ({0} %). Grundlig riskbedömning och känslighetsanalys rekommenderas före beslut.",
-                        format(prob_pct, ".1f"),
-                    )
+                _npvs = np.asarray(mc_result["npvs"], dtype=float)
+                _pcts = [1, 5, 10, 25, 50, 75, 90, 95, 99]
+                mc_pct_df = pd.DataFrame({
+                    "Percentil": [f"P{p}" for p in _pcts],
+                    "NPV (kr)": [float(np.percentile(_npvs, p)) for p in _pcts],
+                })
+                mc_summary_df = pd.DataFrame({
+                    "Mått": [
+                        "Medel-NPV", "Median-NPV", "Standardavvikelse", "P5", "P95",
+                        "Sannolikhet för positivt NPV", "Antal simuleringar",
+                    ],
+                    "Värde": [
+                        format_sek(mc_result["mean"]), format_sek(mc_result["median"]),
+                        format_sek(mc_result["std"]), format_sek(mc_result["p5"]),
+                        format_sek(mc_result["p95"]), format_percent(mc_result["prob_positive_npv"]),
+                        str(n_sims),
+                    ],
+                })
+                _mc_header = _header_lines()
+                toolbar_download(
+                    inv_mc_export_slot,
+                    t("Exportera simuleringen till Excel"),
+                    data=cached_excel(
+                        {"Sammanfattning": mc_summary_df, "Percentiler": mc_pct_df},
+                        header_lines=_mc_header or None,
+                        charts={"Percentiler": [{
+                            "type": "column",
+                            "title": "NPV per percentil",
+                            "categories": table_range("A", len(mc_pct_df), _mc_header),
+                            "values": table_range("B", len(mc_pct_df), _mc_header),
+                            "position": "D2",
+                            "y_axis_title": "NPV (kr)",
+                        }]},
+                    ),
+                    file_name="investering_monte_carlo.xlsx",
+                    mime=_XLSX_MIME,
+                    key="mc_export",
                 )
             else:
-                st.error(
-                    t(
-                        "Låg sannolikhet för positivt utfall ({0} %). Investeringen bedöms som riskfylld. Överväg alternativ eller omstrukturering.",
-                        format(prob_pct, ".1f"),
-                    )
-                )
+                st.info(t("Tryck 'Kör simulering' för att starta Monte Carlo-analysen."))
 
-            st.caption(
-                t("Simulering baserad på {0} iterationer, seed = 42", f"{n_sims:,}".replace(",", " "))
-            )
-
-            _npvs = np.asarray(mc_result["npvs"], dtype=float)
-            _pcts = [1, 5, 10, 25, 50, 75, 90, 95, 99]
-            mc_pct_df = pd.DataFrame({
-                "Percentil": [f"P{p}" for p in _pcts],
-                "NPV (kr)": [float(np.percentile(_npvs, p)) for p in _pcts],
-            })
-            mc_summary_df = pd.DataFrame({
-                "Mått": [
-                    "Medel-NPV", "Median-NPV", "Standardavvikelse", "P5", "P95",
-                    "Sannolikhet för positivt NPV", "Antal simuleringar",
-                ],
-                "Värde": [
-                    format_sek(mc_result["mean"]), format_sek(mc_result["median"]),
-                    format_sek(mc_result["std"]), format_sek(mc_result["p5"]),
-                    format_sek(mc_result["p95"]), format_percent(mc_result["prob_positive_npv"]),
-                    str(n_sims),
-                ],
-            })
-            _mc_header = _header_lines()
-            toolbar_download(
-                inv_mc_export_slot,
-                t("Exportera simuleringen till Excel"),
-                data=cached_excel(
-                    {"Sammanfattning": mc_summary_df, "Percentiler": mc_pct_df},
-                    header_lines=_mc_header or None,
-                    charts={"Percentiler": [{
-                        "type": "column",
-                        "title": "NPV per percentil",
-                        "categories": table_range("A", len(mc_pct_df), _mc_header),
-                        "values": table_range("B", len(mc_pct_df), _mc_header),
-                        "position": "D2",
-                        "y_axis_title": "NPV (kr)",
-                    }]},
+        # LLM explanation and Q&A for Tab 4
+        if mc_result is not None:
+            mc_inputs_llm = {
+                "grundinvestering_medel": mc_inv_mean,
+                "grundinvestering_std": mc_inv_std,
+                "kalkylranta_medel": mc_rate_mean,
+                "antal_simuleringar": n_sims,
+            }
+            mc_outputs_llm = {
+                "medel_npv": mc_result["mean"],
+                "median_npv": mc_result["median"],
+                "p5": mc_result["p5"],
+                "p95": mc_result["p95"],
+                "sannolikhet_positiv_npv": mc_result["prob_positive_npv"],
+            }
+            _render_investering_llm(
+                "monte_carlo", mc_inputs_llm, mc_outputs_llm, "inv_tab4",
+                interpretation=interpret_monte_carlo(
+                    mc_result["prob_positive_npv"], mc_result["p5"], mc_result["mean"]
                 ),
-                file_name="investering_monte_carlo.xlsx",
-                mime=_XLSX_MIME,
-                key="mc_export",
             )
-        else:
-            st.info(t("Tryck 'Kör simulering' för att starta Monte Carlo-analysen."))
 
-    # LLM explanation and Q&A for Tab 4
-    if mc_result is not None:
-        mc_inputs_llm = {
-            "grundinvestering_medel": mc_inv_mean,
-            "grundinvestering_std": mc_inv_std,
-            "kalkylranta_medel": mc_rate_mean,
-            "antal_simuleringar": n_sims,
-        }
-        mc_outputs_llm = {
-            "medel_npv": mc_result["mean"],
-            "median_npv": mc_result["median"],
-            "p5": mc_result["p5"],
-            "p95": mc_result["p95"],
-            "sannolikhet_positiv_npv": mc_result["prob_positive_npv"],
-        }
-        _render_investering_llm(
-            "monte_carlo", mc_inputs_llm, mc_outputs_llm, "inv_tab4",
-            interpretation=interpret_monte_carlo(
-                mc_result["prob_positive_npv"], mc_result["p5"], mc_result["mean"]
-            ),
-        )
+        if toolbar_reset(
+            inv_mc_reset_slot, t("Återställ till standardvärden"), key="inv_mc_reset_autosave"
+        ):
+            clear_state("investering_monte_carlo")
+            st.session_state["_reset_inv_mc"] = True
+            st.rerun()
 
-    if toolbar_reset(
-        inv_mc_reset_slot, t("Återställ till standardvärden"), key="inv_mc_reset_autosave"
-    ):
-        clear_state("investering_monte_carlo")
-        st.session_state["_reset_inv_mc"] = True
-        st.rerun()
+    _mc_block()
+
+
 
 # ===========================================================================
 # TAB 5 — JÄMFÖRELSE AV ALTERNATIV (kapitel 10: val mellan investeringar)
