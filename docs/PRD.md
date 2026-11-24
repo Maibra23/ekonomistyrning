@@ -202,9 +202,9 @@ If LLM is unavailable (timeout, rate limit, missing token):
 ## 9. Tech stack
 
 * **Runtime:** Python 3.11
-* **Framework:** Streamlit ≥ 1.32
+* **Framework:** Streamlit ≥ 1.67
 * **Math:** numpy, pandas, scipy, numpy_financial
-* **Visualization:** Plotly ≥ 5.18
+* **Visualization:** Plotly ≥ 6
 * **Excel export:** openpyxl, xlsxwriter
 * **LLM client:** huggingface_hub ≥ 0.24
 * **Testing:** pytest
@@ -213,9 +213,11 @@ If LLM is unavailable (timeout, rate limit, missing token):
 
 ## 10. UI architecture and design system
 
+The full, code-accurate reference is `docs/METHODOLOGY.md` section 8. This section summarises the decisions.
+
 ### 10.1 Overview
 
-The app has a single, centralized design system implemented in `utils/ui.py`. This file owns all design decisions: color tokens, global CSS, component functions, Swedish labels, and sidebar rendering. Every page — the landing page and all five module pages — consumes it through the same three-call bootstrap:
+The design system lives in `utils/ui.py` (tokens, global CSS, components, sidebar), with page anatomy in `utils/page_blocks.py` and `utils/tutor.py`, tables in `utils/tables.py` and chart layout in `utils/charts.py`. Every page uses the same bootstrap:
 
 ```python
 st.set_page_config(...)
@@ -224,85 +226,63 @@ inject_css()
 render_sidebar("module_key")
 ```
 
-`inject_css()` calls `st.html(f"<style>{GLOBAL_CSS}</style>")`, injecting all CSS into the page head in one shot. After this call, every `.eks-*` class is available to any component rendered on that page.
+Native widgets are styled by the theme in `.streamlit/config.toml` (colours, radius, self-hosted Inter and IBM Plex Mono); `inject_css()` adds CSS only for what the theme cannot express. Custom classes carry the `eks-` prefix.
 
 ### 10.2 Design principles
 
-**Blue-only brand palette.** A single-hue blue palette (`primary #1E40AF`, `sidebar_bg #1E3A8A`, `primary_light #3B82F6`) gives the app a clean, professional identity without decorative color. All color tokens are centralized in the `COLORS` dict and referenced via `%(token_name)s` interpolation in `GLOBAL_CSS`, so a single edit propagates everywhere.
+**One token source.** `TOKENS` in `utils/ui.py` defines every colour; the theme, CSS, charts and the legacy `COLORS` mappings derive from it, and a test keeps `config.toml` in sync.
 
-**Semantic color for financial outcomes.** Three colors carry fixed financial meaning across every module:
+**Semantic colour for financial outcomes.** `positive` (`#067647`), `negative` (`#B42318`) and `caution` (`#B54708`) are reserved for favourable, unfavourable and borderline results. Chart series use a categorical palette without green or red.
 
-| Color | Hex | Means |
-|---|---|---|
-| Success green | `#059669` | Positive: NPV > 0, favorable variance, profitable |
-| Danger red | `#DC2626` | Negative: NPV < 0, unfavorable variance, loss |
-| Warning amber | `#D97706` | Boundary: breakeven zone, neutral variance, LLM offline |
+**Colour is never the only signal.** Every status is a pill with text and a glyph (✓, ✕, !, ▲/▼), and every text token meets WCAG AA contrast (enforced by `tests/test_design_tokens.py`).
 
-Students learn this color language in module 1 (Kalkyl) and it applies identically in all subsequent modules. Color is never the sole signal — every color-coded element also carries a text label and a numeric value.
-
-**Monospace numbers everywhere.** All computed numeric values use IBM Plex Mono. This differentiates calculated output from prose, aligns decimal columns visually, and echoes the spreadsheet conventions students already know.
-
-**Swedish labels only.** All user-facing strings live in the `LABELS` dict in `utils/ui.py`. No Swedish text is hardcoded in any page file, making terminology consistent and easy to update in one place.
+**Swedish source text, translated at render time.** User-facing strings are written in Swedish, wrapped in `t()` and translated by `utils/i18n.py` with the English entries in `utils/i18n_en.py`; a test fails when a string has no English entry.
 
 ### 10.3 Component interaction model
 
-Each module page follows the same assembly sequence:
+Each module page follows the same sequence:
 
 ```
-inject_css()              → activates all .eks-* classes in the page head
-render_sidebar()          → draws nav panel with active page highlighted
-page_title()              → module eyebrow + title + subtitle
-[Input form]              → st.form() with Swedish labels from LABELS dict
-[Calculator call]         → deterministic math in utils/kalkyl.py etc.
-render_kpi_row([...])     → primary results as color-coded KPI cards
-st.plotly_chart()         → chart styled with get_chart_layout() tokens
-[LLM pipeline]            → prompts.py → llm.py → humanizer.py → .eks-llm-section
-[Q&A chat]                → st.chat_input() → same LLM pipeline
-st.download_button()      → utils/export.py → Excel file
-footer_note()             → book reference + version badge
+inject_css(), render_sidebar()   → theme CSS and grouped navigation
+page_header()                    → eyebrow, the page's h1, subtitle, share slot
+render_scenario_controls()       → difficulty + "Generera ett exempelföretag"
+[Input form]                     → st.form(), submit "Uppdatera värden" at the bottom
+[Calculator call]                → deterministic math in utils/kalkyl.py etc.
+results_toolbar()                → export and reset above the results
+kpi_card() / status_pill()       → results with text status
+apply_layout() + show_chart()    → charts
+fin_dataframe() / statement_table() → tables
+tutor_panel()                    → explanation, step guide, chat (offline fallbacks)
+render_share_link(), footer_note() → share popover in the header, one footer
 ```
 
-The design system is active at step 1 and shapes the visual output of every subsequent step. The calculator and the design system are independent — a page can render KPI cards without ever calling the LLM, and the LLM pipeline runs identically regardless of which visual components surround it.
+The calculator and the design system are independent: a page renders its results without ever calling the LLM, and the LLM pipeline runs the same regardless of the surrounding components.
 
 ### 10.4 Sidebar and navigation
 
-The sidebar is the only navigation mechanism. Streamlit's auto-generated sidebar nav is hidden via CSS (`div[data-testid="stSidebarNav"] {display: none !important;}`). `render_sidebar(active_page)` draws custom links via `st.page_link()` for all six pages.
-
-The sidebar footer shows the LLM model name and a live session call counter (`N / 50`). When the cap is reached, `utils/llm.py` stops issuing calls and the page displays `LABELS["llm_cap_warn"]`. This counter is driven by `st.session_state["llm_call_count"]` and updates in real time.
+`render_sidebar(active_page)` draws a light sidebar with three groups of `st.page_link` items (Översikt, Moduler, Övning) and Material icons, the current page highlighted, then the current company, the language switch and, when the explanation service is configured, the model selector and the session call budget. Streamlit's automatic page list is hidden. The sidebar is locked open on desktop and collapsed by default on phones.
 
 ### 10.5 LLM UI elements
 
-Four distinct elements surface LLM state to the user:
-
 | Element | When shown | Signal |
 |---|---|---|
-| `llm_badge(True)` | Landing page, LLM reachable | Green dot "LLM online" |
-| `llm_badge(False)` | Landing page, LLM unreachable | Red dot "LLM offline" |
-| `offline_badge()` | Module page, fallback template active | Amber pill — degraded mode |
-| `.eks-llm-section` | After successful LLM call | Blue-border explanation with 4-section structure |
-| `grounding_warning()` | LLM cites number deviating > 1% from calculator | Red-border warning naming both values |
-
-The `offline_badge()` and fallback template ensure the app is always usable even when the LLM is down. The `grounding_warning()` is the visible surface of the numeric verification mechanism described in section 7.6.
+| Offline notice | Landing page, service not configured | Info callout: everything except written explanations works |
+| `.eks-offline-badge` | Explanation built from the offline template | Badge "Visar grundförklaring (offline-läge)" |
+| Explanation text | After a successful call | Four sections (Antagande, Beräkning, Tolkning, Källor) in the Förklaring panel |
+| `.eks-grounding-warn` | Explanation cites a number the calculator did not produce | Warning naming the mismatch |
+| Session-cap card | 50 calls used | Card explaining the limit; offline fallbacks take over |
 
 ### 10.6 Chart theme
 
-`get_chart_layout()` in `utils/charts.py` returns a Plotly layout dict that applies design tokens to every chart in the app:
-
-- White plot area, light dotted grid matching the page background
-- Inter for titles, IBM Plex Mono for axis tick labels
-- Deep blue hover tooltips (`#1E3A8A`) matching the sidebar
-- Plotly toolbar removed via `config={"displayModeBar": False}`
-
-Chart series draw from `CHART_PALETTE` in `utils/ui.py` so color ordering is consistent across modules. Waterfall charts (Kalkyl) and horizontal bar charts (Standardkostnadsanalys) apply `success`/`danger` colors directly so students see the same green-positive / red-negative convention in charts as in KPI cards.
+`apply_layout(fig, title, height, legend)` in `utils/charts.py` applies the `simple_white` template, Inter, token colours for axes and grid, Swedish separators and a horizontal legend above the plot; `show_chart(fig)` renders it full width with a reduced Plotly toolbar (PNG download kept). Series use `PALETTE`; green and red are used only for favourable and unfavourable values.
 
 ### 10.7 Accessibility
 
-Color is never the sole differentiator. Every financial outcome that uses green/red coloring also carries:
-- A text label ("Investera" / "Avstå", "Fördelaktig" / "Ofördelaktig")
-- A numeric value readable independently of color
-- A KPI card left-border that changes color but does not alter the card's text contrast
-
-Chart axis labels, grid lines, and hover tooltips provide all data in text form regardless of color perception. This satisfies the accessibility requirement in section 8.
+- Every coloured status carries text and a glyph; KPI cards also carry the numeric value.
+- Text tokens meet WCAG AA contrast; no text is smaller than 11.5 px.
+- Keyboard focus is visible on links, buttons, tabs and the share popover.
+- Each page has exactly one `h1`.
+- Known gaps (see `docs/LIMITATIONS.md`): the page `lang` attribute cannot be set, and number inputs cannot show Swedish separators.
 
 ---
 

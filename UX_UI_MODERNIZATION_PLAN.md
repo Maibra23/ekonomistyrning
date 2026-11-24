@@ -1162,97 +1162,99 @@ Each prompt is self-contained. Execute them in order. Every prompt implicitly in
 
 ## B5. Testing and regression checklist
 
+> **T15 run (2026-11-24, v0.3.0):** ticked items passed. Unticked items failed or were not run in the browser; the reason is noted on the item or in `docs/UX_QA_REPORT.md` section 5.
+
 Run each item offline (`HF_TOKEN=""`) in **Svenska**, and the items marked (en) again in **English**. Online-only items (marked ☁) are run once with a valid token if available; otherwise log them as "not run".
 
 ### Automated (every task)
 
-- [ ] `ruff check utils/ pages/ tests/ streamlit_app.py`
-- [ ] `mypy`
-- [ ] `pytest tests/ -q`: baseline 2282 passed / 4 skipped, plus the new tests, 0 failures
-- [ ] `python scripts/ui_snapshots.py`: 0 `stException` on all 6 pages × 2 viewports
+- [x] `ruff check utils/ pages/ tests/ streamlit_app.py`
+- [x] `mypy`
+- [x] `pytest tests/ -q`: baseline 2282 passed / 4 skipped, plus the new tests, 0 failures
+- [x] `python scripts/ui_snapshots.py`: 0 `stException` on all 6 pages × 2 viewports
 
 ### Startup and navigation
 
-- [ ] `streamlit run streamlit_app.py` starts with no warnings about theme keys
-- [ ] Sidebar: all 6 links open the right page; the active item is highlighted (en)
-- [ ] Mobile 390 px: the sidebar is collapsed on load on every page; the expand control opens it; links work; it closes after navigation
-- [ ] Desktop: the sidebar cannot be collapsed (deliberate lock)
-- [ ] Landing CTA "Börja med Kalkylering" opens Kalkyl; "Gör ett kunskapstest" opens the quiz; all 5 module cards open their modules (en)
-- [ ] Language switch: sv ⇄ en on each page; `?lang=en` in the URL; reload keeps the language
+- [x] `streamlit run streamlit_app.py` starts with no warnings about theme keys
+- [x] Sidebar: all 6 links open the right page; the active item is highlighted (en)
+- [ ] Mobile 390 px: the sidebar is collapsed on load on every page; the expand control opens it; links work; it closes after navigation (**T15: fail**, the sidebar does not close after navigation (`st.page_link`); logged in LIMITATIONS)
+- [x] Desktop: the sidebar cannot be collapsed (deliberate lock)
+- [x] Landing CTA "Börja med Kalkylering" opens Kalkyl; "Gör ett kunskapstest" opens the quiz; all 5 module cards open their modules (en)
+- [x] Language switch: sv ⇄ en on each page; `?lang=en` in the URL; reload keeps the language
 
 ### Shared features (each module page)
 
-- [ ] Svårighetsgrad + "Generera ett exempelföretag" fills inputs; the company card shows; the sidebar shows "Aktuellt företag"
+- [x] Svårighetsgrad + "Generera ett exempelföretag" fills inputs; the company card shows; the sidebar shows "Aktuellt företag"
 - [ ] "Använd <företag> här" appears on another module and adopts the company
 - [ ] "Rensa aktuellt företag" clears the sidebar card
 - [ ] Reset ("Återställ till standardvärden") restores the defaults on every tab (Kalkyl 3, Investering 5, Budget 1, Standardkost 1 resetting both tabs)
-- [ ] Autosave: change inputs, reload the browser, and the values persist
-- [ ] Dela: the popover is in the header; its URL reproduces the inputs in a new private window
-- [ ] Tutor offline: "Visa förklaring" shows the offline badge + four-section fallback; "Visa uträkningen steg för steg" shows the worked example; "Ta bort guiden" clears it; the stale caption appears after changing inputs
-- [ ] Chat offline: the caption is shown, with no chat input
-- [ ] ☁ Online: explanation, step guide, chat, grounding warning (exactly one), session-cap card after 50 calls, model selector, budget meter decrementing
-- [ ] Exactly one footer per page, showing the correct version
+- [x] Autosave: change inputs, reload the browser, and the values persist
+- [x] Dela: the popover is in the header; its URL reproduces the inputs in a new private window
+- [ ] Tutor offline: "Visa förklaring" shows the offline badge + four-section fallback; "Visa uträkningen steg för steg" shows the worked example; "Ta bort guiden" clears it; the stale caption appears after changing inputs (T15: worked example verified; the offline badge shows only after a failed or skipped call)
+- [x] Chat offline: the caption is shown, with no chat input
+- [ ] ☁ Online: explanation, step guide, chat, grounding warning (exactly one), session-cap card after 50 calls, model selector, budget meter decrementing (T15: not run (no token))
+- [x] Exactly one footer per page, showing the correct version
 
 ### Kalkylering
 
-- [ ] Självkostnad defaults: självkostnad/st **1 966,20 kr**, pris **2 261,13 kr**, marginal **13,0 %**; waterfall bars and totals match
+- [x] Självkostnad defaults: självkostnad/st **1 966,20 kr**, pris **2 261,13 kr**, marginal **13,0 %**; waterfall bars and totals match
 - [ ] The detail table is right-aligned and sums correctly; export `sjalvkostnadskalkyl.xlsx` opens with the header lines + chart (+ the explanation sheet if generated)
 - [ ] Bidrag: negative TB (pris < rörlig) shows the warning and hides the break-even chart; the sensitivity table is right-aligned and the "most sensitive" caption is correct; export with 3 sheets
 - [ ] ABC: add and remove activity rows (product columns follow); the unallocated-cost warning appears when consumption < volume; the allocation table has Swedish formatting, readable headers and a correct Summa; ABC vs traditional table and chart; export 2 sheets + charts
-- [ ] (en) all tabs render; no Swedish UI strings left untranslated
+- [x] (en) all tabs render; no Swedish UI strings left untranslated
 
 ### Investering
 
-- [ ] Tab 1 defaults: NPV **−52 303 kr** "Ej lönsam", IRR **7,9 %**, payback **4,0 år**, annuitet **263 797 kr/år**, all on single lines at 1440, 1024 and 390 px
+- [x] Tab 1 defaults: NPV **−52 303 kr** "Ej lönsam", IRR **7,9 %**, payback **4,0 år**, annuitet **263 797 kr/år**, all on single lines at 1440, 1024 and 390 px
 - [ ] Changing Antal år keeps the typed cash flows (extends or truncates); restvärde and rörelsekapital caption; IRR edge messages (all-negative flows)
 - [ ] Cash-flow + cumulative chart and NPV profile: no legend/axis collision; IRR annotation
 - [ ] Tab 2: parameter, min and max form; critical-variation message; tornado slider
 - [ ] Tab 3: "Hämta värden…" updates the real rate and depreciation; KPIs; tax-effect message; waterfall; Fisher caption; `test_inflation_tab_subtracts_the_investment` passes
 - [ ] Tab 4: no result before "Kör simulering"; after a run, KPIs, probability meter (status consistent with the decision text), histogram, box plot, export; "Hämta värden" clears the old result
 - [ ] Tab 5: equal lifetimes give the NPV rule; unequal ones give the annuity rule + note; ranking-conflict info when applicable; Fisher point; export
-- [ ] (en) all tabs
+- [x] (en) all tabs
 
 ### Budget
 
-- [ ] Defaults: årets resultat **1 588 000 kr**, likvida medel UB **2 204 438 kr**, the balance sheet balances; the stepper shows ✓ on all
-- [ ] Step submits are at the bottom of all three forms; editing Avskrivningar (steg 1), Likvida medel IB and Investeringar (steg 2) updates the steg 3 read-only fields on the same submit
+- [x] Defaults: årets resultat **1 588 000 kr**, likvida medel UB **2 204 438 kr**, the balance sheet balances; the stepper shows ✓ on all
+- [x] Step submits are at the bottom of all three forms; editing Avskrivningar (steg 1), Likvida medel IB and Investeringar (steg 2) updates the steg 3 read-only fields on the same submit
 - [ ] Unbalanced IB (raise Eget kapital IB) gives the IB error; the stepper shows negative
 - [ ] Negative UB gives the error + stepper caution or negative
-- [ ] Statements: indentation, subtotals and totals, right-aligned, minus signs; "Visa som tabell" shows the original sortable dataframe with CSV download
-- [ ] Nyckeltal: 6 values + status + benchmark; "Så räknas nyckeltalen"
+- [x] Statements: indentation, subtotals and totals, right-aligned, minus signs; "Visa som tabell" shows the original sortable dataframe with CSV download
+- [x] Nyckeltal: 6 values + status + benchmark; "Så räknas nyckeltalen"
 - [ ] Steg 4: season profiles; "Egen" editable; sum ≠ 100 caption; investment and financing month selects; negative months error; chart; numeric table
-- [ ] "Generera ett exempelföretag" ×3: always "I balans"
+- [x] "Generera ett exempelföretag" ×3: always "I balans"
 - [ ] Export: 5 sheets + 3 charts; header lines with the company name
-- [ ] (en) including `test_english_budget_buttons_work`
+- [x] (en) including `test_english_budget_buttons_work`
 
 ### Standardkostnadsanalys
 
-- [ ] Defaults: total **42 804 kr** "Ofördelaktig ▲"; volym 23 400, pris 16 104, effektivitet 3 300; reconciliation OK caption
+- [x] Defaults: total **42 804 kr** "Ofördelaktig ▲"; volym 23 400, pris 16 104, effektivitet 3 300; reconciliation OK caption
 - [ ] Add and remove cost items in the editor; the editor fits without clipping at 1440 px
 - [ ] "Visa uträkningen" per item
 - [ ] Tab 2: "Hämta volymer"; budget and volume variances with F/O status; normalvolym 0 warning
 - [ ] Tab 3: KPIs; chart; dominant-variance info under the KPIs; table with Summa; export
-- [ ] Legacy link with `std_pris` params still restores (use a URL from the baseline branch)
-- [ ] (en)
+- [x] Legacy link with `std_pris` params still restores (use a URL from the baseline branch)
+- [x] (en)
 
 ### Kunskapstest
 
 - [ ] Generate a multiple-choice question (offline: bank or generator) and answer it right and wrong; feedback; solution columns
 - [ ] Numeric question: the unit caption, the tolerance (exact answer accepted)
-- [ ] "Ny fråga", "Liknande fråga men svårare"; ☁ "Förklara djupare"
+- [ ] "Ny fråga", "Liknande fråga men svårare"; ☁ "Förklara djupare" (T15: offline parts via AppTest; ☁ not run (no token))
 - [ ] Score KPIs + gauge; progression cards with status text; "Nollställ"; progress survives a reload
 - [ ] (en) caption "questions are in Swedish"
 
 ### Cross-cutting quality
 
-- [ ] No number wraps mid-value anywhere (1440, 1024, 390 px)
-- [ ] All money columns right-aligned; all money displays use Swedish separators
-- [ ] Every coloured status also has text
-- [ ] Keyboard: focus visible on links, buttons, tabs, the tooltip and the popover; logical tab order
-- [ ] Contrast test passes; no text under 11.5 px
-- [ ] Charts: no overlaps; hover shows Swedish-formatted values
-- [ ] Browsers: Chromium (Edge or Chrome) and Firefox on desktop; Safari/iOS if available (container queries require Safari 16+)
-- [ ] Error handling: invalid share-link params (edit the `s_kalkyl_bidrag` value by hand) do not crash the page
+- [x] No number wraps mid-value anywhere (1440, 1024, 390 px)
+- [x] All money columns right-aligned; all money displays use Swedish separators
+- [x] Every coloured status also has text
+- [x] Keyboard: focus visible on links, buttons, tabs, the tooltip and the popover; logical tab order
+- [x] Contrast test passes; no text under 11.5 px
+- [ ] Charts: no overlaps; hover shows Swedish-formatted values (**T15: fail**, a two-row legend overlaps the title in narrow charts (390 px, 1024 px results column); logged in LIMITATIONS)
+- [ ] Browsers: Chromium (Edge or Chrome) and Firefox on desktop; Safari/iOS if available (container queries require Safari 16+) (T15: Chromium (Edge) only; Firefox and Safari not available)
+- [x] Error handling: invalid share-link params (edit the `s_kalkyl_bidrag` value by hand) do not crash the page
 
 ## B6. Rollback strategy
 

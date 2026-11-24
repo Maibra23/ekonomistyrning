@@ -7,11 +7,17 @@ elements appear in English.
 
 ## Shared pattern
 
-- **Sidebar.** Brand block, the **Svenska / English** switch, navigation to
-  Hem, Kalkylering, Investering, Budget, Standardkostnadsanalys and
-  Kunskapstest, the current company (when one has been generated) and,
-  with the explanation service configured, the model selector (Qwen3-8B or
-  Qwen3-14B) and the remaining explanation calls this session.
+- **Sidebar.** A light sidebar with the brand block and navigation in three
+  groups with icons: ÖVERSIKT (Hem), MODULER (Kalkylering, Investering,
+  Budget, Standardkostnadsanalys) and ÖVNING (Kunskapstest); the current page
+  is highlighted. Below the links: the current company (when one has been
+  generated), the **Svenska / English** switch and, with the explanation
+  service configured, the model selector (Qwen3-8B or Qwen3-14B) and the
+  remaining explanation calls this session. On desktop the sidebar stays
+  open; on a phone it starts collapsed and opens from the header control.
+- **Page header.** Eyebrow with the book chapters, the page title (the only
+  `h1`), a one-line subtitle and, on the right, the **Dela dina siffror**
+  popover (under the title on a phone).
 - **Scenario row.** `Svårighetsgrad` (Lätt / Medel / Svår) and
   `Generera ett exempelföretag`. The generated company fills every input
   and shows a blue info box with its name and description. A company
@@ -20,7 +26,13 @@ elements appear in English.
 - **Input forms.** Inputs sit in `st.form` blocks and are committed with
   **Uppdatera värden**, so a half-typed number never triggers a recompute.
   Every input is autosaved and mirrored to the web address.
-- **Results.** KPI cards, status banner, charts, detail tables.
+- **Results.** A toolbar first (**Exportera till Excel** and
+  **Återställ till standardvärden**, right-aligned), then KPI cards, status
+  banner, charts and detail tables. Every coloured status is a pill with
+  text and a glyph (✓ positive, ✕ negative, ! caution; ▲/▼ for
+  unfavourable/favourable variances), so colour is never the only signal.
+  Money columns are right-aligned with Swedish separators; totals rows are
+  bold.
 - **Explanation (`Visa förklaring`).** With the explanation service the
   model writes a four-section text (Antagande, Beräkning, Tolkning, Källor
   och förbehåll) grounded in the user's numbers; cited numbers are checked
@@ -35,8 +47,11 @@ elements appear in English.
   hidden).
 - **Excel export.** Every module exports a workbook with the company name
   as header lines, one or more sheets and embedded charts.
-- **Dela dina siffror.** A popover with a copyable link that reopens the
-  page with the same inputs (and language).
+- **Förklaring panel.** The explanation, step-by-step guide and chat sit
+  together in one bordered panel at the end of the section.
+- **Dela dina siffror.** The header popover with a copyable link that reopens
+  the page with the same inputs (and language).
+- **Footer.** One footer per page with the update date and app version.
 
 ---
 
@@ -51,10 +66,12 @@ File: `streamlit_app.py`. Read-only; the interactivity is navigation.
 3. **Offline notice** (only without the explanation service): explains that
    all calculations, charts and exports work and that explanations are
    shown as worked calculations.
-4. **"Börja här: Kalkylering →"** link.
-5. **Module map** (Beräkna, Bedöm, Planera, Följ upp, Pröva) with chapter
-   ranges and a one-line description each, followed by a real link per
-   module.
+4. **Calls to action:** **Börja med Kalkylering** (primary) and
+   **Gör ett kunskapstest**.
+5. **Module cards** (Beräkna, Bedöm, Planera, Följ upp, Pröva): role,
+   module name, chapter badge, a one-line description and an **Öppna →**
+   link. Five in a row on a wide screen; they wrap on narrower screens and
+   stack on a phone.
 6. **Arbetsgång** pipeline: Välj modul → Ange data → Beräkna och tolka →
    Exportera.
 7. **Om appen** expander: attribution to Andersson's book, fictional
@@ -184,15 +201,22 @@ mark Fisher's intersection. Excel export and a reset button.
 ## 4. Budget och budgetering
 
 File: `pages/3_Budget.py`. One page with four steps as expanders, preceded
-by a pipeline (Resultatbudget → Likviditetsbudget → Balansbudget →
-Nyckeltal → Månadsbudget) and a tooltip on budget versus the annual
-accounts. The scenario row has its own reset button.
+by a **status stepper** (Resultatbudget, Likviditetsbudget, Balansbudget,
+Nyckeltal, Månadsbudget) that shows each step's key figure and status, for
+example "✓ I balans" or a negative status when the opening balance or the
+closing cash fails, and a tooltip on budget versus the annual accounts. The
+scenario row has its own reset button. Each step's inputs sit in a form
+whose **Uppdatera värden** button is at the bottom.
 
 ### Steg 1 — Resultatbudget
 
 Inputs: försäljning, rörliga kostnader, personal, lokaler, avskrivningar,
 övriga och finansiella kostnader, skattesats. Results: bruttoresultat,
-rörelseresultat and årets resultat cards, the budget table and a waterfall.
+rörelseresultat and årets resultat cards, the result budget as a
+**statement** (indented rows, subtotal and total rules, minus signs; the
+sortable table with CSV download under **Visa som tabell**) and a
+waterfall. The liquidity and balance budgets in steg 2 and 3 use the same
+statement layout.
 
 ### Steg 2 — Likviditetsbudget
 
@@ -217,7 +241,9 @@ the opening balance and its cash becomes the steg 2 opening cash.
 ### Nyckeltal
 
 Soliditet, rörelsemarginal, balans- och kassalikviditet, avkastning på
-eget och totalt kapital, with an expander explaining each formula.
+eget och totalt kapital. The first four carry a status pill (for example
+"✓ Stark" or "✕ Svag") with their benchmark underneath ("riktvärde ≥ 20 %");
+an expander explains each formula.
 
 ### Steg 4 — Likviditetsbudget per månad
 
@@ -246,7 +272,8 @@ Inputs: standard and actual production volume, and a table with one row per
 variable cost type (default: direkt material, direkt lön, rörliga
 omkostnader) with standard and actual price and usage per unit produced.
 
-Results: total, volume, price and efficiency variance cards; a waterfall
+Results: total, volume, price and efficiency variance cards, each with a
+Fördelaktig ▼ / Ofördelaktig ▲ status pill; a waterfall
 from standard to actual cost; a grouped bar chart per cost type; a table
 per cost type; the reconciliation check; **Visa uträkningen** with every
 formula and the user's numbers per cost type; explanation; Excel export.
