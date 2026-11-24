@@ -194,3 +194,21 @@ def test_inflation_tab_subtracts_the_investment():
     # Hand calculation in test_investering: 60 435 kr before, −26 115 kr after tax.
     assert "60 435 kr" in html and "1 260 435 kr" not in html
     assert "-26 115 kr" in html
+
+
+def test_inflation_tab_has_excel_download():
+    at = AppTest.from_file(str(_ROOT / "pages/2_Investering.py"), default_timeout=120)
+    at.run()
+    assert not at.exception
+    keys = {d.proto.id.split("-")[-1] for d in at.get("download_button")}
+    assert "inflation_export" in keys
+
+
+def test_monte_carlo_fragment_runs_and_exports():
+    at = AppTest.from_file(str(_ROOT / "pages/2_Investering.py"), default_timeout=120)
+    at.run()
+    next(b for b in at.button if b.label == "Kör simulering").click().run()
+    assert not at.exception
+    assert at.session_state["mc_last_result"] is not None
+    keys = {d.proto.id.split("-")[-1] for d in at.get("download_button")}
+    assert "mc_export" in keys
