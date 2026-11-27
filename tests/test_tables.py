@@ -3,10 +3,13 @@ from __future__ import annotations
 
 import re
 import textwrap
+from unittest.mock import patch
 
 import pandas as pd
+import pyarrow as pa
 import pytest
 
+from utils import tables
 from utils.budget import build_balansbudget, build_likviditetsbudget, build_resultatbudget
 from utils.formatting import MINUS
 from utils.tables import (
@@ -288,12 +291,6 @@ def test_fin_dataframe_total_row_blanks_are_not_missing_values(tmp_path):
 
 
 def test_fin_dataframe_total_row_keeps_columns_arrow_compatible():
-    from unittest.mock import patch
-
-    import pyarrow as pa
-
-    from utils import tables
-
     df = pd.DataFrame({"Produkt": ["A", "B"], "Kostnad": [100.0, 200.0], "Per styck": [1.5, 2.5]})
     captured = {}
     with patch.object(tables.st, "dataframe", lambda s, **k: captured.setdefault("s", s)):
