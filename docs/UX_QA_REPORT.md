@@ -179,48 +179,53 @@ Page heights (content height in px, baseline → final):
 - – Browsers: Chromium (Edge) only; Firefox and Safari not available in this environment
 - ✓ Invalid share-link parameters (garbled `s_…` value, non-base64 `s_kalkyl_bidrag`) do not crash the page
 
-## 6. Remaining issues
+## 6. Remaining issues (status after the follow-up pass)
 
-1. **Chart title and legend overlap in narrow charts.** Plotly does not wrap
-   titles or legends; when the legend needs two rows it rises into the title,
-   and long titles are cut. Fixing it properly means rendering the title as
-   text above the chart in `show_chart` or moving the legend below narrow
-   charts; both change every chart and were outside the 1 h fix budget.
-   Logged in `docs/LIMITATIONS.md`.
-2. **Mobile sidebar stays open after navigation.** The navigation uses
-   `st.page_link`, which Streamlit does not close automatically. Closing it
-   needs JavaScript or the `st.navigation` migration (T18). Logged in
-   `docs/LIMITATIONS.md`.
-3. **Budget page height.** The plan aimed for a page at least 25 % shorter;
-   it is about the same length as the baseline (+0.3 % at 1440 px) because
-   the statements show every row and the KPI cards now wrap instead of
-   clipping. The statement rows were tightened; a larger saving would need a
-   layout change (for example collapsing steps by default), which is a
-   design decision rather than a QA fix.
-4. **URL after landing-page navigation.** After a landing CTA or module card
-   the right page renders, but the address bar can still show `/` until the
-   page writes its state to the URL, so a reload at that moment returns to
-   the landing page. Not investigated further.
-5. **Long KPI labels.** A single long word such as "TILLVERKNINGSKOSTNAD"
-   can touch the card edge in the 1024 px Kalkyl layout.
-6. **Data-grid toolbar buttons** (Streamlit's own search, download and column
-   buttons on dataframes) show no clear focus outline; they belong to
-   Streamlit's grid and are not styled by the app.
-7. **T16 and T17 (P2) not done.** The server log still shows
-   `use_container_width` deprecation notices (T17); Excel workbooks are still
-   rebuilt on every rerun (T16).
+1. **Chart title and legend overlap in narrow charts: fixed.** `show_chart`
+   renders the title as HTML above the chart (it wraps) and gives the top
+   margin to the legend. Tests in `tests/test_charts.py`.
+2. **Mobile sidebar stays open after navigation: fixed.** The `<html lang>`
+   script (T21) also collapses the sidebar after a menu link is tapped below
+   640 px. Verified in the browser at 390 px.
+3. **Budget page height: open.** A layout decision (for example collapsing
+   steps by default), not a defect.
+4. **URL after landing-page navigation: fixed by T18.** With `st.navigation`
+   every page has a `url_path`, so the address bar updates on navigation.
+5. **Long KPI labels: fixed.** Labels wrap with hyphenation (`hyphens: auto`,
+   which needs the `lang` attribute from T21).
+6. **Data-grid toolbar focus: open.** Streamlit's own grid buttons; not
+   styled by the app.
+7. **T16 and T17: done** (`7457af4`, `6a63117`).
+8. **New, fixed: Arrow tracebacks from total rows.** The T15 blank-cell fix
+   put empty strings into numeric columns, so every render of an ABC table
+   logged an Arrow serialisation traceback. Such columns are now
+   pre-formatted to display text (`tests/test_tables.py`).
 
-## 7. Deferred improvements (not in this project)
+Not measured: export timings for T16 and the server log after T17 under
+load; the log at the end of the pass showed no deprecation notices.
 
-- T18 `st.navigation` migration (would also close the mobile sidebar after navigation).
-- T19 Dark theme.
-- T20 Monte Carlo inputs in a fragment or form.
-- T21 `<html lang="sv">`.
-- T22 Excel export for the "Inflation och skatt" tab.
+## 7. Follow-up tasks T18 to T22 (approved and implemented)
+
+- **T18** `st.navigation` router in `streamlit_app.py`, landing page moved to
+  `pages/0_Hem.py`; the custom sidebar stays (native menu hidden) and the
+  share-link paths `Kalkyl`, `Investering`, `Budget`,
+  `Standardkostnadsanalys`, `Kunskapstest` are unchanged.
+- **T19** Dark theme: `[theme.dark]` in `config.toml`, `TOKENS_DARK` with
+  contrast tests, dark CSS under `prefers-color-scheme: dark`, Plotly
+  template per theme. Series colours set directly by pages still use the
+  light tokens.
+- **T20** Monte Carlo inputs, run button, results and export in an
+  `@st.fragment`, so changing them reruns only that block.
+- **T21** `<html lang>` set to `sv`/`en` by a script from `render_sidebar()`.
+- **T22** Excel export `investering_inflation_skatt.xlsx` on the
+  "Inflation och skatt" tab.
+
+Final checks: 2630 passed, 4 skipped; ruff and mypy clean; snapshots of all
+6 pages at 1440 and 390 px with 0 `stException`.
 
 ## 8. Known limitations
 
 See `docs/LIMITATIONS.md`, section 3.4: number inputs cannot show Swedish
-separators, the page `lang` attribute is not set, there is no dark theme, the
-mobile sidebar does not close after navigation, and chart titles can collide
-with the legend in narrow charts.
+separators; the `lang` attribute and the mobile sidebar close rely on a
+script reading Streamlit's DOM; chart series colours are not tuned for the
+dark theme; a chart exported as an image has no title.

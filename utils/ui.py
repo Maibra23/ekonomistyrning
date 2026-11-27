@@ -1074,10 +1074,30 @@ def set_document_lang() -> None:
 
     Streamlit has no API for this, so a script (st.html with
     unsafe_allow_javascript) sets the attribute on the document in a browser.
+
+    The same script closes the sidebar after a menu link is tapped on a
+    phone: the menu uses st.page_link, which Streamlit never collapses, so
+    the overlay sidebar otherwise stays over the new page. The listener is
+    registered once per browser tab.
     """
     lang = "en" if get_lang() == "en" else "sv"
     st.html(
-        f"<script>document.documentElement.lang = '{lang}';</script>",
+        "<script>"
+        f"document.documentElement.lang = '{lang}';"
+        "if (!window.__eksNavClose) {"
+        "  window.__eksNavClose = true;"
+        "  document.addEventListener('click', function (e) {"
+        "    if (window.innerWidth >= 640) return;"
+        "    var link = e.target.closest('[data-testid=stSidebar] a');"
+        "    if (!link) return;"
+        "    setTimeout(function () {"
+        "      var btn = document.querySelector("
+        "        '[data-testid=stSidebarCollapseButton] button');"
+        "      if (btn) btn.click();"
+        "    }, 150);"
+        "  }, true);"
+        "}"
+        "</script>",
         unsafe_allow_javascript=True,
     )
 
