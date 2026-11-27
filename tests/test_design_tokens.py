@@ -4,7 +4,7 @@ from __future__ import annotations
 import pytest
 
 from utils import charts
-from utils.ui import CHART_CATEGORICAL, TOKENS
+from utils.ui import CHART_CATEGORICAL, TOKENS, TOKENS_DARK
 
 
 def _channel(c: int) -> float:
@@ -136,3 +136,49 @@ def test_css_selectors_allowlist():
     used = set(re.findall(r'data-testid="([^"]+)"', GLOBAL_CSS))
     assert used, "GLOBAL_CSS should target Streamlit elements"
     assert used <= KNOWN_TESTIDS, f"unverified selectors: {sorted(used - KNOWN_TESTIDS)}"
+
+
+@pytest.mark.parametrize("bg", ["canvas", "surface_muted", "surface_input"])
+@pytest.mark.parametrize(
+    "token",
+    ["text_primary", "text_secondary", "text_tertiary", "positive", "negative", "caution", "primary"],
+)
+def test_dark_text_tokens_meet_aa(token, bg):
+    assert _contrast(TOKENS_DARK[token], TOKENS_DARK[bg]) >= 4.5
+
+
+def test_dark_tokens_have_same_keys_as_light():
+    assert set(TOKENS_DARK) == set(TOKENS)
+
+
+def test_streamlit_dark_theme_matches_dark_tokens():
+    dark = _load_streamlit_config()["theme"]["dark"]
+    assert dark["primaryColor"].upper() == TOKENS_DARK["primary"].upper()
+    assert dark["backgroundColor"].upper() == TOKENS_DARK["canvas"].upper()
+    assert dark["textColor"].upper() == TOKENS_DARK["text_primary"].upper()
+    assert dark["secondaryBackgroundColor"].upper() == TOKENS_DARK["surface_input"].upper()
+
+
+def test_global_css_has_dark_override():
+    from utils.ui import GLOBAL_CSS
+
+    assert "@media (prefers-color-scheme: dark)" in GLOBAL_CSS
+
+
+def test_apply_layout_falls_back_to_light_outside_streamlit():
+    import plotly.graph_objects as go
+
+    fig = charts.apply_layout(go.Figure())
+    assert fig.layout.paper_bgcolor == TOKENS["canvas"]
+
+
+def test_document_lang_script_uses_current_language():
+    from streamlit.testing.v1 import AppTest
+
+    def app():
+        from utils.ui import set_document_lang
+
+        set_document_lang()
+
+    at = AppTest.from_function(app).run()
+    assert not at.exception

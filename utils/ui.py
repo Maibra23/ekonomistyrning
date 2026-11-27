@@ -60,6 +60,31 @@ TOKENS: dict[str, str] = {
     "grid": "#F2F4F7",
 }
 
+# Dark variants of TOKENS (same keys). Text tokens hold at least 4.5:1 against
+# canvas and surface_muted; tests/test_design_tokens.py enforces this.
+TOKENS_DARK: dict[str, str] = {
+    "primary": "#8DA2FB",
+    "primary_hover": "#B4C0FD",
+    "primary_subtle": "#1E2A52",
+    "canvas": "#0E1117",
+    "surface_muted": "#161B26",
+    "surface_input": "#1D2433",
+    "border": "#2F3747",
+    "border_strong": "#475066",
+    "text_primary": "#F2F4F7",
+    "text_secondary": "#B0B8C8",
+    "text_tertiary": "#98A2B3",
+    "positive": "#4ADE80",
+    "positive_subtle": "#0F2A1C",
+    "negative": "#F97066",
+    "negative_subtle": "#331614",
+    "caution": "#FDB022",
+    "caution_subtle": "#33240A",
+    "focus_ring": "#84A0FF",
+    "reference": "#667085",
+    "grid": "#1D2433",
+}
+
 # Categorical chart series with no financial meaning. Deliberately contains
 # no green or red, so those stay reserved for favourable/unfavourable values.
 CHART_CATEGORICAL: list[str] = [
@@ -131,11 +156,13 @@ BUDGET_VS_RAKNING_HELP: str = (
 # ---------------------------------------------------------------------------
 
 # Values interpolated into GLOBAL_CSS: every token plus the font stacks.
-_CSS_VARS: dict[str, str] = {**TOKENS, "font_ui": FONT_UI, "font_mono": FONT_MONO}
+_FONT_VARS: dict[str, str] = {"font_ui": FONT_UI, "font_mono": FONT_MONO}
+_CSS_VARS: dict[str, str] = {**TOKENS, **_FONT_VARS}
+_CSS_VARS_DARK: dict[str, str] = {**TOKENS_DARK, **_FONT_VARS}
 
 # Selectors target the data-testid attributes of Streamlit 1.67;
 # tests/test_design_tokens.py keeps them on an explicit allow-list.
-GLOBAL_CSS: str = (
+_GLOBAL_CSS_TEMPLATE: str = (
     """
 /* === Fonts ===
    Inter and IBM Plex Mono are self-hosted (static/fonts/) and registered
@@ -1019,7 +1046,17 @@ button[class^="eks-"]:focus-visible {
     * { scroll-behavior: auto !important; }
 }
 """
-    % _CSS_VARS
+    )
+
+GLOBAL_CSS_LIGHT: str = _GLOBAL_CSS_TEMPLATE % _CSS_VARS
+# Dark mode: the same rules with dark token values, applied when the browser
+# prefers a dark colour scheme (Streamlit's own "system" theme follows it).
+GLOBAL_CSS_DARK: str = _GLOBAL_CSS_TEMPLATE % _CSS_VARS_DARK
+GLOBAL_CSS: str = (
+    GLOBAL_CSS_LIGHT
+    + "\n@media (prefers-color-scheme: dark) {\n"
+    + GLOBAL_CSS_DARK
+    + "\n}\n"
 )
 
 # ---------------------------------------------------------------------------
@@ -1030,6 +1067,19 @@ button[class^="eks-"]:focus-visible {
 def inject_css() -> None:
     """Inject global CSS. Call immediately after st.set_page_config()."""
     st.html(f"<style>{GLOBAL_CSS}</style>")
+
+
+def set_document_lang() -> None:
+    """Set <html lang> to the current UI language (sv or en).
+
+    Streamlit has no API for this, so a script (st.html with
+    unsafe_allow_javascript) sets the attribute on the document in a browser.
+    """
+    lang = "en" if get_lang() == "en" else "sv"
+    st.html(
+        f"<script>document.documentElement.lang = '{lang}';</script>",
+        unsafe_allow_javascript=True,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1620,6 +1670,7 @@ def render_sidebar(active_page: str) -> None:
                      with the ``eks_nav_active`` style hook.
     """
     with st.sidebar:
+        set_document_lang()
         st.html(
             '<div class="eks-sidebar-brand">'
             '<div class="eks-brand-bar"></div>'
