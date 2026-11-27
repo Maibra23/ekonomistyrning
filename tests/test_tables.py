@@ -288,7 +288,11 @@ def test_fin_dataframe_total_row_blanks_are_not_missing_values(tmp_path):
 
 
 def test_fin_dataframe_total_row_keeps_columns_arrow_compatible():
+    from unittest.mock import patch
+
     import pyarrow as pa
+
+    from utils import tables
 
     df = pd.DataFrame({"Produkt": ["A", "B"], "Kostnad": [100.0, 200.0], "Per styck": [1.5, 2.5]})
     captured = {}
