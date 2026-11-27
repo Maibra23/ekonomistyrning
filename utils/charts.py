@@ -9,7 +9,7 @@ from typing import Any, Literal
 
 import plotly.graph_objects as go
 
-from utils.ui import CHART_CATEGORICAL, TOKENS
+from utils.ui import CHART_CATEGORICAL, TOKENS, TOKENS_DARK
 
 # Compatibility mapping used by the pages; values come from utils.ui.TOKENS.
 # "primary_light" (waterfall totals, secondary bars) uses the sky colour of
@@ -81,6 +81,16 @@ def _legend_layout(legend: LegendPosition) -> dict[str, Any]:
     }
 
 
+def _is_dark_theme() -> bool:
+    """True when Streamlit reports a dark theme; light when unavailable."""
+    try:
+        import streamlit as st
+
+        return st.context.theme.type == "dark"
+    except Exception:
+        return False
+
+
 def apply_layout(
     fig: go.Figure,
     title: str | None = None,
@@ -93,11 +103,13 @@ def apply_layout(
     Swedish number format. ``legend`` is ``"top"`` (horizontal above the
     plot, default), ``"inside"`` (upper-left inside the plot) or ``"none"``.
     """
+    dark = _is_dark_theme()
+    tk = TOKENS_DARK if dark else TOKENS
     fig.update_layout(
-        template="simple_white",
+        template="plotly_dark" if dark else "simple_white",
         title={
             "text": title,
-            "font": {"size": 15, "color": TOKENS["text_primary"], "family": CHART_FONT},
+            "font": {"size": 15, "color": tk["text_primary"], "family": CHART_FONT},
             "x": 0,
             "xref": "paper",
             "xanchor": "left",
@@ -106,31 +118,31 @@ def apply_layout(
             "yanchor": "top",
             "pad": {"t": 10},
         },
-        font={"family": CHART_FONT, "size": 13, "color": TOKENS["text_primary"]},
+        font={"family": CHART_FONT, "size": 13, "color": tk["text_primary"]},
         # With a title the legend sits between title and plot; 64 px leaves
         # room for both. Without a title only the legend needs space.
         margin={"l": 56, "r": 24, "t": 64 if title else 36, "b": 48},
         height=height,
         colorway=list(CHART_CATEGORICAL),
         hoverlabel={
-            "bgcolor": "white",
-            "bordercolor": TOKENS["border"],
-            "font": {"family": CHART_FONT, "size": 13, "color": TOKENS["text_primary"]},
+            "bgcolor": tk["canvas"],
+            "bordercolor": tk["border"],
+            "font": {"family": CHART_FONT, "size": 13, "color": tk["text_primary"]},
         },
-        plot_bgcolor=TOKENS["canvas"],
-        paper_bgcolor=TOKENS["canvas"],
+        plot_bgcolor=tk["canvas"],
+        paper_bgcolor=tk["canvas"],
         separators=", ",  # comma decimal, space thousands
         **_legend_layout(legend),
     )
     axis_style: dict[str, Any] = {
         "showgrid": True,
-        "gridcolor": TOKENS["grid"],
+        "gridcolor": tk["grid"],
         "zeroline": True,
-        "zerolinecolor": TOKENS["reference"],
-        "linecolor": TOKENS["border"],
+        "zerolinecolor": tk["reference"],
+        "linecolor": tk["border"],
         "automargin": True,
-        "tickfont": {"color": TOKENS["text_secondary"]},
-        "tickcolor": TOKENS["border"],
+        "tickfont": {"color": tk["text_secondary"]},
+        "tickcolor": tk["border"],
     }
     fig.update_xaxes(**axis_style)
     fig.update_yaxes(**axis_style)
